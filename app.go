@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
-	"time"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -36,8 +37,8 @@ func (a *App) OpenFileBrowser() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, options)
 }
 
-// Analyze parses the archive
-func (a *App) Analyze(targetPath string) (ReportData, error) {
+// Analyze parses the archive and optionally anonymizes PII
+func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 	fileMap := make(map[string]string)
 	info, err := os.Stat(targetPath)
 	if err != nil {
@@ -48,16 +49,50 @@ func (a *App) Analyze(targetPath string) (ReportData, error) {
 	} else {
 		loadFromArchive(targetPath, fileMap)
 	}
-	return analyzeData(fileMap), nil
+	return analyzeData(fileMap, anonymize), nil
+}
+
+// SavePDF opens a native Save dialog and writes the PDF to disk
+func (a *App) SavePDF(b64 string) (string, error) {
+	parts := strings.SplitN(b64, "base64,", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid PDF data received from frontend")
+	}
+
+	pdfBytes, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %v", err)
+	}
+
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: "SSSD_Analysis_Report.pdf",
+		Title:           "Save PDF Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PDF Document (*.pdf)", Pattern: "*.pdf"},
+		},
+	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	if filePath == "" {
+		return "cancelled", nil
+	}
+
+	err = os.WriteFile(filePath, pdfBytes, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	return filePath, nil
 }
 
 // SaveTXT opens a native Save dialog and writes the report to a TXT file
 func (a *App) SaveTXT(report ReportData) (string, error) {
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	
-	// Open the native Save dialog
+	// ... Re-use your existing SaveTXT logic ...
 	options := runtime.SaveDialogOptions{
-		DefaultFilename: fmt.Sprintf("SSSD_Analysis_Report_%s.txt", timestamp),
+		DefaultFilename: "SSSD_Analysis_Report.txt",
 		Title:           "Save TXT Report",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Text Document (*.txt)", Pattern: "*.txt"},
@@ -67,19 +102,13 @@ func (a *App) SaveTXT(report ReportData) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	// If user cancelled the dialog, filePath will be empty
 	if filePath == "" {
 		return "cancelled", nil
 	}
-
 	txtContent := buildTextReport(report)
-
-	// Save the file exactly where the user requested
 	err = os.WriteFile(filePath, []byte(txtContent), 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to write file: %v", err)
 	}
-
 	return filePath, nil
 }

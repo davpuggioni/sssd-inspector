@@ -14,7 +14,6 @@ import (
 var reStatus = regexp.MustCompile(`status=(\d+)`)
 
 func deduplicateProblems(problems []string) []string {
-	// Optimized: map[string]struct{} uses 0 bytes of memory per entry compared to map[string]bool
 	seen := make(map[string]struct{})
 	var result []string
 	for _, p := range problems {
@@ -30,9 +29,7 @@ func getSSSDVersion(packages []string) (int, int) {
 	for _, pkg := range packages {
 		parts := strings.Fields(pkg)
 		for _, p := range parts {
-			//if strings.HasPrefix(p, "sssd-") {
 			p = strings.TrimPrefix(p, "sssd-")
-			//}
 			if len(p) > 0 && p[0] >= '0' && p[0] <= '9' && strings.Contains(p, ".") {
 				vParts := strings.SplitN(p, ".", 3)
 				if len(vParts) >= 2 {
@@ -48,10 +45,10 @@ func getSSSDVersion(packages []string) (int, int) {
 	return 0, 0
 }
 
-func analyzeData(fileMap map[string]string) ReportData {
+func analyzeData(fileMap map[string]string, anonymize bool) ReportData {
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.1.3" // Updated version
+	report.AppVersion = "0.1.4" // Bumped version
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
@@ -90,7 +87,6 @@ func analyzeData(fileMap map[string]string) ReportData {
 
 	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
 		hasDebug9 := false
-		// Optimized debug_level check: Scan files and only replace strings if "debug_level" is explicitly on the line
 		checkDebug := func(line string) {
 			if hasDebug9 {
 				return
@@ -109,10 +105,72 @@ func analyzeData(fileMap map[string]string) ReportData {
 		}
 	}
 
+	// Apply Anonymization if requested
+	if anonymize {
+		anonymizeReport(&report)
+	}
+
 	return report
 }
 
+// anonymizeReport scrubs PII from the report
+func anonymizeReport(r *ReportData) {
+	// Matches IPv4 addresses
+	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+
+	maskString := func(s string) string {
+		// Mask IPs
+		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
+
+		// Mask Domain occurrences if known
+		if r.SearchDomain != "" && r.SearchDomain != "None" {
+			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
+		}
+		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
+			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
+			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
+		}
+		return s
+	}
+
+	// Mask global identity fields
+	r.HardwareManufacturer = "[REDACTED]"
+	r.HardwareModel = "[REDACTED]"
+	r.VirtualIdentity = "[REDACTED]"
+	r.SCCStatus = "[REDACTED]"
+
+	for i, ns := range r.Nameservers {
+		r.Nameservers[i] = maskString(ns)
+	}
+	r.SearchDomain = maskString(r.SearchDomain)
+	r.KerberosRealm = maskString(r.KerberosRealm)
+
+	for i, p := range r.Problems {
+		r.Problems[i] = maskString(p)
+	}
+	for i, w := range r.Warnings {
+		r.Warnings[i] = maskString(w)
+	}
+	for i, mac := range r.MACDenialExamples {
+		r.MACDenialExamples[i] = maskString(mac)
+	}
+	for i := range r.SSSDLogErrors {
+		r.SSSDLogErrors[i].Description = maskString(r.SSSDLogErrors[i].Description)
+		for j, ex := range r.SSSDLogErrors[i].Examples {
+			r.SSSDLogErrors[i].Examples[j] = maskString(ex)
+		}
+	}
+	for i := range r.MatchedTIDs {
+		for j, ev := range r.MatchedTIDs[i].Evidence {
+			r.MatchedTIDs[i].Evidence[j] = maskString(ev)
+		}
+	}
+	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+}
+
 func analyzeOSAndHardware(fileMap map[string]string, report *ReportData) {
+	// ... KEEP YOUR EXISTING CODE EXACTLY AS IT IS FROM HERE DOWN ...
 	if env, ok := fileMap["basic-environment.txt"]; ok {
 		scanner := bufio.NewScanner(strings.NewReader(env))
 		for scanner.Scan() {

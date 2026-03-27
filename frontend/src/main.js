@@ -5,7 +5,6 @@ import './app.css';
 import { Analyze, OpenFileBrowser, SaveTXT } from '../wailsjs/go/main/App';
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 
-// 2. Build the main layout (Added the Export PDF button)
 document.querySelector('#app').innerHTML = `
     <style>
         .report-wrapper { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 20px; text-align: left; }
@@ -38,13 +37,19 @@ document.querySelector('#app').innerHTML = `
 
     <div id="topBar" style="padding: 20px; background-color: #1e1e2e; color: white; text-align: center; border-bottom: 4px solid #0056b3;">
         <h2 style="margin: 0 0 10px 0; border: none; color: #fff;">SSSD Supportconfig Analyzer</h2>
-        <div style="display: flex; justify-content: center; gap: 10px;">
-            <input id="filePath" type="text" placeholder="Select or paste path to supportconfig.txz..." style="width: 500px; padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc;"/>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+            <input id="filePath" type="text" placeholder="Select or paste path to supportconfig.txz..." style="width: 450px; padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc;"/>
             <button id="browseBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px; font-weight: bold;">Browse...</button>
+            
+            <label style="color: white; margin-left: 5px; margin-right: 5px; display: flex; align-items: center; font-size: 14px; cursor: pointer;" title="Redacts IP Addresses and Domain Names from the report">
+                <input type="checkbox" id="anonymizeCheck" style="margin-right: 5px; cursor: pointer; transform: scale(1.2);"> Anonymize PII
+            </label>
+
             <button id="analyzeBtn" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-weight: bold;">Analyze</button>
             <button id="exportPdfBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold;">📄 Export PDF</button>
             <button id="exportTxtBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #17a2b8; color: white; border: none; border-radius: 4px; font-weight: bold;">📝 Export TXT</button>
-            <div id="zoomControls" style="display: none; margin-left: 10px;">
+            
+            <div id="zoomControls" style="display: none; margin-left: 5px;">
                 <button id="zoomOutBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px 0 0 4px; border-right: 1px solid #5a6268; font-weight: bold;">A-</button>
                 <button id="zoomInBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 0 4px 4px 0; font-weight: bold;">A+</button>
             </div>
@@ -171,16 +176,14 @@ function renderReportHTML(report) {
         html += `</div>`;
     }
 
-    // Add Dynamic Footer
     html += `
     <div style="margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px;">
-        sssd-inspector v${report.app_version} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
+        sssd-inspector v${report.app_version} - SUSE Technical Support - Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
     </div>`;
 
     return html;
 }
 
-// Wire up the Browse Button
 document.getElementById('browseBtn').addEventListener('click', () => {
     OpenFileBrowser().then((selectedPath) => {
         if (selectedPath) {
@@ -191,9 +194,10 @@ document.getElementById('browseBtn').addEventListener('click', () => {
     });
 });
 
-// Wire up the Analyze Button
 document.getElementById('analyzeBtn').addEventListener('click', () => {
     let filePath = document.getElementById('filePath').value.trim();
+    let isAnonymized = document.getElementById('anonymizeCheck').checked; // Read Checkbox
+    
     let resultBox = document.getElementById('resultBox');
     let exportPdfBtn = document.getElementById('exportPdfBtn');
     let exportTxtBtn = document.getElementById('exportTxtBtn');
@@ -204,7 +208,6 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         return;
     }
 
-    // Hide Export button during loading
     exportPdfBtn.style.display = 'none';
     exportTxtBtn.style.display = 'none';
     zoomControls.style.display = 'none';
@@ -216,11 +219,11 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         </div>
     `;
 
-    Analyze(filePath)
+    // Pass the boolean anonymize flag to the Go Backend
+    Analyze(filePath, isAnonymized)
         .then((report) => {
-            window.currentReport = report; // Store for TXT export
+            window.currentReport = report; 
             resultBox.innerHTML = renderReportHTML(report);
-            // Show the Export buttons now that we have data!
             exportPdfBtn.style.display = 'inline-block';
             exportTxtBtn.style.display = 'inline-block';
             zoomControls.style.display = 'inline-flex';
@@ -233,31 +236,21 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         });
 });
 
-// 3. Wire up the Export PDF Button (Native Print Dialog)
 document.getElementById('exportPdfBtn').addEventListener('click', () => {
-    // Generate a timestamp
     const now = new Date();
     const timestamp = now.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
-    
-    // Temporarily change document title so the native Print to PDF picks it up as the filename
     const originalTitle = document.title;
     document.title = `SSSD_Analysis_Report_${timestamp}`;
-    
-    // Trigger OS native print dialog
     window.print();
-    
-    // Restore title immediately after the dialog opens
     document.title = originalTitle;
 });
 
-// 4. Wire up the Export TXT Button
 document.getElementById('exportTxtBtn').addEventListener('click', () => {
     const btn = document.getElementById('exportTxtBtn');
     btn.innerText = "⏳ Saving...";
-    
     SaveTXT(window.currentReport).then((savedPath) => {
         if (savedPath === "cancelled") {
-            btn.innerText = "📝 Export TXT"; // User clicked cancel
+            btn.innerText = "📝 Export TXT";
         } else {
             btn.innerText = "✅ Saved!";
             setTimeout(() => { btn.innerText = "📝 Export TXT"; }, 3000);
@@ -269,7 +262,6 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
     });
 });
 
-// 5. Wire up the Zoom Buttons
 let currentFontSize = 1.0;
 
 document.getElementById('zoomInBtn').addEventListener('click', () => {
@@ -278,14 +270,12 @@ document.getElementById('zoomInBtn').addEventListener('click', () => {
 });
 
 document.getElementById('zoomOutBtn').addEventListener('click', () => {
-    // Don't let it get completely unreadable
     if (currentFontSize > 0.4) {
         currentFontSize -= 0.1;
         document.getElementById('resultBox').style.fontSize = currentFontSize + 'em';
     }
 });
 
-// 6. Wire up Drag and Drop (Comprehensive Fallbacks)
 function handleFilePath(path) {
     if (path) {
         document.getElementById('filePath').value = path;
@@ -293,17 +283,14 @@ function handleFilePath(path) {
     }
 }
 
-// 6A. Wails Native method
 OnFileDrop((x, y, paths) => {
     if (paths && paths.length > 0) handleFilePath(paths[0]);
 }, false);
 
-// 6B. Wails Event Bus method (bypass OnFileDrop wrapper)
 EventsOn("wails:file-drop", (x, y, paths) => {
     if (paths && paths.length > 0) handleFilePath(paths[0]);
 });
 
-// 6C. HTML5 DOM Fallback (Needed for WebKitGTK on some Linux distros)
 let dropZone = document.getElementById('app');
 
 dropZone.addEventListener('dragover', (e) => {
@@ -313,7 +300,6 @@ dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     if (e.dataTransfer && e.dataTransfer.files.length > 0) {
         let file = e.dataTransfer.files[0];
-        // Linux Webkit instances typically expose the absolute path here
         if (file.path) {
             handleFilePath(file.path);
         }
