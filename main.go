@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -21,24 +22,54 @@ func main() {
 	// 1. Setup CLI Flags
 	versionShort := flag.Bool("v", false, "Print program version")
 	cliPath := flag.String("analyze", "", "Path to the supportconfig directory or log file")
-	txtReport := flag.Bool("txt", false, "Generate a TXT report (requires -analyze)")
-	htmlReport := flag.Bool("html", false, "Generate an HTML report (requires -analyze)")
+	txtReport := flag.Bool("txt", false, "Generate a TXT report")
+	htmlReport := flag.Bool("html", false, "Generate an HTML report")
 	anonymize := flag.Bool("anonymize", false, "Redact PII (IPs, Domains) from the report")
 	flag.Parse()
 
 	if *versionShort {
-		fmt.Printf("sssd-analyzer-gui version 0.1.4 (Hybrid)\n")
+		fmt.Printf("sssd-analyzer-gui version 0.1.5 (Hybrid)\n")
 		os.Exit(0)
 	}
 
-	// 2. Traffic Cop Logic
+	// 2. Traffic Cop Logic (If they used the strict -analyze flag)
 	if *cliPath != "" {
 		runCLI(*cliPath, *txtReport, *htmlReport, *anonymize)
 		os.Exit(0) // Exit immediately. Do not load the GUI.
 	}
 
+	// Fallback: If they provided a path WITHOUT -analyze, flag.Parse() stops parsing.
+	// We must manually scan the remaining arguments so that flags like -html or -anonymize
+	// placed AFTER the path still work perfectly.
 	if flag.NArg() > 0 {
-		runCLI(flag.Arg(0), true, true, *anonymize)
+		path := flag.Arg(0)
+		isAnonymize := *anonymize
+		isTxt := *txtReport
+		isHtml := *htmlReport
+		hasExplicitFormat := false
+
+		// Manually scan remaining arguments for all our flags
+		for _, arg := range os.Args[1:] {
+			if strings.Contains(arg, "-anonymize") {
+				isAnonymize = true
+			}
+			if strings.Contains(arg, "-txt") {
+				isTxt = true
+				hasExplicitFormat = true
+			}
+			if strings.Contains(arg, "-html") {
+				isHtml = true
+				hasExplicitFormat = true
+			}
+		}
+
+		// If they just passed the path and NO format flags, default to both to match previous behavior
+		if !hasExplicitFormat && !*txtReport && !*htmlReport {
+			isTxt = true
+			isHtml = true
+		}
+
+		runCLI(path, isTxt, isHtml, isAnonymize)
 		os.Exit(0)
 	}
 

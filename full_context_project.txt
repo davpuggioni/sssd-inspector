@@ -1,200 +1,6 @@
 
 
 ====================
-PATH: ./app.go
-====================
-package main
-
-import (
-	"context"
-	"fmt"
-	"os"
-	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-)
-
-// App struct
-type App struct {
-	ctx context.Context
-}
-
-// NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
-}
-
-// startup is called when the app starts. The context is saved
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-}
-
-// OpenFileBrowser opens the native OS file browser
-func (a *App) OpenFileBrowser() (string, error) {
-	options := runtime.OpenDialogOptions{
-		Title: "Select Supportconfig Archive",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Supportconfig Archives (*.txz, *.tar.xz)", Pattern: "*.txz;*.tar.xz"},
-			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
-		},
-	}
-	return runtime.OpenFileDialog(a.ctx, options)
-}
-
-// Analyze parses the archive
-func (a *App) Analyze(targetPath string) (ReportData, error) {
-	fileMap := make(map[string]string)
-	info, err := os.Stat(targetPath)
-	if err != nil {
-		return ReportData{}, fmt.Errorf("error accessing path: %v", err)
-	}
-	if info.IsDir() {
-		loadFromDir(targetPath, fileMap)
-	} else {
-		loadFromArchive(targetPath, fileMap)
-	}
-	return analyzeData(fileMap), nil
-}
-
-// SaveTXT opens a native Save dialog and writes the report to a TXT file
-func (a *App) SaveTXT(report ReportData) (string, error) {
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	
-	// Open the native Save dialog
-	options := runtime.SaveDialogOptions{
-		DefaultFilename: fmt.Sprintf("SSSD_Analysis_Report_%s.txt", timestamp),
-		Title:           "Save TXT Report",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Text Document (*.txt)", Pattern: "*.txt"},
-		},
-	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
-	if err != nil {
-		return "", err
-	}
-
-	// If user cancelled the dialog, filePath will be empty
-	if filePath == "" {
-		return "cancelled", nil
-	}
-
-	txtContent := buildTextReport(report)
-
-	// Save the file exactly where the user requested
-	err = os.WriteFile(filePath, []byte(txtContent), 0644)
-	if err != nil {
-		return "", fmt.Errorf("failed to write file: %v", err)
-	}
-
-	return filePath, nil
-}
-
-
-====================
-PATH: ./main.go
-====================
-package main
-
-import (
-	"embed"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"time"
-
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-)
-
-//go:embed all:frontend/dist
-var assets embed.FS
-
-func main() {
-	// 1. Setup CLI Flags
-	versionShort := flag.Bool("v", false, "Print program version")
-	flag.Parse()
-
-	if *versionShort {
-		fmt.Printf("sssd-analyzer-gui version 0.1.3 (Hybrid)\n")
-		os.Exit(0)
-	}
-
-	// 2. Traffic Cop Logic: Did they pass a file argument in the terminal?
-	if flag.NArg() > 0 {
-		runCLI(flag.Arg(0))
-		os.Exit(0) // Exit immediately. Do not load the GUI.
-	}
-
-	// 3. No arguments? Launch the Wails GUI!
-	app := NewApp()
-
-	err := wails.Run(&options.App{
-		Title:  "SSSD Inspector",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 244, G: 244, B: 249, A: 255},
-		OnStartup:        app.startup,
-		Bind: []interface{}{
-			app, // This binds our app.go functions to Javascript
-		},
-		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop: true,
-		},
-	})
-
-	if err != nil {
-		println("Error:", err.Error())
-	}
-}
-
-// runCLI contains your old main.go terminal logic
-func runCLI(path string) {
-	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
-	fileMap := make(map[string]string)
-
-	info, err := os.Stat(path)
-	if err != nil {
-		log.Fatalf("Error accessing path: %v", err)
-	}
-
-	if info.IsDir() {
-		loadFromDir(path, fileMap)
-	} else {
-		loadFromArchive(path, fileMap)
-	}
-
-	report := analyzeData(fileMap)
-
-	now := time.Now()
-	report.Timestamp = now.Format("02:01:2006 15:04:05")
-
-	// Re-use your text and HTML generation logic
-	reportText := buildTextReport(report)
-	fmt.Println(reportText)
-
-	baseName := filepath.Base(path)
-	txtReportFile := baseName + "_report.txt"
-	htmlReportFile := baseName + "_report.html"
-
-	err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
-	if err != nil {
-		fmt.Printf("Error writing txt report: %v\n", err)
-	} else {
-		fmt.Printf("Text report saved to: %s\n", txtReportFile)
-	}
-
-	writeHTMLReportFile(report, htmlReportFile)
-	fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
-}
-
-
-====================
 PATH: ./wails.json
 ====================
 {
@@ -209,6 +15,999 @@ PATH: ./wails.json
     "name": "Davide Michele Puggioni",
     "email": "davide.puggioni@suse.com"
   }
+}
+
+
+====================
+PATH: ./kb.go
+====================
+// kb.go
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data
+func matchKBArticles(fileMap map[string]string, report *ReportData) {
+	exePath, err := os.Executable()
+	kbDir := "kb_articles"
+
+	if err == nil {
+		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+		if _, err := os.Stat(exeDir); !os.IsNotExist(err) {
+			kbDir = exeDir
+		}
+	}
+
+	if _, err := os.Stat(kbDir); os.IsNotExist(err) {
+		return
+	}
+
+	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
+	if err != nil || len(files) == 0 {
+		return
+	}
+
+	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
+	configFiles := []string{"sssd.conf"}
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			log.Printf("Warning: Failed to read KB article %s: %v", file, err)
+			continue
+		}
+
+		var article TIDArticle
+		if err := json.Unmarshal(content, &article); err != nil {
+			log.Printf("Warning: Invalid JSON in KB article %s: %v", file, err)
+			continue
+		}
+
+		// Initialize evidence slice
+		article.Evidence = []string{}
+
+		logMatched := len(article.LogPatterns) == 0
+		if !logMatched {
+			for _, pattern := range article.LogPatterns {
+				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				scanFiles(fileMap, logFiles, func(line string) {
+					if matcher.MatchString(line) {
+						logMatched = true
+						// Capture up to 3 examples
+						if len(article.Evidence) < 3 {
+							cleanLine := strings.TrimSpace(line)
+							isDupe := false
+							for _, ev := range article.Evidence {
+								if ev == cleanLine {
+									isDupe = true
+									break
+								}
+							}
+							if !isDupe {
+								article.Evidence = append(article.Evidence, cleanLine)
+							}
+						}
+					}
+				})
+			}
+		}
+
+		configMatched := len(article.ConfigPatterns) == 0
+		if !configMatched {
+			for _, pattern := range article.ConfigPatterns {
+				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				scanFiles(fileMap, configFiles, func(line string) {
+					if matcher.MatchString(line) {
+						configMatched = true
+					}
+				})
+			}
+		}
+
+		if logMatched && configMatched {
+			if len(article.LogPatterns) > 0 || len(article.ConfigPatterns) > 0 {
+				report.MatchedTIDs = append(report.MatchedTIDs, article)
+			}
+		}
+	}
+}
+
+
+====================
+PATH: ./report.go
+====================
+// report.go
+package main
+
+import (
+	"fmt"
+	"html/template"
+	"log"
+	"os"
+	"strings"
+)
+
+func buildTextReport(report ReportData) string {
+	var sb strings.Builder
+
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString("             SUPPORTCONFIG SSSD ANALYSIS REPORT\n")
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString(fmt.Sprintf(" Generated: %s\n", report.Timestamp))
+	if report.SupportCaseID != "" {
+		sb.WriteString(fmt.Sprintf(" Support Case (SR#): %s\n", report.SupportCaseID))
+	}
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+
+	sb.WriteString(fmt.Sprintf("[+] OS Release:        %s\n", report.SLESRlease))
+	sb.WriteString(fmt.Sprintf("[+] Kernel:            %s\n", report.KernelVersion))
+	sb.WriteString(fmt.Sprintf("[+] SCC Status:        %s\n", report.SCCStatus))
+	sb.WriteString(fmt.Sprintf("[+] Hardware:          %s %s\n", report.HardwareManufacturer, report.HardwareModel))
+	sb.WriteString(fmt.Sprintf("[+] Virtualization:    %s (Identity: %s)\n", report.Hypervisor, report.VirtualIdentity))
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+
+	sb.WriteString(fmt.Sprintf("[+] SSSD Installed:    %v\n", report.SssdInstalled))
+	sb.WriteString(fmt.Sprintf("[+] SSSD Config:       %v\n", report.SssdConfigFound))
+	sb.WriteString(fmt.Sprintf("[+] SSSD Service:      %s\n", report.SssdService))
+	sb.WriteString(fmt.Sprintf("[+] Winbind Status:    %s\n", report.WinbindService))
+	sb.WriteString(fmt.Sprintf("[+] NSCD Service:      %s\n", report.NscdStatus))
+	if len(report.NscdCaching) > 0 {
+		sb.WriteString(fmt.Sprintf("[!] NSCD Caching:      YES (%s)\n", strings.Join(report.NscdCaching, ", ")))
+	} else {
+		sb.WriteString("[+] NSCD Caching:      Safely Disabled for SSSD modules\n")
+	}
+
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	sb.WriteString("               AD / KERBEROS INTEGRATION CHECKS\n")
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+
+	sb.WriteString(fmt.Sprintf("[+] DNS Nameservers:   %s\n", strings.Join(report.Nameservers, ", ")))
+	sb.WriteString(fmt.Sprintf("[+] DNS Search Domain: %s\n", report.SearchDomain))
+	sb.WriteString(fmt.Sprintf("[+] Time Service:      %s\n", report.TimeService))
+	sb.WriteString(fmt.Sprintf("[+] Kerberos Realm:    %s\n", report.KerberosRealm))
+	sb.WriteString(fmt.Sprintf("[+] Machine Keytab:    %v\n", report.KeytabFound))
+
+	if report.PamGDPRRestricted {
+		sb.WriteString("[!] PAM pam_sss.so:    Restricted (GDPR)\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("[+] PAM pam_sss.so:    %v\n", report.PamSssInstalled))
+	}
+	sb.WriteString(fmt.Sprintf("[+] NSSwitch valid:    %v\n", report.NsswitchValid))
+
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	sb.WriteString(fmt.Sprintf("[+] SSSD AD Provider:  %v\n", report.ADProviderMode))
+	sb.WriteString(fmt.Sprintf("[+] SSSD Use FQDN:     %v\n", report.UseFQDNSet))
+	sb.WriteString(fmt.Sprintf("[!] SSSD Enumerate:    %v\n", report.EnumerateIssue))
+
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString("                  INSTALLED SSSD PACKAGES\n")
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	if len(report.SSSDPackages) > 0 {
+		for _, pkg := range report.SSSDPackages {
+			sb.WriteString(fmt.Sprintf(" [+] %s\n", pkg))
+		}
+	} else {
+		sb.WriteString(" [-] No SSSD packages found.\n")
+	}
+
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString("                 SSSD LOG ERRORS (sssd.txt)\n")
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	if len(report.SSSDLogErrors) == 0 {
+		sb.WriteString(" [+] No critical AD/Kerberos errors found in SSSD logs.\n")
+	} else {
+		for _, errData := range report.SSSDLogErrors {
+			sb.WriteString(fmt.Sprintf(" [!] %s\n", errData.Description))
+			for _, line := range errData.Examples {
+				sb.WriteString(fmt.Sprintf("     - %s\n", line))
+			}
+		}
+	}
+
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString("                     ACTIONABLE PROBLEMS\n")
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+
+	if len(report.Problems) == 0 {
+		sb.WriteString(" No major SSSD/Auth issues detected based on the checks.\n")
+	} else {
+		for _, prob := range report.Problems {
+			sb.WriteString(fmt.Sprintf(" [X] %s\n", prob))
+		}
+	}
+
+	if len(report.MACDenialExamples) > 0 {
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		sb.WriteString("              APPARMOR / SELINUX DENIALS FOUND\n")
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		for _, line := range report.MACDenialExamples {
+			sb.WriteString(fmt.Sprintf(" [!] %s\n", line))
+		}
+	}
+
+	if len(report.Warnings) > 0 {
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		sb.WriteString("                 TUNING & DIAGNOSTIC HINTS\n")
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		for _, warn := range report.Warnings {
+			sb.WriteString(fmt.Sprintf(" [i] %s\n", warn))
+		}
+	}
+
+	if len(report.MatchedTIDs) > 0 {
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		sb.WriteString("               KNOWLEDGE BASE ARTICLES (TIDs)\n")
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		for _, tid := range report.MatchedTIDs {
+			sb.WriteString(fmt.Sprintf(" [KB] %s: %s\n", tid.TIDID, tid.Title))
+			sb.WriteString(fmt.Sprintf("      Link: %s\n", tid.URL))
+			sb.WriteString(fmt.Sprintf("      Desc: %s\n", tid.Description))
+			if len(tid.Evidence) > 0 {
+				sb.WriteString("      Log Evidence:\n")
+				for _, ev := range tid.Evidence {
+					sb.WriteString(fmt.Sprintf("       - %s\n", ev))
+				}
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
+	sb.WriteString(strings.Repeat("=", 60) + "\n")
+
+	return sb.String()
+}
+
+func writeHTMLReportFile(report ReportData, filename string) {
+	const tpl = `
+<!DOCTYPE html>
+<html>
+<head>
+<title>SSSD Supportconfig Analysis</title>
+<style>
+	body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 40px; }
+	h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 5px; }
+	.timestamp { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+	h2 { color: #d9534f; border-bottom: 1px solid #d9534f; padding-bottom: 5px; margin-top: 30px;}
+	h2.warn-header { color: #17a2b8; border-bottom: 1px solid #17a2b8; }
+	h2.kb-header { color: #28a745; border-bottom: 1px solid #28a745; }
+	.info-table { border-collapse: collapse; width: 100%; max-width: 900px; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px;}
+	.info-table th, .info-table td { padding: 12px 15px; border: 1px solid #ddd; text-align: left; }
+	.info-table th { background-color: #0056b3; color: white; width: 35%; }
+	.section-title { background-color: #e9ecef !important; color: #333 !important; font-weight: bold; text-align: center; }
+	.problem-list { background: #ffebee; padding: 20px; border-left: 5px solid #d9534f; list-style-type: square; }
+	.problem-list li { margin-bottom: 10px; font-weight: bold; }
+	.warn-list { background: #e2f3f5; padding: 20px; border-left: 5px solid #17a2b8; list-style-type: square; }
+	.warn-list li { margin-bottom: 10px; font-weight: normal; color: #0c5460; }
+	.kb-list { background: #e8f5e9; padding: 20px; border-left: 5px solid #28a745; list-style-type: none; }
+	.kb-list li { margin-bottom: 15px; }
+	.kb-title { font-weight: bold; color: #155724; font-size: 1.1em; }
+	.kb-desc { color: #333; margin-top: 5px; }
+	.success { color: green; font-weight: bold;}
+	.fail { color: red; font-weight: bold;}
+	.warn { color: #d39e00; font-weight: bold;}
+	
+	details summary { cursor: pointer; font-weight: bold; color: #555; padding: 5px 0; outline: none; transition: color 0.2s;}
+	details summary:hover { color: #000; }
+	.log-block { margin-top: 5px; background: #f8f9fa; padding: 10px; border-left: 3px solid #d9534f; font-family: monospace; font-size: 0.85em; overflow-x: auto; color: #333;}
+	.mac-block { background: #fff3cd; border-left: 3px solid #d39e00; }
+	
+	.pkg-list { margin: 0; padding-left: 20px; font-family: monospace; font-size: 0.9em; }
+	.footer { margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px; }
+</style>
+</head>
+<body>
+	<h1>Supportconfig SSSD Analysis Report</h1>
+	<div class="timestamp">Generated on: {{.Timestamp}}</div>
+	
+	<table class="info-table">
+		<tr><td colspan="2" class="section-title">System & Virtualization Information</td></tr>
+		<tr><th>OS Release</th><td>{{.SLESRlease}}</td></tr>
+		<tr><th>Kernel Version</th><td>{{.KernelVersion}}</td></tr>
+		<tr><th>SCC Status</th><td>{{.SCCStatus}}</td></tr>
+		<tr><th>Hardware</th><td>{{.HardwareManufacturer}} {{.HardwareModel}}</td></tr>
+		<tr><th>Virtualization</th><td>{{.Hypervisor}} (Identity: {{.VirtualIdentity}})</td></tr>
+		
+		<tr><td colspan="2" class="section-title">Base Authentication Services</td></tr>
+		<tr><th>SSSD Installed</th><td>{{.SssdInstalled}}</td></tr>
+		<tr><th>SSSD Config Found</th><td>{{if .SssdConfigFound}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
+		<tr><th>SSSD Service Status</th><td>{{.SssdService}}</td></tr>
+		<tr><th>Winbind Status</th><td>{{.WinbindService}}</td></tr>
+		<tr><th>NSCD Service Status</th><td>{{.NscdStatus}}</td></tr>
+		<tr><th>NSSwitch Valid</th><td>{{if .NsswitchValid}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
+		<tr><th>PAM pam_sss.so Found</th><td>{{if .PamGDPRRestricted}}<span class="warn">Restricted (GDPR)</span>{{else if .PamSssInstalled}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
+		
+		<tr><td colspan="2" class="section-title">Installed SSSD Packages</td></tr>
+		<tr><td colspan="2">
+			{{if .SSSDPackages}}
+			<ul class="pkg-list">
+				{{range .SSSDPackages}}<li>{{.}}</li>{{end}}
+			</ul>
+			{{else}}
+			<span class="warn">No SSSD packages found.</span>
+			{{end}}
+		</td></tr>
+
+		<tr><td colspan="2" class="section-title">Active Directory & Kerberos Prerequisites</td></tr>
+		<tr><th>DNS Nameservers</th><td>
+			<ul style="margin: 0; padding-left: 20px;">
+			{{range .Nameservers}}<li>{{.}}</li>{{end}}
+			</ul>
+		</td></tr>
+		<tr><th>DNS Search Domain</th><td>{{.SearchDomain}}</td></tr>
+		<tr><th>Time Sync Service</th><td>{{.TimeService}}</td></tr>
+		<tr><th>Kerberos Realm</th><td>{{.KerberosRealm}}</td></tr>
+		<tr><th>Machine Keytab Verified</th><td>{{if .KeytabFound}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
+		
+		<tr><td colspan="2" class="section-title">Deep SSSD Configuration</td></tr>
+		<tr><th>AD Provider Explicitly Set</th><td>{{.ADProviderMode}}</td></tr>
+		<tr><th>Use Fully Qualified Names</th><td>{{.UseFQDNSet}}</td></tr>
+		<tr><th>Enumerate Set to True</th><td>{{if .EnumerateIssue}}<span class="fail">Yes (Performance Risk)</span>{{else}}<span class="success">No</span>{{end}}</td></tr>
+
+		<tr><td colspan="2" class="section-title">SSSD Log Errors (sssd.txt)</td></tr>
+		{{if .SSSDLogErrors}}
+			{{range .SSSDLogErrors}}
+			<tr><td colspan="2"><span class="fail">Error Detected:</span> {{.Description}}
+				<details>
+					<summary>View Log Snippets</summary>
+					<div class="log-block">
+						{{range .Examples}}
+						<div style="margin-bottom: 4px;">{{.}}</div>
+						{{end}}
+					</div>
+				</details>
+			</td></tr>
+			{{end}}
+		{{else}}
+			<tr><td colspan="2"><span class="success">No critical AD/Kerberos errors found in SSSD logs.</span></td></tr>
+		{{end}}
+	</table>
+
+	<h2>Actionable Problems Found</h2>
+	{{if .Problems}}
+		<ul class="problem-list">
+		{{range .Problems}}
+			<li>{{.}}</li>
+		{{end}}
+		</ul>
+	{{else}}
+		<p class="success" style="font-size: 1.2em;">No major SSSD/Auth issues detected based on the analysis!</p>
+	{{end}}
+
+	{{if .MACDenialExamples}}
+		<h2 style="color: #d39e00; border-bottom: 1px solid #d39e00;">AppArmor / SELinux Denials Found</h2>
+		<details>
+			<summary style="color: #d39e00;">View Blocked Access Logs</summary>
+			<div class="log-block mac-block">
+				{{range .MACDenialExamples}}
+					<div style="margin-bottom: 4px;">{{.}}</div>
+				{{end}}
+			</div>
+		</details>
+	{{end}}
+
+	{{if .Warnings}}
+		<h2 class="warn-header">Tuning & Diagnostic Hints</h2>
+		<ul class="warn-list">
+		{{range .Warnings}}
+			<li>{{.}}</li>
+		{{end}}
+		</ul>
+	{{end}}
+
+	{{if .MatchedTIDs}}
+<h2 style="color: #2e7d32; border-bottom: 2px solid #2e7d32; padding-bottom: 5px;">Knowledge Base Articles (TIDs)</h2>
+<div style="background-color: #e8f5e9; border-left: 5px solid #2e7d32; padding: 15px; margin-bottom: 20px;">
+    {{range .MatchedTIDs}}
+    <div style="margin-bottom: 20px;">
+        <strong><a href="{{.URL}}" target="_blank" style="color: #1565c0; text-decoration: none; font-size: 1.1em;">[{{.TIDID}}] {{.Title}}</a></strong>
+        
+        <div style="white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; margin-top: 8px; font-size: 0.95em; color: #333; line-height: 1.4;">{{.Description}}</div>
+        
+        {{if .Evidence}}
+        <div style="margin-top: 12px; padding: 10px; background-color: #fff; border: 1px solid #c8e6c9; border-radius: 4px;">
+            <strong style="color: #d84315; font-size: 0.9em;">🔍 Log Evidence Found:</strong>
+            <ul style="margin-top: 6px; margin-bottom: 0; padding-left: 20px; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; color: #555;">
+                {{range .Evidence}}
+                <li style="margin-bottom: 4px;">{{.}}</li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+	<div class="footer">
+		sssd-inspector v{{.AppVersion}} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
+	</div>
+</body>
+</html>
+`
+	t, err := template.New("report").Parse(tpl)
+	if err != nil {
+		log.Printf("Template parsing error: %v", err)
+		return
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		log.Printf("Failed to create HTML report: %v", err)
+		return
+	}
+	defer file.Close()
+
+	if err := t.Execute(file, report); err != nil {
+		log.Printf("Template execution error: %v", err)
+	}
+}
+
+
+====================
+PATH: ./types.go
+====================
+// types.go
+package main
+
+// SSSDLogError holds the human-readable description and samples of the actual log lines
+type SSSDLogError struct {
+	Description string   `json:"description"`
+	Examples    []string `json:"examples"`
+}
+
+// TIDArticle represents a dynamically loaded Knowledge Base article
+type TIDArticle struct {
+	TIDID          string   `json:"tid_id"`
+	Title          string   `json:"title"`
+	URL            string   `json:"url"`
+	Description    string   `json:"description"`
+	LogPatterns    []string `json:"log_patterns"`
+	ConfigPatterns []string `json:"config_patterns"`
+	Evidence       []string `json:"-"` // Log lines that triggered the match
+}
+
+// ReportData holds the results of our analysis
+type ReportData struct {
+	AppVersion    string `json:"app_version"`
+	Timestamp     string `json:"timestamp"`
+	SupportCaseID string `json:"support_case_id"`
+	KernelVersion string `json:"kernel_version"`
+	SLESRlease    string `json:"sles_release"`
+	SCCStatus     string `json:"scc_status"`
+
+	// Virtualization & Hardware
+	HardwareManufacturer string `json:"hardware_manufacturer"`
+	HardwareModel        string `json:"hardware_model"`
+	Hypervisor           string `json:"hypervisor"`
+	VirtualIdentity      string `json:"virtual_identity"`
+	MACType              string `json:"mac_type"`
+
+	// Base Services
+	SssdInstalled   bool     `json:"sssd_installed"`
+	SssdConfigFound bool     `json:"sssd_config_found"`
+	SssdService     string   `json:"sssd_service"`
+	WinbindService  string   `json:"winbind_service"`
+	NscdStatus      string   `json:"nscd_status"`
+	NscdCaching     []string `json:"nscd_caching"`
+	SSSDPackages    []string `json:"sssd_packages"`
+
+	// Authentication Details
+	NsswitchValid     bool     `json:"nsswitch_valid"`
+	PamSssInstalled   bool     `json:"pam_sss_installed"`
+	PamGDPRRestricted bool     `json:"pam_gdpr_restricted"`
+	HostsIssues       []string `json:"hosts_issues"`
+	Nameservers       []string `json:"nameservers"`
+	SearchDomain      string   `json:"search_domain"`
+	TimeService       string   `json:"time_service"`
+	KerberosRealm     string   `json:"kerberos_realm"`
+	KeytabFound       bool     `json:"keytab_found"`
+
+	// SSSD Deep AD Configs
+	ADProviderMode bool `json:"ad_provider_mode"`
+	EnumerateIssue bool `json:"enumerate_issue"`
+	UseFQDNSet     bool `json:"use_fqdn_set"`
+
+	// Log Analysis & Problems
+	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors"`
+	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
+	MACDenialExamples []string       `json:"mac_denial_examples"`
+
+	Problems    []string     `json:"problems"`
+	Warnings    []string     `json:"warnings"`
+	MatchedTIDs []TIDArticle `json:"matched_tids"`
+}
+
+
+====================
+PATH: ./utils.go
+====================
+// utils.go
+package main
+
+import (
+	"bufio"
+	"strings"
+)
+
+// anyFileContains checks if any of the specified files contains the substring.
+// This is highly memory-efficient as it avoids concatenating files.
+func anyFileContains(fileMap map[string]string, files []string, search string) bool {
+	for _, name := range files {
+		if content, ok := fileMap[name]; ok {
+			if strings.Contains(content, search) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// scanFiles lazily scans lines across multiple files without concatenating them.
+// This allows the garbage collector to immediately clean up processed lines.
+func scanFiles(fileMap map[string]string, files []string, lineFunc func(line string)) {
+	for _, name := range files {
+		if content, ok := fileMap[name]; ok {
+			scanner := bufio.NewScanner(strings.NewReader(content))
+			for scanner.Scan() {
+				lineFunc(scanner.Text())
+			}
+		}
+	}
+}
+
+// isRelevantFile checks if the extracted file is one we care about parsing
+func isRelevantFile(name string) bool {
+	relevant := []string{
+		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
+		"systemd.txt", "basic-environment.txt", "updates.txt",
+		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
+		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
+		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
+		"memory.txt", "sar.txt", "messages", "messages.txt",
+	}
+	for _, r := range relevant {
+		if name == r {
+			return true
+		}
+	}
+	return false
+}
+
+// extractSection extracts a specific output block from a supportconfig text file
+func extractSection(text, header string) string {
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	var sb strings.Builder
+	inSection := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, header) {
+			inSection = true
+			continue
+		}
+		if inSection {
+			// Stop extraction if we hit the next command block's header
+			if strings.HasPrefix(line, "#==[") {
+				break
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+	return sb.String()
+}
+
+
+====================
+PATH: ./loaders.go
+====================
+// loaders.go
+package main
+
+import (
+	"archive/tar"
+	"bytes"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+
+	"github.com/ulikunitz/xz"
+)
+
+func loadFromArchive(path string, fileMap map[string]string) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Printf("Error opening archive: %v", err)
+		return
+	}
+	defer f.Close()
+
+	r, err := xz.NewReader(f)
+	if err != nil {
+		log.Printf("Error creating xz reader: %v", err)
+		return
+	}
+
+	tr := tar.NewReader(r)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Tar extraction error: %v", err)
+			return
+		}
+
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		fileName := filepath.Base(hdr.Name)
+		if isRelevantFile(fileName) {
+			buf := new(bytes.Buffer)
+			if _, err := io.Copy(buf, tr); err != nil {
+				log.Printf("Failed to read %s: %v", hdr.Name, err)
+			}
+			fileMap[fileName] = buf.String()
+		}
+	}
+}
+
+func loadFromDir(root string, fileMap map[string]string) {
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() && isRelevantFile(filepath.Base(path)) {
+			content, err := os.ReadFile(path)
+			if err == nil {
+				fileMap[filepath.Base(path)] = string(content)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Error reading directory: %v", err)
+	}
+}
+
+
+====================
+PATH: ./package.json
+====================
+{
+  "dependencies": {
+    "html2pdf.js": "^0.14.0"
+  }
+}
+
+
+====================
+PATH: ./analyzer_test.go
+====================
+// analyzer_test.go
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+// Helper function to check if a specific string exists in a slice
+func containsString(slice []string, expected string) bool {
+	for _, item := range slice {
+		if strings.Contains(item, expected) {
+			return true
+		}
+	}
+	return false
+}
+
+// Test 1: Verify that SSSD version extraction works correctly
+func TestGetSSSDVersion(t *testing.T) {
+	packages := []string{"sssd-2.10.2-150700.9.17.1.x86_64", "sssd-ad-2.10.2"}
+	major, minor := getSSSDVersion(packages)
+
+	if major != 2 || minor != 10 {
+		t.Errorf("Expected version 2.10, but got %d.%d", major, minor)
+	}
+}
+
+// Test 2: Verify the Kerberos 5-minute rule (Time Skew)
+func TestAnalyzeTime_KerberosSkew(t *testing.T) {
+	fileMap := map[string]string{
+		"systemd.txt": "Active: active (running) chronyd.service\n",
+		"ntp.txt":     "System time     : 312.450 seconds fast of NTP time\nSystem clock synchronized: yes\n",
+	}
+	var report ReportData
+	analyzeTime(fileMap, &report)
+
+	if !containsString(report.Problems, "System time offset is 312.45") {
+		t.Errorf("Failed to detect Kerberos Time Skew > 300 seconds")
+	}
+}
+
+// Test 3: Verify the RC4 Downgrade bug is reported in Tuning
+func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
+	fileMap := map[string]string{
+		"messages": "Dec 10 12:00:00 server sssd: service key not available\n",
+	}
+	var report ReportData
+	analyzeSSSDConfigAndLogs(fileMap, &report)
+
+	if !containsString(report.Warnings, "[AD CRYPTO BUG]") {
+		t.Errorf("Failed to detect RC4 downgrade bug in logs")
+	}
+}
+
+// Test 4: Verify deprecated 'enumerate = true' is caught
+func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
+	fileMap := map[string]string{
+		"sssd.conf": "[domain/ad]\nenumerate = true\n",
+	}
+	var report ReportData
+	analyzeSSSDConfigAndLogs(fileMap, &report)
+
+	if !containsString(report.Problems, "[DEPRECATION] 'enumerate = true' is set") {
+		t.Errorf("Failed to detect deprecated enumerate=true setting")
+	}
+}
+
+// Test 5: Verify vm.dirty_bytes performance issue
+func TestAnalyzePerformance_DirtyBytes(t *testing.T) {
+	fileMap := map[string]string{
+		"memory.txt": "vm.dirty_bytes = 0\n",
+	}
+	var report ReportData
+	analyzePerformance(fileMap, &report)
+
+	if !containsString(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0") {
+		t.Errorf("Failed to detect vm.dirty_bytes = 0 misconfiguration")
+	}
+}
+
+// Test 6: Verify strict nsswitch.conf ordering (sss before files)
+func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
+	fileMap := map[string]string{
+		// 'sss' is mistakenly placed before 'files'
+		"nsswitch.conf": "passwd: sss files\ngroup: files sss\n",
+	}
+	var report ReportData
+	analyzeNSSwitch(fileMap, &report)
+
+	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
+		t.Errorf("Failed to detect bad nsswitch.conf ordering")
+	}
+}
+
+// Test 7: Verify SSSD >= 2.10 file permissions (Should catch root:root as an error on standard OS)
+func TestAnalyzePermissions_NewVersion(t *testing.T) {
+	fileMap := map[string]string{
+		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		// Wrong permissions for >= 2.10 (should be root:sssd 0640)
+		"sssd.txt": "-rw------- 1 root root 1024 Mar 10 10:00 sssd.conf\n",
+	}
+	var report ReportData
+	analyzePackages(fileMap, &report) // This extracts the version 2.10
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if !containsString(report.Problems, "strictly requires 'root:sssd'") {
+		t.Errorf("Failed to detect incorrect file ownership for SSSD 2.10+")
+	}
+}
+
+// Test 8: Verify Disk Space warning for full partitions
+func TestAnalyzeDiskSpace_Critical(t *testing.T) {
+	fileMap := map[string]string{
+		"fs-diskio.txt": "/dev/sda1  100G  98G  2G  98% /\n",
+	}
+	var report ReportData
+	analyzeDiskSpace(fileMap, &report)
+
+	if !containsString(report.Problems, "[CRITICAL] Partition / is 98% full") {
+		t.Errorf("Failed to detect 98%% full root partition")
+	}
+}
+
+// Test 9: Verify Systemd Exit Code parsing (Code 4 = Config Error)
+func TestAnalyzeServices_CrashCode4(t *testing.T) {
+	fileMap := map[string]string{
+		"systemd.txt": "● sssd.service - System Security Services Daemon\n   Loaded: loaded\n   Active: failed (Result: exit-code)\n  Process: 1234 ExecStart=/usr/sbin/sssd (code=exited, status=4)\n",
+	}
+	var report ReportData
+	analyzeServices(fileMap, &report)
+
+	if !containsString(report.Problems, "crashed with exit code 4 (Configuration Error)") {
+		t.Errorf("Failed to parse systemd exit code 4")
+	}
+}
+
+// Test 10: Verify FQDN Hostname check
+func TestAnalyzeHostname_ShortName(t *testing.T) {
+	fileMap := map[string]string{
+		"basic-environment.txt": "Hostname: linux-server\n", // Missing the dot (e.g. .local)
+	}
+	var report ReportData
+	analyzeHostnameAndFQDN(fileMap, &report)
+
+	if !containsString(report.Problems, "System is using a short hostname instead of an FQDN") {
+		t.Errorf("Failed to detect short hostname")
+	}
+}
+
+// Test 11: Verify AppArmor MAC Status extraction
+func TestAnalyzeMACStatus_AppArmor(t *testing.T) {
+	fileMap := map[string]string{
+		"security-apparmor.txt": "apparmor module is loaded.\n",
+	}
+	var report ReportData
+	analyzeMACStatus(fileMap, &report)
+
+	if report.MACType != "AppArmor" {
+		t.Errorf("Expected MACType 'AppArmor', got '%s'", report.MACType)
+	}
+}
+
+// Test 12: Verify SELinux MAC Status extraction
+func TestAnalyzeMACStatus_SELinux(t *testing.T) {
+	fileMap := map[string]string{
+		"security-selinux.txt": "SELinux status:                 enabled\n",
+	}
+	var report ReportData
+	analyzeMACStatus(fileMap, &report)
+
+	if report.MACType != "SELinux" {
+		t.Errorf("Expected MACType 'SELinux', got '%s'", report.MACType)
+	}
+}
+
+// Test 13: Verify SELinux Log Warnings are suppressed on AppArmor
+func TestAnalyzeSSSDConfigAndLogs_SELinuxSuppression(t *testing.T) {
+	fileMap := map[string]string{
+		"security-apparmor.txt": "apparmor module is loaded.\n",
+		"sssd.txt":              "SELINUX_getpeercon failed\n",
+	}
+	var report ReportData
+	analyzeMACStatus(fileMap, &report)
+	analyzeSSSDConfigAndLogs(fileMap, &report)
+
+	foundError := false
+	for _, err := range report.SSSDLogErrors {
+		if strings.Contains(err.Description, "SELinux Warning") {
+			foundError = true
+			break
+		}
+	}
+
+	if foundError {
+		t.Errorf("Expected strict SELinux warnings to be suppressed when AppArmor is active.")
+	}
+}
+
+// Test 14: Verify SELinux Log Warnings are preserved on SELinux
+func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
+	fileMap := map[string]string{
+		"security-selinux.txt": "SELinux status:                 enabled\n",
+		"sssd.txt":             "SELINUX_getpeercon failed\n",
+	}
+	var report ReportData
+	analyzeMACStatus(fileMap, &report)
+	analyzeSSSDConfigAndLogs(fileMap, &report)
+
+	foundError := false
+	for _, err := range report.SSSDLogErrors {
+		if strings.Contains(err.Description, "SELinux Warning") {
+			foundError = true
+			break
+		}
+	}
+
+	if !foundError {
+		t.Errorf("Expected SELinux warnings to be preserved when SELinux is active.")
+	}
+}
+
+// Test 15: Verify valid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
+func TestAnalyzePermissions_VarLibSss_SSSD210_Valid(t *testing.T) {
+	fileMap := map[string]string{
+		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
+drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if containsString(report.Problems, "/var/lib/sss/") {
+		t.Errorf("Expected no /var/lib/sss/ permissions errors for perfectly owned directories, but found one.")
+	}
+}
+
+// Test 16: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
+func TestAnalyzePermissions_VarLibSss_SSSD210_Invalid(t *testing.T) {
+	fileMap := map[string]string{
+		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
+drwxr-xr-x 2 root root 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 root root  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if !containsString(report.Problems, "2 files or directories in /var/lib/sss/ are incorrectly owned") {
+		t.Errorf("Failed to detect exactly 2 incorrectly owned files in /var/lib/sss/ for SSSD 2.10+")
+	}
+}
+
+// Test 17: Verify SLES15 SP7 Bug Detection (sssd running unprivileged triggers warning)
+func TestAnalyzePermissions_SLES15SP7_UnprivilegedBug(t *testing.T) {
+	fileMap := map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
+drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzeOSAndHardware(fileMap, &report)
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if !containsString(report.Problems, "it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1") {
+		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
+	}
+}
+
+// Test 18: Verify SLES15 SP7 Valid Configuration (Reverted to root:root correctly)
+func TestAnalyzePermissions_SLES15SP7_Valid(t *testing.T) {
+	fileMap := map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.4.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 root root   40 2026-03-01 10:39 db
+drwxr-xr-x 2 root root 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 root root  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzeOSAndHardware(fileMap, &report)
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if containsString(report.Problems, "incorrectly owned") {
+		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
+	}
 }
 
 
@@ -231,7 +1030,6 @@ import (
 var reStatus = regexp.MustCompile(`status=(\d+)`)
 
 func deduplicateProblems(problems []string) []string {
-	// Optimized: map[string]struct{} uses 0 bytes of memory per entry compared to map[string]bool
 	seen := make(map[string]struct{})
 	var result []string
 	for _, p := range problems {
@@ -247,9 +1045,7 @@ func getSSSDVersion(packages []string) (int, int) {
 	for _, pkg := range packages {
 		parts := strings.Fields(pkg)
 		for _, p := range parts {
-			//if strings.HasPrefix(p, "sssd-") {
 			p = strings.TrimPrefix(p, "sssd-")
-			//}
 			if len(p) > 0 && p[0] >= '0' && p[0] <= '9' && strings.Contains(p, ".") {
 				vParts := strings.SplitN(p, ".", 3)
 				if len(vParts) >= 2 {
@@ -265,10 +1061,10 @@ func getSSSDVersion(packages []string) (int, int) {
 	return 0, 0
 }
 
-func analyzeData(fileMap map[string]string) ReportData {
+func analyzeData(fileMap map[string]string, anonymize bool) ReportData {
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.1.3" // Updated version
+	report.AppVersion = "0.1.4" // Bumped version
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
@@ -307,7 +1103,6 @@ func analyzeData(fileMap map[string]string) ReportData {
 
 	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
 		hasDebug9 := false
-		// Optimized debug_level check: Scan files and only replace strings if "debug_level" is explicitly on the line
 		checkDebug := func(line string) {
 			if hasDebug9 {
 				return
@@ -326,10 +1121,72 @@ func analyzeData(fileMap map[string]string) ReportData {
 		}
 	}
 
+	// Apply Anonymization if requested
+	if anonymize {
+		anonymizeReport(&report)
+	}
+
 	return report
 }
 
+// anonymizeReport scrubs PII from the report
+func anonymizeReport(r *ReportData) {
+	// Matches IPv4 addresses
+	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+
+	maskString := func(s string) string {
+		// Mask IPs
+		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
+
+		// Mask Domain occurrences if known
+		if r.SearchDomain != "" && r.SearchDomain != "None" {
+			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
+		}
+		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
+			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
+			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
+		}
+		return s
+	}
+
+	// Mask global identity fields
+	r.HardwareManufacturer = "[REDACTED]"
+	r.HardwareModel = "[REDACTED]"
+	r.VirtualIdentity = "[REDACTED]"
+	r.SCCStatus = "[REDACTED]"
+
+	for i, ns := range r.Nameservers {
+		r.Nameservers[i] = maskString(ns)
+	}
+	r.SearchDomain = maskString(r.SearchDomain)
+	r.KerberosRealm = maskString(r.KerberosRealm)
+
+	for i, p := range r.Problems {
+		r.Problems[i] = maskString(p)
+	}
+	for i, w := range r.Warnings {
+		r.Warnings[i] = maskString(w)
+	}
+	for i, mac := range r.MACDenialExamples {
+		r.MACDenialExamples[i] = maskString(mac)
+	}
+	for i := range r.SSSDLogErrors {
+		r.SSSDLogErrors[i].Description = maskString(r.SSSDLogErrors[i].Description)
+		for j, ex := range r.SSSDLogErrors[i].Examples {
+			r.SSSDLogErrors[i].Examples[j] = maskString(ex)
+		}
+	}
+	for i := range r.MatchedTIDs {
+		for j, ev := range r.MatchedTIDs[i].Evidence {
+			r.MatchedTIDs[i].Evidence[j] = maskString(ev)
+		}
+	}
+	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+}
+
 func analyzeOSAndHardware(fileMap map[string]string, report *ReportData) {
+	// ... KEEP YOUR EXISTING CODE EXACTLY AS IT IS FROM HERE DOWN ...
 	if env, ok := fileMap["basic-environment.txt"]; ok {
 		scanner := bufio.NewScanner(strings.NewReader(env))
 		for scanner.Scan() {
@@ -1339,994 +2196,238 @@ func analyzeBasicHealth(fileMap map[string]string, report *ReportData) {
 
 
 ====================
-PATH: ./kb.go
+PATH: ./app.go
 ====================
-// kb.go
 package main
 
 import (
-	"encoding/json"
-	"log"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-)
-
-// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data
-func matchKBArticles(fileMap map[string]string, report *ReportData) {
-	exePath, err := os.Executable()
-	kbDir := "kb_articles"
-
-	if err == nil {
-		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
-		if _, err := os.Stat(exeDir); !os.IsNotExist(err) {
-			kbDir = exeDir
-		}
-	}
-
-	if _, err := os.Stat(kbDir); os.IsNotExist(err) {
-		return
-	}
-
-	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
-	if err != nil || len(files) == 0 {
-		return
-	}
-
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
-	configFiles := []string{"sssd.conf"}
-
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			log.Printf("Warning: Failed to read KB article %s: %v", file, err)
-			continue
-		}
-
-		var article TIDArticle
-		if err := json.Unmarshal(content, &article); err != nil {
-			log.Printf("Warning: Invalid JSON in KB article %s: %v", file, err)
-			continue
-		}
-
-		// Initialize evidence slice
-		article.Evidence = []string{}
-
-		logMatched := len(article.LogPatterns) == 0
-		if !logMatched {
-			for _, pattern := range article.LogPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(fileMap, logFiles, func(line string) {
-					if matcher.MatchString(line) {
-						logMatched = true
-						// Capture up to 3 examples
-						if len(article.Evidence) < 3 {
-							cleanLine := strings.TrimSpace(line)
-							isDupe := false
-							for _, ev := range article.Evidence {
-								if ev == cleanLine {
-									isDupe = true
-									break
-								}
-							}
-							if !isDupe {
-								article.Evidence = append(article.Evidence, cleanLine)
-							}
-						}
-					}
-				})
-			}
-		}
-
-		configMatched := len(article.ConfigPatterns) == 0
-		if !configMatched {
-			for _, pattern := range article.ConfigPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(fileMap, configFiles, func(line string) {
-					if matcher.MatchString(line) {
-						configMatched = true
-					}
-				})
-			}
-		}
-
-		if logMatched && configMatched {
-			if len(article.LogPatterns) > 0 || len(article.ConfigPatterns) > 0 {
-				report.MatchedTIDs = append(report.MatchedTIDs, article)
-			}
-		}
-	}
-}
-
-
-====================
-PATH: ./report.go
-====================
-// report.go
-package main
-
-import (
+	"context"
+	"encoding/base64"
 	"fmt"
-	"html/template"
-	"log"
 	"os"
 	"strings"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func buildTextReport(report ReportData) string {
-	var sb strings.Builder
-
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("             SUPPORTCONFIG SSSD ANALYSIS REPORT\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" Generated: %s\n", report.Timestamp))
-	if report.SupportCaseID != "" {
-		sb.WriteString(fmt.Sprintf(" Support Case (SR#): %s\n", report.SupportCaseID))
-	}
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-
-	sb.WriteString(fmt.Sprintf("[+] OS Release:        %s\n", report.SLESRlease))
-	sb.WriteString(fmt.Sprintf("[+] Kernel:            %s\n", report.KernelVersion))
-	sb.WriteString(fmt.Sprintf("[+] SCC Status:        %s\n", report.SCCStatus))
-	sb.WriteString(fmt.Sprintf("[+] Hardware:          %s %s\n", report.HardwareManufacturer, report.HardwareModel))
-	sb.WriteString(fmt.Sprintf("[+] Virtualization:    %s (Identity: %s)\n", report.Hypervisor, report.VirtualIdentity))
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-
-	sb.WriteString(fmt.Sprintf("[+] SSSD Installed:    %v\n", report.SssdInstalled))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Config:       %v\n", report.SssdConfigFound))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Service:      %s\n", report.SssdService))
-	sb.WriteString(fmt.Sprintf("[+] Winbind Status:    %s\n", report.WinbindService))
-	sb.WriteString(fmt.Sprintf("[+] NSCD Service:      %s\n", report.NscdStatus))
-	if len(report.NscdCaching) > 0 {
-		sb.WriteString(fmt.Sprintf("[!] NSCD Caching:      YES (%s)\n", strings.Join(report.NscdCaching, ", ")))
-	} else {
-		sb.WriteString("[+] NSCD Caching:      Safely Disabled for SSSD modules\n")
-	}
-
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-	sb.WriteString("               AD / KERBEROS INTEGRATION CHECKS\n")
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-
-	sb.WriteString(fmt.Sprintf("[+] DNS Nameservers:   %s\n", strings.Join(report.Nameservers, ", ")))
-	sb.WriteString(fmt.Sprintf("[+] DNS Search Domain: %s\n", report.SearchDomain))
-	sb.WriteString(fmt.Sprintf("[+] Time Service:      %s\n", report.TimeService))
-	sb.WriteString(fmt.Sprintf("[+] Kerberos Realm:    %s\n", report.KerberosRealm))
-	sb.WriteString(fmt.Sprintf("[+] Machine Keytab:    %v\n", report.KeytabFound))
-
-	if report.PamGDPRRestricted {
-		sb.WriteString("[!] PAM pam_sss.so:    Restricted (GDPR)\n")
-	} else {
-		sb.WriteString(fmt.Sprintf("[+] PAM pam_sss.so:    %v\n", report.PamSssInstalled))
-	}
-	sb.WriteString(fmt.Sprintf("[+] NSSwitch valid:    %v\n", report.NsswitchValid))
-
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-	sb.WriteString(fmt.Sprintf("[+] SSSD AD Provider:  %v\n", report.ADProviderMode))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Use FQDN:     %v\n", report.UseFQDNSet))
-	sb.WriteString(fmt.Sprintf("[!] SSSD Enumerate:    %v\n", report.EnumerateIssue))
-
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                  INSTALLED SSSD PACKAGES\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	if len(report.SSSDPackages) > 0 {
-		for _, pkg := range report.SSSDPackages {
-			sb.WriteString(fmt.Sprintf(" [+] %s\n", pkg))
-		}
-	} else {
-		sb.WriteString(" [-] No SSSD packages found.\n")
-	}
-
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                 SSSD LOG ERRORS (sssd.txt)\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	if len(report.SSSDLogErrors) == 0 {
-		sb.WriteString(" [+] No critical AD/Kerberos errors found in SSSD logs.\n")
-	} else {
-		for _, errData := range report.SSSDLogErrors {
-			sb.WriteString(fmt.Sprintf(" [!] %s\n", errData.Description))
-			for _, line := range errData.Examples {
-				sb.WriteString(fmt.Sprintf("     - %s\n", line))
-			}
-		}
-	}
-
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                     ACTIONABLE PROBLEMS\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-
-	if len(report.Problems) == 0 {
-		sb.WriteString(" No major SSSD/Auth issues detected based on the checks.\n")
-	} else {
-		for _, prob := range report.Problems {
-			sb.WriteString(fmt.Sprintf(" [X] %s\n", prob))
-		}
-	}
-
-	if len(report.MACDenialExamples) > 0 {
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("              APPARMOR / SELINUX DENIALS FOUND\n")
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		for _, line := range report.MACDenialExamples {
-			sb.WriteString(fmt.Sprintf(" [!] %s\n", line))
-		}
-	}
-
-	if len(report.Warnings) > 0 {
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("                 TUNING & DIAGNOSTIC HINTS\n")
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		for _, warn := range report.Warnings {
-			sb.WriteString(fmt.Sprintf(" [i] %s\n", warn))
-		}
-	}
-
-	if len(report.MatchedTIDs) > 0 {
-		sb.WriteString(strings.Repeat("=", 60) + "\n")
-		sb.WriteString("               KNOWLEDGE BASE ARTICLES (TIDs)\n")
-		sb.WriteString(strings.Repeat("=", 60) + "\n")
-		for _, tid := range report.MatchedTIDs {
-			sb.WriteString(fmt.Sprintf(" [KB] %s: %s\n", tid.TIDID, tid.Title))
-			sb.WriteString(fmt.Sprintf("      Link: %s\n", tid.URL))
-			sb.WriteString(fmt.Sprintf("      Desc: %s\n", tid.Description))
-			if len(tid.Evidence) > 0 {
-				sb.WriteString("      Log Evidence:\n")
-				for _, ev := range tid.Evidence {
-					sb.WriteString(fmt.Sprintf("       - %s\n", ev))
-				}
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-
-	return sb.String()
+// App struct
+type App struct {
+	ctx context.Context
 }
 
-func writeHTMLReportFile(report ReportData, filename string) {
-	const tpl = `
-<!DOCTYPE html>
-<html>
-<head>
-<title>SSSD Supportconfig Analysis</title>
-<style>
-	body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 40px; }
-	h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 5px; }
-	.timestamp { color: #666; font-size: 0.9em; margin-bottom: 20px; }
-	h2 { color: #d9534f; border-bottom: 1px solid #d9534f; padding-bottom: 5px; margin-top: 30px;}
-	h2.warn-header { color: #17a2b8; border-bottom: 1px solid #17a2b8; }
-	h2.kb-header { color: #28a745; border-bottom: 1px solid #28a745; }
-	.info-table { border-collapse: collapse; width: 100%; max-width: 900px; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px;}
-	.info-table th, .info-table td { padding: 12px 15px; border: 1px solid #ddd; text-align: left; }
-	.info-table th { background-color: #0056b3; color: white; width: 35%; }
-	.section-title { background-color: #e9ecef !important; color: #333 !important; font-weight: bold; text-align: center; }
-	.problem-list { background: #ffebee; padding: 20px; border-left: 5px solid #d9534f; list-style-type: square; }
-	.problem-list li { margin-bottom: 10px; font-weight: bold; }
-	.warn-list { background: #e2f3f5; padding: 20px; border-left: 5px solid #17a2b8; list-style-type: square; }
-	.warn-list li { margin-bottom: 10px; font-weight: normal; color: #0c5460; }
-	.kb-list { background: #e8f5e9; padding: 20px; border-left: 5px solid #28a745; list-style-type: none; }
-	.kb-list li { margin-bottom: 15px; }
-	.kb-title { font-weight: bold; color: #155724; font-size: 1.1em; }
-	.kb-desc { color: #333; margin-top: 5px; }
-	.success { color: green; font-weight: bold;}
-	.fail { color: red; font-weight: bold;}
-	.warn { color: #d39e00; font-weight: bold;}
-	
-	details summary { cursor: pointer; font-weight: bold; color: #555; padding: 5px 0; outline: none; transition: color 0.2s;}
-	details summary:hover { color: #000; }
-	.log-block { margin-top: 5px; background: #f8f9fa; padding: 10px; border-left: 3px solid #d9534f; font-family: monospace; font-size: 0.85em; overflow-x: auto; color: #333;}
-	.mac-block { background: #fff3cd; border-left: 3px solid #d39e00; }
-	
-	.pkg-list { margin: 0; padding-left: 20px; font-family: monospace; font-size: 0.9em; }
-	.footer { margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px; }
-</style>
-</head>
-<body>
-	<h1>Supportconfig SSSD Analysis Report</h1>
-	<div class="timestamp">Generated on: {{.Timestamp}}</div>
-	
-	<table class="info-table">
-		<tr><td colspan="2" class="section-title">System & Virtualization Information</td></tr>
-		<tr><th>OS Release</th><td>{{.SLESRlease}}</td></tr>
-		<tr><th>Kernel Version</th><td>{{.KernelVersion}}</td></tr>
-		<tr><th>SCC Status</th><td>{{.SCCStatus}}</td></tr>
-		<tr><th>Hardware</th><td>{{.HardwareManufacturer}} {{.HardwareModel}}</td></tr>
-		<tr><th>Virtualization</th><td>{{.Hypervisor}} (Identity: {{.VirtualIdentity}})</td></tr>
-		
-		<tr><td colspan="2" class="section-title">Base Authentication Services</td></tr>
-		<tr><th>SSSD Installed</th><td>{{.SssdInstalled}}</td></tr>
-		<tr><th>SSSD Config Found</th><td>{{if .SssdConfigFound}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
-		<tr><th>SSSD Service Status</th><td>{{.SssdService}}</td></tr>
-		<tr><th>Winbind Status</th><td>{{.WinbindService}}</td></tr>
-		<tr><th>NSCD Service Status</th><td>{{.NscdStatus}}</td></tr>
-		<tr><th>NSSwitch Valid</th><td>{{if .NsswitchValid}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
-		<tr><th>PAM pam_sss.so Found</th><td>{{if .PamGDPRRestricted}}<span class="warn">Restricted (GDPR)</span>{{else if .PamSssInstalled}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
-		
-		<tr><td colspan="2" class="section-title">Installed SSSD Packages</td></tr>
-		<tr><td colspan="2">
-			{{if .SSSDPackages}}
-			<ul class="pkg-list">
-				{{range .SSSDPackages}}<li>{{.}}</li>{{end}}
-			</ul>
-			{{else}}
-			<span class="warn">No SSSD packages found.</span>
-			{{end}}
-		</td></tr>
+// NewApp creates a new App application struct
+func NewApp() *App {
+	return &App{}
+}
 
-		<tr><td colspan="2" class="section-title">Active Directory & Kerberos Prerequisites</td></tr>
-		<tr><th>DNS Nameservers</th><td>
-			<ul style="margin: 0; padding-left: 20px;">
-			{{range .Nameservers}}<li>{{.}}</li>{{end}}
-			</ul>
-		</td></tr>
-		<tr><th>DNS Search Domain</th><td>{{.SearchDomain}}</td></tr>
-		<tr><th>Time Sync Service</th><td>{{.TimeService}}</td></tr>
-		<tr><th>Kerberos Realm</th><td>{{.KerberosRealm}}</td></tr>
-		<tr><th>Machine Keytab Verified</th><td>{{if .KeytabFound}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
-		
-		<tr><td colspan="2" class="section-title">Deep SSSD Configuration</td></tr>
-		<tr><th>AD Provider Explicitly Set</th><td>{{.ADProviderMode}}</td></tr>
-		<tr><th>Use Fully Qualified Names</th><td>{{.UseFQDNSet}}</td></tr>
-		<tr><th>Enumerate Set to True</th><td>{{if .EnumerateIssue}}<span class="fail">Yes (Performance Risk)</span>{{else}}<span class="success">No</span>{{end}}</td></tr>
+// startup is called when the app starts. The context is saved
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+}
 
-		<tr><td colspan="2" class="section-title">SSSD Log Errors (sssd.txt)</td></tr>
-		{{if .SSSDLogErrors}}
-			{{range .SSSDLogErrors}}
-			<tr><td colspan="2"><span class="fail">Error Detected:</span> {{.Description}}
-				<details>
-					<summary>View Log Snippets</summary>
-					<div class="log-block">
-						{{range .Examples}}
-						<div style="margin-bottom: 4px;">{{.}}</div>
-						{{end}}
-					</div>
-				</details>
-			</td></tr>
-			{{end}}
-		{{else}}
-			<tr><td colspan="2"><span class="success">No critical AD/Kerberos errors found in SSSD logs.</span></td></tr>
-		{{end}}
-	</table>
+// OpenFileBrowser opens the native OS file browser
+func (a *App) OpenFileBrowser() (string, error) {
+	options := runtime.OpenDialogOptions{
+		Title: "Select Supportconfig Archive",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Supportconfig Archives (*.txz, *.tar.xz)", Pattern: "*.txz;*.tar.xz"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	}
+	return runtime.OpenFileDialog(a.ctx, options)
+}
 
-	<h2>Actionable Problems Found</h2>
-	{{if .Problems}}
-		<ul class="problem-list">
-		{{range .Problems}}
-			<li>{{.}}</li>
-		{{end}}
-		</ul>
-	{{else}}
-		<p class="success" style="font-size: 1.2em;">No major SSSD/Auth issues detected based on the analysis!</p>
-	{{end}}
-
-	{{if .MACDenialExamples}}
-		<h2 style="color: #d39e00; border-bottom: 1px solid #d39e00;">AppArmor / SELinux Denials Found</h2>
-		<details>
-			<summary style="color: #d39e00;">View Blocked Access Logs</summary>
-			<div class="log-block mac-block">
-				{{range .MACDenialExamples}}
-					<div style="margin-bottom: 4px;">{{.}}</div>
-				{{end}}
-			</div>
-		</details>
-	{{end}}
-
-	{{if .Warnings}}
-		<h2 class="warn-header">Tuning & Diagnostic Hints</h2>
-		<ul class="warn-list">
-		{{range .Warnings}}
-			<li>{{.}}</li>
-		{{end}}
-		</ul>
-	{{end}}
-
-	{{if .MatchedTIDs}}
-<h2 style="color: #2e7d32; border-bottom: 2px solid #2e7d32; padding-bottom: 5px;">Knowledge Base Articles (TIDs)</h2>
-<div style="background-color: #e8f5e9; border-left: 5px solid #2e7d32; padding: 15px; margin-bottom: 20px;">
-    {{range .MatchedTIDs}}
-    <div style="margin-bottom: 20px;">
-        <strong><a href="{{.URL}}" target="_blank" style="color: #1565c0; text-decoration: none; font-size: 1.1em;">[{{.TIDID}}] {{.Title}}</a></strong>
-        
-        <div style="white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; margin-top: 8px; font-size: 0.95em; color: #333; line-height: 1.4;">{{.Description}}</div>
-        
-        {{if .Evidence}}
-        <div style="margin-top: 12px; padding: 10px; background-color: #fff; border: 1px solid #c8e6c9; border-radius: 4px;">
-            <strong style="color: #d84315; font-size: 0.9em;">🔍 Log Evidence Found:</strong>
-            <ul style="margin-top: 6px; margin-bottom: 0; padding-left: 20px; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; color: #555;">
-                {{range .Evidence}}
-                <li style="margin-bottom: 4px;">{{.}}</li>
-                {{end}}
-            </ul>
-        </div>
-        {{end}}
-    </div>
-    {{end}}
-</div>
-{{end}}
-
-	<div class="footer">
-		sssd-inspector v{{.AppVersion}} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
-	</div>
-</body>
-</html>
-`
-	t, err := template.New("report").Parse(tpl)
+// Analyze parses the archive and optionally anonymizes PII
+func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
+	fileMap := make(map[string]string)
+	info, err := os.Stat(targetPath)
 	if err != nil {
-		log.Printf("Template parsing error: %v", err)
-		return
+		return ReportData{}, fmt.Errorf("error accessing path: %v", err)
+	}
+	if info.IsDir() {
+		loadFromDir(targetPath, fileMap)
+	} else {
+		loadFromArchive(targetPath, fileMap)
+	}
+	return analyzeData(fileMap, anonymize), nil
+}
+
+// SavePDF opens a native Save dialog and writes the PDF to disk
+func (a *App) SavePDF(b64 string) (string, error) {
+	parts := strings.SplitN(b64, "base64,", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid PDF data received from frontend")
 	}
 
-	file, err := os.Create(filename)
+	pdfBytes, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
-		log.Printf("Failed to create HTML report: %v", err)
-		return
+		return "", fmt.Errorf("failed to decode base64: %v", err)
 	}
-	defer file.Close()
 
-	if err := t.Execute(file, report); err != nil {
-		log.Printf("Template execution error: %v", err)
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: "SSSD_Analysis_Report.pdf",
+		Title:           "Save PDF Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PDF Document (*.pdf)", Pattern: "*.pdf"},
+		},
 	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	if filePath == "" {
+		return "cancelled", nil
+	}
+
+	err = os.WriteFile(filePath, pdfBytes, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	return filePath, nil
+}
+
+// SaveTXT opens a native Save dialog and writes the report to a TXT file
+func (a *App) SaveTXT(report ReportData) (string, error) {
+	// ... Re-use your existing SaveTXT logic ...
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: "SSSD_Analysis_Report.txt",
+		Title:           "Save TXT Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Text Document (*.txt)", Pattern: "*.txt"},
+		},
+	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "cancelled", nil
+	}
+	txtContent := buildTextReport(report)
+	err = os.WriteFile(filePath, []byte(txtContent), 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+	return filePath, nil
 }
 
 
 ====================
-PATH: ./types.go
+PATH: ./main.go
 ====================
-// types.go
-package main
-
-// SSSDLogError holds the human-readable description and samples of the actual log lines
-type SSSDLogError struct {
-	Description string   `json:"description"`
-	Examples    []string `json:"examples"`
-}
-
-// TIDArticle represents a dynamically loaded Knowledge Base article
-type TIDArticle struct {
-	TIDID          string   `json:"tid_id"`
-	Title          string   `json:"title"`
-	URL            string   `json:"url"`
-	Description    string   `json:"description"`
-	LogPatterns    []string `json:"log_patterns"`
-	ConfigPatterns []string `json:"config_patterns"`
-	Evidence       []string `json:"-"` // Log lines that triggered the match
-}
-
-// ReportData holds the results of our analysis
-type ReportData struct {
-	AppVersion    string `json:"app_version"`
-	Timestamp     string `json:"timestamp"`
-	SupportCaseID string `json:"support_case_id"`
-	KernelVersion string `json:"kernel_version"`
-	SLESRlease    string `json:"sles_release"`
-	SCCStatus     string `json:"scc_status"`
-
-	// Virtualization & Hardware
-	HardwareManufacturer string `json:"hardware_manufacturer"`
-	HardwareModel        string `json:"hardware_model"`
-	Hypervisor           string `json:"hypervisor"`
-	VirtualIdentity      string `json:"virtual_identity"`
-	MACType              string `json:"mac_type"`
-
-	// Base Services
-	SssdInstalled   bool     `json:"sssd_installed"`
-	SssdConfigFound bool     `json:"sssd_config_found"`
-	SssdService     string   `json:"sssd_service"`
-	WinbindService  string   `json:"winbind_service"`
-	NscdStatus      string   `json:"nscd_status"`
-	NscdCaching     []string `json:"nscd_caching"`
-	SSSDPackages    []string `json:"sssd_packages"`
-
-	// Authentication Details
-	NsswitchValid     bool     `json:"nsswitch_valid"`
-	PamSssInstalled   bool     `json:"pam_sss_installed"`
-	PamGDPRRestricted bool     `json:"pam_gdpr_restricted"`
-	HostsIssues       []string `json:"hosts_issues"`
-	Nameservers       []string `json:"nameservers"`
-	SearchDomain      string   `json:"search_domain"`
-	TimeService       string   `json:"time_service"`
-	KerberosRealm     string   `json:"kerberos_realm"`
-	KeytabFound       bool     `json:"keytab_found"`
-
-	// SSSD Deep AD Configs
-	ADProviderMode bool `json:"ad_provider_mode"`
-	EnumerateIssue bool `json:"enumerate_issue"`
-	UseFQDNSet     bool `json:"use_fqdn_set"`
-
-	// Log Analysis & Problems
-	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors"`
-	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
-	MACDenialExamples []string       `json:"mac_denial_examples"`
-
-	Problems    []string     `json:"problems"`
-	Warnings    []string     `json:"warnings"`
-	MatchedTIDs []TIDArticle `json:"matched_tids"`
-}
-
-
-====================
-PATH: ./utils.go
-====================
-// utils.go
 package main
 
 import (
-	"bufio"
-	"strings"
-)
-
-// anyFileContains checks if any of the specified files contains the substring.
-// This is highly memory-efficient as it avoids concatenating files.
-func anyFileContains(fileMap map[string]string, files []string, search string) bool {
-	for _, name := range files {
-		if content, ok := fileMap[name]; ok {
-			if strings.Contains(content, search) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// scanFiles lazily scans lines across multiple files without concatenating them.
-// This allows the garbage collector to immediately clean up processed lines.
-func scanFiles(fileMap map[string]string, files []string, lineFunc func(line string)) {
-	for _, name := range files {
-		if content, ok := fileMap[name]; ok {
-			scanner := bufio.NewScanner(strings.NewReader(content))
-			for scanner.Scan() {
-				lineFunc(scanner.Text())
-			}
-		}
-	}
-}
-
-// isRelevantFile checks if the extracted file is one we care about parsing
-func isRelevantFile(name string) bool {
-	relevant := []string{
-		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
-		"systemd.txt", "basic-environment.txt", "updates.txt",
-		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
-		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
-		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
-		"memory.txt", "sar.txt", "messages", "messages.txt",
-	}
-	for _, r := range relevant {
-		if name == r {
-			return true
-		}
-	}
-	return false
-}
-
-// extractSection extracts a specific output block from a supportconfig text file
-func extractSection(text, header string) string {
-	scanner := bufio.NewScanner(strings.NewReader(text))
-	var sb strings.Builder
-	inSection := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, header) {
-			inSection = true
-			continue
-		}
-		if inSection {
-			// Stop extraction if we hit the next command block's header
-			if strings.HasPrefix(line, "#==[") {
-				break
-			}
-			sb.WriteString(line + "\n")
-		}
-	}
-	return sb.String()
-}
-
-
-====================
-PATH: ./loaders.go
-====================
-// loaders.go
-package main
-
-import (
-	"archive/tar"
-	"bytes"
-	"io"
+	"embed"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/ulikunitz/xz"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-func loadFromArchive(path string, fileMap map[string]string) {
-	f, err := os.Open(path)
-	if err != nil {
-		log.Printf("Error opening archive: %v", err)
-		return
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func main() {
+	// 1. Setup CLI Flags
+	versionShort := flag.Bool("v", false, "Print program version")
+	cliPath := flag.String("analyze", "", "Path to the supportconfig directory or log file")
+	txtReport := flag.Bool("txt", false, "Generate a TXT report (requires -analyze)")
+	htmlReport := flag.Bool("html", false, "Generate an HTML report (requires -analyze)")
+	anonymize := flag.Bool("anonymize", false, "Redact PII (IPs, Domains) from the report")
+	flag.Parse()
+
+	if *versionShort {
+		fmt.Printf("sssd-analyzer-gui version 0.1.4 (Hybrid)\n")
+		os.Exit(0)
 	}
-	defer f.Close()
 
-	r, err := xz.NewReader(f)
-	if err != nil {
-		log.Printf("Error creating xz reader: %v", err)
-		return
+	// 2. Traffic Cop Logic
+	if *cliPath != "" {
+		runCLI(*cliPath, *txtReport, *htmlReport, *anonymize)
+		os.Exit(0) // Exit immediately. Do not load the GUI.
 	}
 
-	tr := tar.NewReader(r)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Printf("Tar extraction error: %v", err)
-			return
-		}
-
-		if hdr.Typeflag != tar.TypeReg {
-			continue
-		}
-
-		fileName := filepath.Base(hdr.Name)
-		if isRelevantFile(fileName) {
-			buf := new(bytes.Buffer)
-			if _, err := io.Copy(buf, tr); err != nil {
-				log.Printf("Failed to read %s: %v", hdr.Name, err)
-			}
-			fileMap[fileName] = buf.String()
-		}
+	if flag.NArg() > 0 {
+		runCLI(flag.Arg(0), true, true, *anonymize)
+		os.Exit(0)
 	}
-}
 
-func loadFromDir(root string, fileMap map[string]string) {
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() && isRelevantFile(filepath.Base(path)) {
-			content, err := os.ReadFile(path)
-			if err == nil {
-				fileMap[filepath.Base(path)] = string(content)
-			}
-		}
-		return nil
+	// 3. Launch the Wails GUI
+	app := NewApp()
+
+	err := wails.Run(&options.App{
+		Title:  "SSSD Inspector",
+		Width:  1024,
+		Height: 768,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 244, G: 244, B: 249, A: 255},
+		OnStartup:        app.startup,
+		Bind: []interface{}{
+			app,
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
+		},
 	})
+
 	if err != nil {
-		log.Printf("Error reading directory: %v", err)
+		println("Error:", err.Error())
 	}
 }
 
-
-====================
-PATH: ./package.json
-====================
-{
-  "dependencies": {
-    "html2pdf.js": "^0.14.0"
-  }
-}
-
-
-====================
-PATH: ./analyzer_test.go
-====================
-// analyzer_test.go
-package main
-
-import (
-	"strings"
-	"testing"
-)
-
-// Helper function to check if a specific string exists in a slice
-func containsString(slice []string, expected string) bool {
-	for _, item := range slice {
-		if strings.Contains(item, expected) {
-			return true
-		}
+func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) {
+	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
+	if anonymize {
+		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
 	}
-	return false
-}
+	fileMap := make(map[string]string)
 
-// Test 1: Verify that SSSD version extraction works correctly
-func TestGetSSSDVersion(t *testing.T) {
-	packages := []string{"sssd-2.10.2-150700.9.17.1.x86_64", "sssd-ad-2.10.2"}
-	major, minor := getSSSDVersion(packages)
-
-	if major != 2 || minor != 10 {
-		t.Errorf("Expected version 2.10, but got %d.%d", major, minor)
+	info, err := os.Stat(path)
+	if err != nil {
+		log.Fatalf("Error accessing path: %v", err)
 	}
-}
 
-// Test 2: Verify the Kerberos 5-minute rule (Time Skew)
-func TestAnalyzeTime_KerberosSkew(t *testing.T) {
-	fileMap := map[string]string{
-		"systemd.txt": "Active: active (running) chronyd.service\n",
-		"ntp.txt":     "System time     : 312.450 seconds fast of NTP time\nSystem clock synchronized: yes\n",
+	if info.IsDir() {
+		loadFromDir(path, fileMap)
+	} else {
+		loadFromArchive(path, fileMap)
 	}
-	var report ReportData
-	analyzeTime(fileMap, &report)
 
-	if !containsString(report.Problems, "System time offset is 312.45") {
-		t.Errorf("Failed to detect Kerberos Time Skew > 300 seconds")
-	}
-}
+	report := analyzeData(fileMap, anonymize)
 
-// Test 3: Verify the RC4 Downgrade bug is reported in Tuning
-func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
-	fileMap := map[string]string{
-		"messages": "Dec 10 12:00:00 server sssd: service key not available\n",
-	}
-	var report ReportData
-	analyzeSSSDConfigAndLogs(fileMap, &report)
+	now := time.Now()
+	report.Timestamp = now.Format("02:01:2006 15:04:05")
 
-	if !containsString(report.Warnings, "[AD CRYPTO BUG]") {
-		t.Errorf("Failed to detect RC4 downgrade bug in logs")
-	}
-}
+	reportText := buildTextReport(report)
+	fmt.Println(reportText)
 
-// Test 4: Verify deprecated 'enumerate = true' is caught
-func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
-	fileMap := map[string]string{
-		"sssd.conf": "[domain/ad]\nenumerate = true\n",
-	}
-	var report ReportData
-	analyzeSSSDConfigAndLogs(fileMap, &report)
+	baseName := filepath.Base(path)
 
-	if !containsString(report.Problems, "[DEPRECATION] 'enumerate = true' is set") {
-		t.Errorf("Failed to detect deprecated enumerate=true setting")
-	}
-}
-
-// Test 5: Verify vm.dirty_bytes performance issue
-func TestAnalyzePerformance_DirtyBytes(t *testing.T) {
-	fileMap := map[string]string{
-		"memory.txt": "vm.dirty_bytes = 0\n",
-	}
-	var report ReportData
-	analyzePerformance(fileMap, &report)
-
-	if !containsString(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0") {
-		t.Errorf("Failed to detect vm.dirty_bytes = 0 misconfiguration")
-	}
-}
-
-// Test 6: Verify strict nsswitch.conf ordering (sss before files)
-func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
-	fileMap := map[string]string{
-		// 'sss' is mistakenly placed before 'files'
-		"nsswitch.conf": "passwd: sss files\ngroup: files sss\n",
-	}
-	var report ReportData
-	analyzeNSSwitch(fileMap, &report)
-
-	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
-		t.Errorf("Failed to detect bad nsswitch.conf ordering")
-	}
-}
-
-// Test 7: Verify SSSD >= 2.10 file permissions (Should catch root:root as an error on standard OS)
-func TestAnalyzePermissions_NewVersion(t *testing.T) {
-	fileMap := map[string]string{
-		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
-		// Wrong permissions for >= 2.10 (should be root:sssd 0640)
-		"sssd.txt": "-rw------- 1 root root 1024 Mar 10 10:00 sssd.conf\n",
-	}
-	var report ReportData
-	analyzePackages(fileMap, &report) // This extracts the version 2.10
-	analyzeSSSDFilePermissions(fileMap, &report)
-
-	if !containsString(report.Problems, "strictly requires 'root:sssd'") {
-		t.Errorf("Failed to detect incorrect file ownership for SSSD 2.10+")
-	}
-}
-
-// Test 8: Verify Disk Space warning for full partitions
-func TestAnalyzeDiskSpace_Critical(t *testing.T) {
-	fileMap := map[string]string{
-		"fs-diskio.txt": "/dev/sda1  100G  98G  2G  98% /\n",
-	}
-	var report ReportData
-	analyzeDiskSpace(fileMap, &report)
-
-	if !containsString(report.Problems, "[CRITICAL] Partition / is 98% full") {
-		t.Errorf("Failed to detect 98%% full root partition")
-	}
-}
-
-// Test 9: Verify Systemd Exit Code parsing (Code 4 = Config Error)
-func TestAnalyzeServices_CrashCode4(t *testing.T) {
-	fileMap := map[string]string{
-		"systemd.txt": "● sssd.service - System Security Services Daemon\n   Loaded: loaded\n   Active: failed (Result: exit-code)\n  Process: 1234 ExecStart=/usr/sbin/sssd (code=exited, status=4)\n",
-	}
-	var report ReportData
-	analyzeServices(fileMap, &report)
-
-	if !containsString(report.Problems, "crashed with exit code 4 (Configuration Error)") {
-		t.Errorf("Failed to parse systemd exit code 4")
-	}
-}
-
-// Test 10: Verify FQDN Hostname check
-func TestAnalyzeHostname_ShortName(t *testing.T) {
-	fileMap := map[string]string{
-		"basic-environment.txt": "Hostname: linux-server\n", // Missing the dot (e.g. .local)
-	}
-	var report ReportData
-	analyzeHostnameAndFQDN(fileMap, &report)
-
-	if !containsString(report.Problems, "System is using a short hostname instead of an FQDN") {
-		t.Errorf("Failed to detect short hostname")
-	}
-}
-
-// Test 11: Verify AppArmor MAC Status extraction
-func TestAnalyzeMACStatus_AppArmor(t *testing.T) {
-	fileMap := map[string]string{
-		"security-apparmor.txt": "apparmor module is loaded.\n",
-	}
-	var report ReportData
-	analyzeMACStatus(fileMap, &report)
-
-	if report.MACType != "AppArmor" {
-		t.Errorf("Expected MACType 'AppArmor', got '%s'", report.MACType)
-	}
-}
-
-// Test 12: Verify SELinux MAC Status extraction
-func TestAnalyzeMACStatus_SELinux(t *testing.T) {
-	fileMap := map[string]string{
-		"security-selinux.txt": "SELinux status:                 enabled\n",
-	}
-	var report ReportData
-	analyzeMACStatus(fileMap, &report)
-
-	if report.MACType != "SELinux" {
-		t.Errorf("Expected MACType 'SELinux', got '%s'", report.MACType)
-	}
-}
-
-// Test 13: Verify SELinux Log Warnings are suppressed on AppArmor
-func TestAnalyzeSSSDConfigAndLogs_SELinuxSuppression(t *testing.T) {
-	fileMap := map[string]string{
-		"security-apparmor.txt": "apparmor module is loaded.\n",
-		"sssd.txt":              "SELINUX_getpeercon failed\n",
-	}
-	var report ReportData
-	analyzeMACStatus(fileMap, &report)
-	analyzeSSSDConfigAndLogs(fileMap, &report)
-
-	foundError := false
-	for _, err := range report.SSSDLogErrors {
-		if strings.Contains(err.Description, "SELinux Warning") {
-			foundError = true
-			break
+	if genTxt {
+		txtReportFile := baseName + "_report.txt"
+		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
+		if err != nil {
+			fmt.Printf("Error writing txt report: %v\n", err)
+		} else {
+			fmt.Printf("Text report saved to: %s\n", txtReportFile)
 		}
 	}
 
-	if foundError {
-		t.Errorf("Expected strict SELinux warnings to be suppressed when AppArmor is active.")
-	}
-}
-
-// Test 14: Verify SELinux Log Warnings are preserved on SELinux
-func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
-	fileMap := map[string]string{
-		"security-selinux.txt": "SELinux status:                 enabled\n",
-		"sssd.txt":             "SELINUX_getpeercon failed\n",
-	}
-	var report ReportData
-	analyzeMACStatus(fileMap, &report)
-	analyzeSSSDConfigAndLogs(fileMap, &report)
-
-	foundError := false
-	for _, err := range report.SSSDLogErrors {
-		if strings.Contains(err.Description, "SELinux Warning") {
-			foundError = true
-			break
-		}
-	}
-
-	if !foundError {
-		t.Errorf("Expected SELinux warnings to be preserved when SELinux is active.")
-	}
-}
-
-// Test 15: Verify valid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
-func TestAnalyzePermissions_VarLibSss_SSSD210_Valid(t *testing.T) {
-	fileMap := map[string]string{
-		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
-		"sssd.txt": `/var/lib/sss/:
-total 20
-drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
-drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
-
-/var/lib/sss/mc:
-total 33900
--rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
-`,
-	}
-	var report ReportData
-	analyzePackages(fileMap, &report)
-	analyzeSSSDFilePermissions(fileMap, &report)
-
-	if containsString(report.Problems, "/var/lib/sss/") {
-		t.Errorf("Expected no /var/lib/sss/ permissions errors for perfectly owned directories, but found one.")
-	}
-}
-
-// Test 16: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
-func TestAnalyzePermissions_VarLibSss_SSSD210_Invalid(t *testing.T) {
-	fileMap := map[string]string{
-		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
-		"sssd.txt": `/var/lib/sss/:
-total 20
-drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
-drwxr-xr-x 2 root root 4096 2026-03-01 10:28 mc
-
-/var/lib/sss/mc:
-total 33900
--rw-rw-r-- 1 root root  6940392 2026-03-01 10:38 group
-`,
-	}
-	var report ReportData
-	analyzePackages(fileMap, &report)
-	analyzeSSSDFilePermissions(fileMap, &report)
-
-	if !containsString(report.Problems, "2 files or directories in /var/lib/sss/ are incorrectly owned") {
-		t.Errorf("Failed to detect exactly 2 incorrectly owned files in /var/lib/sss/ for SSSD 2.10+")
-	}
-}
-
-// Test 17: Verify SLES15 SP7 Bug Detection (sssd running unprivileged triggers warning)
-func TestAnalyzePermissions_SLES15SP7_UnprivilegedBug(t *testing.T) {
-	fileMap := map[string]string{
-		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
-		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
-		"sssd.txt": `/var/lib/sss/:
-total 20
-drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
-drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
-
-/var/lib/sss/mc:
-total 33900
--rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
-`,
-	}
-	var report ReportData
-	analyzeOSAndHardware(fileMap, &report)
-	analyzePackages(fileMap, &report)
-	analyzeSSSDFilePermissions(fileMap, &report)
-
-	if !containsString(report.Problems, "it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1") {
-		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
-	}
-}
-
-// Test 18: Verify SLES15 SP7 Valid Configuration (Reverted to root:root correctly)
-func TestAnalyzePermissions_SLES15SP7_Valid(t *testing.T) {
-	fileMap := map[string]string{
-		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
-		"rpm.txt":               "sssd-2.10.2-150700.4.1.x86_64\n",
-		"sssd.txt": `/var/lib/sss/:
-total 20
-drwx------ 2 root root   40 2026-03-01 10:39 db
-drwxr-xr-x 2 root root 4096 2026-03-01 10:28 mc
-
-/var/lib/sss/mc:
-total 33900
--rw-rw-r-- 1 root root  6940392 2026-03-01 10:38 group
-`,
-	}
-	var report ReportData
-	analyzeOSAndHardware(fileMap, &report)
-	analyzePackages(fileMap, &report)
-	analyzeSSSDFilePermissions(fileMap, &report)
-
-	if containsString(report.Problems, "incorrectly owned") {
-		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
+	if genHtml {
+		htmlReportFile := baseName + "_report.html"
+		writeHTMLReportFile(report, htmlReportFile)
+		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
 	}
 }
 
@@ -2424,6 +2525,37 @@ PATH: ./frontend/src/app.css
 }
 
 ====================
+PATH: ./frontend/src/style.css
+====================
+html {
+    background-color: rgba(27, 38, 54, 1);
+    text-align: center;
+    color: white;
+}
+
+body {
+    margin: 0;
+    color: white;
+    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+}
+
+@font-face {
+    font-family: "Nunito";
+    font-style: normal;
+    font-weight: 400;
+    src: local(""),
+    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+}
+
+#app {
+    height: 100vh;
+    text-align: center;
+}
+
+
+====================
 PATH: ./frontend/src/main.js
 ====================
 import './style.css';
@@ -2433,7 +2565,6 @@ import './app.css';
 import { Analyze, OpenFileBrowser, SaveTXT } from '../wailsjs/go/main/App';
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 
-// 2. Build the main layout (Added the Export PDF button)
 document.querySelector('#app').innerHTML = `
     <style>
         .report-wrapper { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 20px; text-align: left; }
@@ -2466,13 +2597,19 @@ document.querySelector('#app').innerHTML = `
 
     <div id="topBar" style="padding: 20px; background-color: #1e1e2e; color: white; text-align: center; border-bottom: 4px solid #0056b3;">
         <h2 style="margin: 0 0 10px 0; border: none; color: #fff;">SSSD Supportconfig Analyzer</h2>
-        <div style="display: flex; justify-content: center; gap: 10px;">
-            <input id="filePath" type="text" placeholder="Select or paste path to supportconfig.txz..." style="width: 500px; padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc;"/>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+            <input id="filePath" type="text" placeholder="Select or paste path to supportconfig.txz..." style="width: 450px; padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc;"/>
             <button id="browseBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px; font-weight: bold;">Browse...</button>
+            
+            <label style="color: white; margin-left: 5px; margin-right: 5px; display: flex; align-items: center; font-size: 14px; cursor: pointer;" title="Redacts IP Addresses and Domain Names from the report">
+                <input type="checkbox" id="anonymizeCheck" style="margin-right: 5px; cursor: pointer; transform: scale(1.2);"> Anonymize PII
+            </label>
+
             <button id="analyzeBtn" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-weight: bold;">Analyze</button>
             <button id="exportPdfBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold;">📄 Export PDF</button>
             <button id="exportTxtBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #17a2b8; color: white; border: none; border-radius: 4px; font-weight: bold;">📝 Export TXT</button>
-            <div id="zoomControls" style="display: none; margin-left: 10px;">
+            
+            <div id="zoomControls" style="display: none; margin-left: 5px;">
                 <button id="zoomOutBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px 0 0 4px; border-right: 1px solid #5a6268; font-weight: bold;">A-</button>
                 <button id="zoomInBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 0 4px 4px 0; font-weight: bold;">A+</button>
             </div>
@@ -2599,16 +2736,14 @@ function renderReportHTML(report) {
         html += `</div>`;
     }
 
-    // Add Dynamic Footer
     html += `
     <div style="margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px;">
-        sssd-inspector v${report.app_version} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
+        sssd-inspector v${report.app_version} - SUSE Technical Support - Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
     </div>`;
 
     return html;
 }
 
-// Wire up the Browse Button
 document.getElementById('browseBtn').addEventListener('click', () => {
     OpenFileBrowser().then((selectedPath) => {
         if (selectedPath) {
@@ -2619,9 +2754,10 @@ document.getElementById('browseBtn').addEventListener('click', () => {
     });
 });
 
-// Wire up the Analyze Button
 document.getElementById('analyzeBtn').addEventListener('click', () => {
     let filePath = document.getElementById('filePath').value.trim();
+    let isAnonymized = document.getElementById('anonymizeCheck').checked; // Read Checkbox
+    
     let resultBox = document.getElementById('resultBox');
     let exportPdfBtn = document.getElementById('exportPdfBtn');
     let exportTxtBtn = document.getElementById('exportTxtBtn');
@@ -2632,7 +2768,6 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         return;
     }
 
-    // Hide Export button during loading
     exportPdfBtn.style.display = 'none';
     exportTxtBtn.style.display = 'none';
     zoomControls.style.display = 'none';
@@ -2644,11 +2779,11 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         </div>
     `;
 
-    Analyze(filePath)
+    // Pass the boolean anonymize flag to the Go Backend
+    Analyze(filePath, isAnonymized)
         .then((report) => {
-            window.currentReport = report; // Store for TXT export
+            window.currentReport = report; 
             resultBox.innerHTML = renderReportHTML(report);
-            // Show the Export buttons now that we have data!
             exportPdfBtn.style.display = 'inline-block';
             exportTxtBtn.style.display = 'inline-block';
             zoomControls.style.display = 'inline-flex';
@@ -2661,31 +2796,21 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
         });
 });
 
-// 3. Wire up the Export PDF Button (Native Print Dialog)
 document.getElementById('exportPdfBtn').addEventListener('click', () => {
-    // Generate a timestamp
     const now = new Date();
     const timestamp = now.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
-    
-    // Temporarily change document title so the native Print to PDF picks it up as the filename
     const originalTitle = document.title;
     document.title = `SSSD_Analysis_Report_${timestamp}`;
-    
-    // Trigger OS native print dialog
     window.print();
-    
-    // Restore title immediately after the dialog opens
     document.title = originalTitle;
 });
 
-// 4. Wire up the Export TXT Button
 document.getElementById('exportTxtBtn').addEventListener('click', () => {
     const btn = document.getElementById('exportTxtBtn');
     btn.innerText = "⏳ Saving...";
-    
     SaveTXT(window.currentReport).then((savedPath) => {
         if (savedPath === "cancelled") {
-            btn.innerText = "📝 Export TXT"; // User clicked cancel
+            btn.innerText = "📝 Export TXT";
         } else {
             btn.innerText = "✅ Saved!";
             setTimeout(() => { btn.innerText = "📝 Export TXT"; }, 3000);
@@ -2697,7 +2822,6 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
     });
 });
 
-// 5. Wire up the Zoom Buttons
 let currentFontSize = 1.0;
 
 document.getElementById('zoomInBtn').addEventListener('click', () => {
@@ -2706,14 +2830,12 @@ document.getElementById('zoomInBtn').addEventListener('click', () => {
 });
 
 document.getElementById('zoomOutBtn').addEventListener('click', () => {
-    // Don't let it get completely unreadable
     if (currentFontSize > 0.4) {
         currentFontSize -= 0.1;
         document.getElementById('resultBox').style.fontSize = currentFontSize + 'em';
     }
 });
 
-// 6. Wire up Drag and Drop (Comprehensive Fallbacks)
 function handleFilePath(path) {
     if (path) {
         document.getElementById('filePath').value = path;
@@ -2721,17 +2843,14 @@ function handleFilePath(path) {
     }
 }
 
-// 6A. Wails Native method
 OnFileDrop((x, y, paths) => {
     if (paths && paths.length > 0) handleFilePath(paths[0]);
 }, false);
 
-// 6B. Wails Event Bus method (bypass OnFileDrop wrapper)
 EventsOn("wails:file-drop", (x, y, paths) => {
     if (paths && paths.length > 0) handleFilePath(paths[0]);
 });
 
-// 6C. HTML5 DOM Fallback (Needed for WebKitGTK on some Linux distros)
 let dropZone = document.getElementById('app');
 
 dropZone.addEventListener('dragover', (e) => {
@@ -2741,43 +2860,11 @@ dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     if (e.dataTransfer && e.dataTransfer.files.length > 0) {
         let file = e.dataTransfer.files[0];
-        // Linux Webkit instances typically expose the absolute path here
         if (file.path) {
             handleFilePath(file.path);
         }
     }
 });
-
-====================
-PATH: ./frontend/src/style.css
-====================
-html {
-    background-color: rgba(27, 38, 54, 1);
-    text-align: center;
-    color: white;
-}
-
-body {
-    margin: 0;
-    color: white;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
-}
-
-@font-face {
-    font-family: "Nunito";
-    font-style: normal;
-    font-weight: 400;
-    src: local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
-}
-
-#app {
-    height: 100vh;
-    text-align: center;
-}
-
 
 ====================
 PATH: ./frontend/wailsjs/go/models.ts
@@ -2927,37 +3014,43 @@ export namespace main {
 
 
 ====================
-PATH: ./frontend/wailsjs/go/main/App.js
-====================
-// @ts-check
-// Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
-// This file is automatically generated. DO NOT EDIT
-
-export function Analyze(arg1) {
-  return window['go']['main']['App']['Analyze'](arg1);
-}
-
-export function OpenFileBrowser() {
-  return window['go']['main']['App']['OpenFileBrowser']();
-}
-
-export function SaveTXT(arg1) {
-  return window['go']['main']['App']['SaveTXT'](arg1);
-}
-
-
-====================
 PATH: ./frontend/wailsjs/go/main/App.d.ts
 ====================
 // Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
 // This file is automatically generated. DO NOT EDIT
 import {main} from '../models';
 
-export function Analyze(arg1:string):Promise<main.ReportData>;
+export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
 
 export function OpenFileBrowser():Promise<string>;
 
+export function SavePDF(arg1:string):Promise<string>;
+
 export function SaveTXT(arg1:main.ReportData):Promise<string>;
+
+
+====================
+PATH: ./frontend/wailsjs/go/main/App.js
+====================
+// @ts-check
+// Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
+// This file is automatically generated. DO NOT EDIT
+
+export function Analyze(arg1, arg2) {
+  return window['go']['main']['App']['Analyze'](arg1, arg2);
+}
+
+export function OpenFileBrowser() {
+  return window['go']['main']['App']['OpenFileBrowser']();
+}
+
+export function SavePDF(arg1) {
+  return window['go']['main']['App']['SavePDF'](arg1);
+}
+
+export function SaveTXT(arg1) {
+  return window['go']['main']['App']['SaveTXT'](arg1);
+}
 
 
 ====================
