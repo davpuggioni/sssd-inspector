@@ -286,7 +286,7 @@ total 33900
 	analyzePackages(fileMap, &report)
 	analyzeSSSDFilePermissions(fileMap, &report)
 
-	if !containsString(report.Problems, "install the latest version of sssd greater than version sssd-2.10.2-150700.9.17.1") {
+	if !containsString(report.Problems, "it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1") {
 		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
 	}
 }

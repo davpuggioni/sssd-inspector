@@ -16,9 +16,9 @@ document.querySelector('#app').innerHTML = `
         .info-table th, .info-table td { padding: 10px 15px; border: 1px solid #ddd; text-align: left; font-size: 0.95em; }
         .info-table th { background-color: #0056b3; color: white; width: 35%; }
         .section-title { background-color: #e9ecef !important; color: #333 !important; font-weight: bold; text-align: center; }
-        .problem-list { background: #ffebee; padding: 15px 15px 15px 35px; border-left: 5px solid #d9534f; list-style-type: square; }
+        .problem-list { padding: 15px 15px 15px 35px; border-left: 5px solid #d9534f; list-style-type: square; background: #ffebee;}
         .problem-list li { margin-bottom: 8px; font-weight: bold; color: #b71c1c; }
-        .warn-list { background: #e2f3f5; padding: 15px 15px 15px 35px; border-left: 5px solid #17a2b8; list-style-type: square; }
+        .warn-list { padding: 15px 15px 15px 35px; border-left: 5px solid #17a2b8; list-style-type: square; background: #e2f3f5;}
         .warn-list li { margin-bottom: 8px; color: #0c5460; }
         .success-text { color: green; font-weight: bold; font-size: 1.1em; }
         .success { color: green; font-weight: bold; }
@@ -83,9 +83,7 @@ function renderReportHTML(report) {
         <tr><td colspan="2" class="section-title">Base Authentication Services</td></tr>
         <tr><th>SSSD Installed</th><td>${yesNo(report.sssd_installed)}</td></tr>
         <tr><th>SSSD Packages</th><td>
-            ${report.sssd_packages && report.sssd_packages.length > 0 ? 
-                `<pre style="margin: 0; font-family: monospace; font-size: 0.9em;">${report.sssd_packages.join('\n')}</pre>` : 
-                'None Detected'}
+            ${report.sssd_packages && report.sssd_packages.length > 0 ? `<pre style="margin: 0; font-family: monospace; font-size: 0.9em;">${report.sssd_packages.join('\n')}</pre>` : 'None Detected'}
         </td></tr>
         <tr><th>SSSD Config Found</th><td>${yesNo(report.sssd_config_found)}</td></tr>
         <tr><th>SSSD Service Status</th><td>${report.sssd_service || 'Unknown'}</td></tr>
@@ -172,6 +170,12 @@ function renderReportHTML(report) {
         });
         html += `</div>`;
     }
+
+    // Add Dynamic Footer
+    html += `
+    <div style="margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px;">
+        sssd-inspector v${report.app_version} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
+    </div>`;
 
     return html;
 }
@@ -267,10 +271,12 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
 
 // 5. Wire up the Zoom Buttons
 let currentFontSize = 1.0;
+
 document.getElementById('zoomInBtn').addEventListener('click', () => {
     currentFontSize += 0.1;
     document.getElementById('resultBox').style.fontSize = currentFontSize + 'em';
 });
+
 document.getElementById('zoomOutBtn').addEventListener('click', () => {
     // Don't let it get completely unreadable
     if (currentFontSize > 0.4) {
@@ -299,6 +305,7 @@ EventsOn("wails:file-drop", (x, y, paths) => {
 
 // 6C. HTML5 DOM Fallback (Needed for WebKitGTK on some Linux distros)
 let dropZone = document.getElementById('app');
+
 dropZone.addEventListener('dragover', (e) => {
     e.preventDefault(); 
 });

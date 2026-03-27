@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *versionShort {
-		fmt.Printf("sssd-analyzer-gui version 0.11.4 (Hybrid)\n")
+		fmt.Printf("sssd-analyzer-gui version 0.1.1 (Hybrid)\n")
 		os.Exit(0)
 	}
 

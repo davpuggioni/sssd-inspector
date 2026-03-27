@@ -30,9 +30,9 @@ func getSSSDVersion(packages []string) (int, int) {
 	for _, pkg := range packages {
 		parts := strings.Fields(pkg)
 		for _, p := range parts {
-			if strings.HasPrefix(p, "sssd-") {
-				p = strings.TrimPrefix(p, "sssd-")
-			}
+			//if strings.HasPrefix(p, "sssd-") {
+			p = strings.TrimPrefix(p, "sssd-")
+			//}
 			if len(p) > 0 && p[0] >= '0' && p[0] <= '9' && strings.Contains(p, ".") {
 				vParts := strings.SplitN(p, ".", 3)
 				if len(vParts) >= 2 {
@@ -51,7 +51,7 @@ func getSSSDVersion(packages []string) (int, int) {
 func analyzeData(fileMap map[string]string) ReportData {
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.11.4" // Bumped version
+	report.AppVersion = "0.1.1" // Updated version
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
@@ -553,7 +553,7 @@ func analyzeSSSDFilePermissions(fileMap map[string]string, report *ReportData) {
 
 	if varDirMistakes > 0 {
 		if isSles15SP7 && foundSssdUserInVar {
-			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. On SLES15 SP7, if file permissions in the /var/lib/sss folder are still assigned to the sssd user, it's recommended to install the latest version of sssd greater than version sssd-2.10.2-150700.9.17.1 as there were some regressions in the program if sssd was running unprivileged. Ensure they are reverted to root:root.", varDirMistakes))
+			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. On SLES 15 SP7, if the /var/lib/sss directory permissions are still assigned to the sssd user, it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1. Earlier versions may exhibit regressions when running in unprivileged mode. Ensure that ownership is reverted to root:root.", varDirMistakes))
 		} else {
 			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. SSSD version %d.%d strictly requires them to be owned by '%s:%s'. Please run 'chown -R %s:%s /var/lib/sss/' to fix.", varDirMistakes, major, minor, expectedVarOwner, expectedVarGroup, expectedVarOwner, expectedVarGroup))
 		}
