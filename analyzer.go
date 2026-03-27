@@ -51,7 +51,7 @@ func getSSSDVersion(packages []string) (int, int) {
 func analyzeData(fileMap map[string]string) ReportData {
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.11.3" // Bumped version for the winbindd false-positive fix
+	report.AppVersion = "0.11.4" // Bumped version
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
@@ -483,14 +483,22 @@ func analyzeSSSDFilePermissions(fileMap map[string]string, report *ReportData) {
 	expectedConfOwner, expectedConfGroup, expectedConfPerms := "root", "root", "-rw-------" // 0600
 	expectedVarOwner, expectedVarGroup := "root", "root"
 
+	isSles15SP7 := strings.Contains(report.SLESRlease, "15 SP7") || strings.Contains(report.SLESRlease, "15-SP7")
+
 	if major > 2 || (major == 2 && minor >= 10) {
-		expectedConfGroup, expectedConfPerms = "sssd", "-rw-r-----" // 0640
-		expectedVarOwner, expectedVarGroup = "sssd", "sssd"
+		if isSles15SP7 {
+			expectedConfOwner, expectedConfGroup, expectedConfPerms = "root", "root", "-rw-------" // Reverted to root
+			expectedVarOwner, expectedVarGroup = "root", "root"
+		} else {
+			expectedConfOwner, expectedConfGroup, expectedConfPerms = "root", "sssd", "-rw-r-----" // 0640
+			expectedVarOwner, expectedVarGroup = "sssd", "sssd"
+		}
 	}
 
 	foundConfErr := false
 	varDirMistakes := 0
 	inVarLibSss := false
+	foundSssdUserInVar := false
 
 	scanFiles(fileMap, []string{"sssd.txt", "etc.txt"}, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
@@ -505,11 +513,12 @@ func analyzeSSSDFilePermissions(fileMap map[string]string, report *ReportData) {
 				perms, owner, group := fields[0], fields[2], fields[3]
 				if owner != expectedConfOwner || group != expectedConfGroup {
 					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but installed SSSD version %d.%d strictly requires '%s:%s'. The service will fail to start.", owner, group, major, minor, expectedConfOwner, expectedConfGroup))
+					foundConfErr = true
 				}
-				if perms != expectedConfPerms {
+				if !foundConfErr && perms != expectedConfPerms {
 					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf has incorrect permissions '%s'. SSSD version %d.%d requires exactly '%s' or it will refuse to start.", perms, major, minor, expectedConfPerms))
+					foundConfErr = true
 				}
-				foundConfErr = true
 			}
 		}
 
@@ -533,6 +542,9 @@ func analyzeSSSDFilePermissions(fileMap map[string]string, report *ReportData) {
 					owner, group := fields[2], fields[3]
 					if owner != expectedVarOwner || group != expectedVarGroup {
 						varDirMistakes++
+						if owner == "sssd" || group == "sssd" {
+							foundSssdUserInVar = true
+						}
 					}
 				}
 			}
@@ -540,7 +552,11 @@ func analyzeSSSDFilePermissions(fileMap map[string]string, report *ReportData) {
 	})
 
 	if varDirMistakes > 0 {
-		report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. SSSD version %d.%d strictly requires them to be owned by '%s:%s'. Please run 'chown -R %s:%s /var/lib/sss/' to fix.", varDirMistakes, major, minor, expectedVarOwner, expectedVarGroup, expectedVarOwner, expectedVarGroup))
+		if isSles15SP7 && foundSssdUserInVar {
+			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. On SLES15 SP7, if file permissions in the /var/lib/sss folder are still assigned to the sssd user, it's recommended to install the latest version of sssd greater than version sssd-2.10.2-150700.9.17.1 as there were some regressions in the program if sssd was running unprivileged. Ensure they are reverted to root:root.", varDirMistakes))
+		} else {
+			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. SSSD version %d.%d strictly requires them to be owned by '%s:%s'. Please run 'chown -R %s:%s /var/lib/sss/' to fix.", varDirMistakes, major, minor, expectedVarOwner, expectedVarGroup, expectedVarOwner, expectedVarGroup))
+		}
 	}
 }
 
@@ -1103,4 +1119,3 @@ func analyzeBasicHealth(fileMap map[string]string, report *ReportData) {
 		}
 	}
 }
-

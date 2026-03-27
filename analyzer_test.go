@@ -93,7 +93,7 @@ func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
 	}
 }
 
-// Test 7: Verify SSSD >= 2.10 file permissions (Should catch root:root as an error)
+// Test 7: Verify SSSD >= 2.10 file permissions (Should catch root:root as an error on standard OS)
 func TestAnalyzePermissions_NewVersion(t *testing.T) {
 	fileMap := map[string]string{
 		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
@@ -220,7 +220,7 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 	}
 }
 
-// Test 15: Verify valid /var/lib/sss/ ownership for SSSD 2.10+
+// Test 15: Verify valid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
 func TestAnalyzePermissions_VarLibSss_SSSD210_Valid(t *testing.T) {
 	fileMap := map[string]string{
 		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
@@ -243,7 +243,7 @@ total 33900
 	}
 }
 
-// Test 16: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+
+// Test 16: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
 func TestAnalyzePermissions_VarLibSss_SSSD210_Invalid(t *testing.T) {
 	fileMap := map[string]string{
 		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
@@ -263,5 +263,55 @@ total 33900
 
 	if !containsString(report.Problems, "2 files or directories in /var/lib/sss/ are incorrectly owned") {
 		t.Errorf("Failed to detect exactly 2 incorrectly owned files in /var/lib/sss/ for SSSD 2.10+")
+	}
+}
+
+// Test 17: Verify SLES15 SP7 Bug Detection (sssd running unprivileged triggers warning)
+func TestAnalyzePermissions_SLES15SP7_UnprivilegedBug(t *testing.T) {
+	fileMap := map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
+drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzeOSAndHardware(fileMap, &report)
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if !containsString(report.Problems, "install the latest version of sssd greater than version sssd-2.10.2-150700.9.17.1") {
+		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
+	}
+}
+
+// Test 18: Verify SLES15 SP7 Valid Configuration (Reverted to root:root correctly)
+func TestAnalyzePermissions_SLES15SP7_Valid(t *testing.T) {
+	fileMap := map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.4.1.x86_64\n",
+		"sssd.txt": `/var/lib/sss/:
+total 20
+drwx------ 2 root root   40 2026-03-01 10:39 db
+drwxr-xr-x 2 root root 4096 2026-03-01 10:28 mc
+
+/var/lib/sss/mc:
+total 33900
+-rw-rw-r-- 1 root root  6940392 2026-03-01 10:38 group
+`,
+	}
+	var report ReportData
+	analyzeOSAndHardware(fileMap, &report)
+	analyzePackages(fileMap, &report)
+	analyzeSSSDFilePermissions(fileMap, &report)
+
+	if containsString(report.Problems, "incorrectly owned") {
+		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
 	}
 }
