@@ -1,0 +1,12 @@
+{
+  "tid_id": "TID-000019823",
+  "title": "Linux accounts cannot get AES tickets in AD DS (RC4 Downgrade Bug)",
+  "url": "https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/linux-accounts-cannot-get-aes-tickets",
+  "description": "A causa di un comportamento by-design del KDC di Active Directory, se l'attributo 'operatingSystemVersion' dell'oggetto computer inizia con un numero inferiore a 6 (es. '5.14.21'), Windows forza l'uso della crittografia RC4. Poiché le nuove versioni di SUSE (es. SLE Micro 6.1) disabilitano RC4 di default, l'autenticazione fallisce.\n\nSOLUZIONE:\n1. Lato AD: Modificare l'attributo in AD aggiungendo 'Linux ' all'inizio (es. 'Linux 5.14.21').\n2. Lato Linux (Workaround): Lanciare 'update-crypto-policies --set DEFAULT:AD-SUPPORT' e riavviare.",
+  "log_patterns": [
+    "service key not available",
+    "TGT failed verification",
+    "KDC has no support for encryption type"
+  ],
+  "config_patterns": []
+}

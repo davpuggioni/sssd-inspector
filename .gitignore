@@ -1,0 +1,19 @@
+build/bin
+node_modules
+frontend/dist
+# Escludi il binario compilato
+sssd-inspector
+
+# Escludi i report generati
+supportconfig_sssd_report_*.txt
+supportconfig_sssd_report_*.html
+
+# Escludi archivi e cartelle dei clienti estratti
+*.txz
+*.tar.xz
+*.tar.gz
+*.zip
+
+# Escludi eventuali file temporanei degli IDE (opzionale)
+.vscode/
+.idea/

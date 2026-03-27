@@ -1,0 +1,11 @@
+{
+  "tid_id": "TID-000020793",
+  "title": "SSSD Authentication with AD fails with a MEMORY:/etc/krb5.keytab error",
+  "url": "https://support.scc.suse.com/s/kb/SSSD-Authentication-with-AD-fails-with-a-MEMORY-etc-krb5-keytab-error?language=en_US",
+  "description": "CAUSE:\n/etc/krb5.keytab file, for some reason, became invalid or corrupted.\n\nRESOLUTION:\nDelete the computer account in the domain (the account must already exist):\n# adcli delete-computer -D domain.example.com servertest01 -S dc.example.com\n-D specifies the domain\n-S specifies a domain controller\nStop the SSSD daemon:\n# systemctl stop sssd\nRename and backup the old keytab:\n# mv /etc/krb5.keytab /root/krb5.keytab.backup\nClear SSSD cache:\n# rm -rf /var/lib/sss/db/*\nRemove Kerberos caches:\n# rm -f /tmp/krb5*;\nJoin the domain:\n# adcli join -D example.com -S dc.example.com\nStart the SSSD daemon:\n# systemctl start sssd",
+  "log_patterns": [
+    "Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed",
+    "Failed to init credentials: Client"
+  ],
+  "config_patterns": []
+}
