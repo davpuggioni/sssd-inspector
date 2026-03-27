@@ -51,7 +51,7 @@ func getSSSDVersion(packages []string) (int, int) {
 func analyzeData(fileMap map[string]string) ReportData {
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.1.1" // Updated version
+	report.AppVersion = "0.1.3" // Updated version
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
