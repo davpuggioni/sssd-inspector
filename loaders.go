@@ -1,40 +1,51 @@
-// loaders.go
 package main
 
 import (
 	"archive/tar"
-	"bytes"
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ulikunitz/xz"
 )
 
-func loadFromArchive(path string, fileMap map[string]string) {
-	f, err := os.Open(path)
+// extractArchiveToTemp safely extracts relevant files to a temporary directory.
+func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
+	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
 	if err != nil {
-		log.Printf("Error opening archive: %v", err)
-		return
+		return "", fmt.Errorf("failed to create temp dir: %v", err)
+	}
+
+	f, err := os.Open(archivePath)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", err
 	}
 	defer f.Close()
 
 	r, err := xz.NewReader(f)
 	if err != nil {
-		log.Printf("Error creating xz reader: %v", err)
-		return
+		os.RemoveAll(tempDir)
+		return "", err
 	}
 
 	tr := tar.NewReader(r)
+	const maxFileSize = 2 * 1024 * 1024 * 1024 // 2GB max per file safety limit
+
+	if progressFunc != nil {
+		progressFunc("Decompressing archive securely to disk...", 5)
+	}
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			log.Printf("Tar extraction error: %v", err)
-			return
+			os.RemoveAll(tempDir)
+			return "", fmt.Errorf("tar extraction error: %v", err)
 		}
 
 		if hdr.Typeflag != tar.TypeReg {
@@ -43,26 +54,25 @@ func loadFromArchive(path string, fileMap map[string]string) {
 
 		fileName := filepath.Base(hdr.Name)
 		if isRelevantFile(fileName) {
-			buf := new(bytes.Buffer)
-			if _, err := io.Copy(buf, tr); err != nil {
-				log.Printf("Failed to read %s: %v", hdr.Name, err)
+			// Prevent path traversal
+			targetPath := filepath.Join(tempDir, fileName)
+			if !strings.HasPrefix(targetPath, filepath.Clean(tempDir)+string(os.PathSeparator)) {
+				continue
 			}
-			fileMap[fileName] = buf.String()
-		}
-	}
-}
 
-func loadFromDir(root string, fileMap map[string]string) {
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() && isRelevantFile(filepath.Base(path)) {
-			content, err := os.ReadFile(path)
-			if err == nil {
-				fileMap[filepath.Base(path)] = string(content)
+			// Prevent Zip/Tar Bombs
+			if hdr.Size > maxFileSize {
+				continue
 			}
+
+			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				continue
+			}
+
+			_, err = io.CopyN(outFile, tr, hdr.Size)
+			outFile.Close()
 		}
-		return nil
-	})
-	if err != nil {
-		log.Printf("Error reading directory: %v", err)
 	}
+	return tempDir, nil
 }

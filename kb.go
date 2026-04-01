@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data
-func matchKBArticles(fileMap map[string]string, report *ReportData) {
+// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming
+func matchKBArticles(dirPath string, report *ReportData) {
 	exePath, err := os.Executable()
 	kbDir := "kb_articles"
 
@@ -34,6 +34,8 @@ func matchKBArticles(fileMap map[string]string, report *ReportData) {
 	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
 	configFiles := []string{"sssd.conf"}
 
+	activeSecModule := report.MACType
+
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
@@ -47,17 +49,30 @@ func matchKBArticles(fileMap map[string]string, report *ReportData) {
 			continue
 		}
 
-		// Initialize evidence slice
+		isSELinuxArticle := strings.Contains(strings.ToLower(article.Title), "selinux") ||
+			strings.Contains(strings.ToLower(article.Description), "selinux")
+
+		for _, pat := range article.LogPatterns {
+			if strings.Contains(strings.ToLower(pat), "selinux") {
+				isSELinuxArticle = true
+				break
+			}
+		}
+
+		// Skip SELinux TIDs if we are on an AppArmor system to prevent false positives
+		if activeSecModule == "AppArmor" && isSELinuxArticle {
+			continue
+		}
+
 		article.Evidence = []string{}
 
 		logMatched := len(article.LogPatterns) == 0
 		if !logMatched {
 			for _, pattern := range article.LogPatterns {
 				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(fileMap, logFiles, func(line string) {
+				scanFiles(dirPath, logFiles, func(line string) {
 					if matcher.MatchString(line) {
 						logMatched = true
-						// Capture up to 3 examples
 						if len(article.Evidence) < 3 {
 							cleanLine := strings.TrimSpace(line)
 							isDupe := false
@@ -80,7 +95,7 @@ func matchKBArticles(fileMap map[string]string, report *ReportData) {
 		if !configMatched {
 			for _, pattern := range article.ConfigPatterns {
 				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(fileMap, configFiles, func(line string) {
+				scanFiles(dirPath, configFiles, func(line string) {
 					if matcher.MatchString(line) {
 						configMatched = true
 					}

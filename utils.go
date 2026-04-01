@@ -1,58 +1,62 @@
-// utils.go
 package main
 
 import (
 	"bufio"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
-// anyFileContains checks if any of the specified files contains the substring.
-// This is highly memory-efficient as it avoids concatenating files.
-func anyFileContains(fileMap map[string]string, files []string, search string) bool {
+// anyFileContains streams files line-by-line, instantly stopping if a match is found (Near-zero RAM usage)
+func anyFileContains(dirPath string, files []string, search string) bool {
 	for _, name := range files {
-		if content, ok := fileMap[name]; ok {
-			if strings.Contains(content, search) {
+		f, err := os.Open(filepath.Join(dirPath, name))
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // Support long lines up to 1MB
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), search) {
+				f.Close()
 				return true
 			}
 		}
+		f.Close()
 	}
 	return false
 }
 
-// scanFiles lazily scans lines across multiple files without concatenating them.
-// This allows the garbage collector to immediately clean up processed lines.
-func scanFiles(fileMap map[string]string, files []string, lineFunc func(line string)) {
+// scanFiles streams files line-by-line and executes a callback, discarding the bytes immediately
+func scanFiles(dirPath string, files []string, lineFunc func(line string)) {
 	for _, name := range files {
-		if content, ok := fileMap[name]; ok {
-			scanner := bufio.NewScanner(strings.NewReader(content))
-			for scanner.Scan() {
-				lineFunc(scanner.Text())
-			}
+		f, err := os.Open(filepath.Join(dirPath, name))
+		if err != nil {
+			continue
 		}
+		scanner := bufio.NewScanner(f)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024)
+		for scanner.Scan() {
+			lineFunc(scanner.Text())
+		}
+		f.Close()
 	}
 }
 
-// isRelevantFile checks if the extracted file is one we care about parsing
-func isRelevantFile(name string) bool {
-	relevant := []string{
-		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
-		"systemd.txt", "basic-environment.txt", "updates.txt",
-		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
-		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
-		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
-		"memory.txt", "sar.txt", "messages", "messages.txt",
+// extractSection streams a file and extracts a specific command block
+func extractSection(dirPath string, fileName string, header string) string {
+	f, err := os.Open(filepath.Join(dirPath, fileName))
+	if err != nil {
+		return ""
 	}
-	for _, r := range relevant {
-		if name == r {
-			return true
-		}
-	}
-	return false
-}
+	defer f.Close()
 
-// extractSection extracts a specific output block from a supportconfig text file
-func extractSection(text, header string) string {
-	scanner := bufio.NewScanner(strings.NewReader(text))
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
 	var sb strings.Builder
 	inSection := false
 
@@ -63,7 +67,6 @@ func extractSection(text, header string) string {
 			continue
 		}
 		if inSection {
-			// Stop extraction if we hit the next command block's header
 			if strings.HasPrefix(line, "#==[") {
 				break
 			}
@@ -71,4 +74,30 @@ func extractSection(text, header string) string {
 		}
 	}
 	return sb.String()
+}
+
+// readFileSafe reads a small file directly into a string (Used only for tiny configs like sssd.conf)
+func readFileSafe(dirPath string, fileName string) string {
+	b, err := os.ReadFile(filepath.Join(dirPath, fileName))
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func isRelevantFile(name string) bool {
+	relevant := []string{
+		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
+		"systemd.txt", "basic-environment.txt", "updates.txt",
+		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
+		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
+		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
+		"memory.txt", "sar.txt", "messages", "messages.txt", "boot.txt",
+	}
+	for _, r := range relevant {
+		if name == r {
+			return true
+		}
+	}
+	return false
 }

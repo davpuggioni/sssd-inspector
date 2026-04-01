@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	if *versionShort {
-		fmt.Printf("sssd-analyzer-gui version 0.1.5 (Hybrid)\n")
+		fmt.Printf("sssd-analyzer-gui version 0.2.0 (Hybrid)\n")
 		os.Exit(0)
 	}
 
@@ -103,26 +103,37 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) {
 	if anonymize {
 		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
 	}
-	fileMap := make(map[string]string)
+
+	// Mock progress func for CLI output so the streaming engine doesn't panic
+	progressFunc := func(msg string, pct int) {
+		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
+	}
 
 	info, err := os.Stat(path)
 	if err != nil {
 		log.Fatalf("Error accessing path: %v", err)
 	}
 
+	var dirPath string
 	if info.IsDir() {
-		loadFromDir(path, fileMap)
+		dirPath = path
 	} else {
-		loadFromArchive(path, fileMap)
+		// Use the new secure archive extractor
+		dirPath, err = extractArchiveToTemp(path, progressFunc)
+		if err != nil {
+			log.Fatalf("Extract error: %v", err)
+		}
+		defer os.RemoveAll(dirPath) // Clean up temp files when done
 	}
 
-	report := analyzeData(fileMap, anonymize)
+	// Use the updated analyzeData signature
+	report := analyzeData(dirPath, anonymize, progressFunc)
 
 	now := time.Now()
 	report.Timestamp = now.Format("02:01:2006 15:04:05")
 
 	reportText := buildTextReport(report)
-	fmt.Println(reportText)
+	fmt.Println("\n" + reportText)
 
 	baseName := filepath.Base(path)
 

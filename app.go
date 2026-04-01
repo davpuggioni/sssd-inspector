@@ -10,22 +10,18 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// App struct
 type App struct {
 	ctx context.Context
 }
 
-// NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{}
 }
 
-// startup is called when the app starts. The context is saved
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// OpenFileBrowser opens the native OS file browser
 func (a *App) OpenFileBrowser() (string, error) {
 	options := runtime.OpenDialogOptions{
 		Title: "Select Supportconfig Archive",
@@ -37,22 +33,38 @@ func (a *App) OpenFileBrowser() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, options)
 }
 
-// Analyze parses the archive and optionally anonymizes PII
+// Analyze handles the secure extraction, routing, and cleanup of the target logs
 func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
-	fileMap := make(map[string]string)
+	// Emit progress directly to the Javascript UI
+	progressFunc := func(msg string, pct int) {
+		runtime.EventsEmit(a.ctx, "analyze-progress", msg, pct)
+	}
+
+	progressFunc("Initializing streaming engine...", 0)
+
 	info, err := os.Stat(targetPath)
 	if err != nil {
 		return ReportData{}, fmt.Errorf("error accessing path: %v", err)
 	}
+
+	var dirPath string
+
 	if info.IsDir() {
-		loadFromDir(targetPath, fileMap)
+		dirPath = targetPath
 	} else {
-		loadFromArchive(targetPath, fileMap)
+		dirPath, err = extractArchiveToTemp(targetPath, progressFunc)
+		if err != nil {
+			return ReportData{}, err
+		}
+		// ALWAYS clean up the massive logs off the disk after analysis!
+		defer os.RemoveAll(dirPath)
 	}
-	return analyzeData(fileMap, anonymize), nil
+
+	report := analyzeData(dirPath, anonymize, progressFunc)
+	progressFunc("Analysis Complete!", 100)
+	return report, nil
 }
 
-// SavePDF opens a native Save dialog and writes the PDF to disk
 func (a *App) SavePDF(b64 string) (string, error) {
 	parts := strings.SplitN(b64, "base64,", 2)
 	if len(parts) != 2 {
@@ -88,9 +100,7 @@ func (a *App) SavePDF(b64 string) (string, error) {
 	return filePath, nil
 }
 
-// SaveTXT opens a native Save dialog and writes the report to a TXT file
 func (a *App) SaveTXT(report ReportData) (string, error) {
-	// ... Re-use your existing SaveTXT logic ...
 	options := runtime.SaveDialogOptions{
 		DefaultFilename: "SSSD_Analysis_Report.txt",
 		Title:           "Save TXT Report",

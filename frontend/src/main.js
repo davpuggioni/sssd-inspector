@@ -184,6 +184,14 @@ function renderReportHTML(report) {
     return html;
 }
 
+// Subscribe to the real-time Go Progress events!
+EventsOn("analyze-progress", (msg, pct) => {
+    const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBarInner');
+    if (loadingText) loadingText.innerText = msg;
+    if (progressBar) progressBar.style.width = pct + '%';
+});
+
 document.getElementById('browseBtn').addEventListener('click', () => {
     OpenFileBrowser().then((selectedPath) => {
         if (selectedPath) {
@@ -212,10 +220,13 @@ document.getElementById('analyzeBtn').addEventListener('click', () => {
     exportTxtBtn.style.display = 'none';
     zoomControls.style.display = 'none';
 
+    // Injected the new Progress Bar HTML
     resultBox.innerHTML = `
         <div style="text-align: center; margin-top: 50px;">
-            <h3 style="color: #0056b3;">Analyzing...</h3>
-            <p style="color: #666;">Parsing supportconfig in Go! 🚀</p>
+            <h3 style="color: #0056b3;" id="loadingText">Preparing Analysis Engine...</h3>
+            <div style="width: 80%; max-width: 400px; height: 10px; background: #ddd; margin: 20px auto; border-radius: 5px; overflow: hidden;">
+                <div id="progressBarInner" style="width: 0%; height: 100%; background: #0056b3; transition: width 0.3s;"></div>
+            </div>
         </div>
     `;
 
