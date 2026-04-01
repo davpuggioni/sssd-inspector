@@ -19,123 +19,6 @@ PATH: ./wails.json
 
 
 ====================
-PATH: ./kb.go
-====================
-// kb.go
-package main
-
-import (
-	"encoding/json"
-	"log"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-)
-
-// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming
-func matchKBArticles(dirPath string, report *ReportData) {
-	exePath, err := os.Executable()
-	kbDir := "kb_articles"
-
-	if err == nil {
-		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
-		if _, err := os.Stat(exeDir); !os.IsNotExist(err) {
-			kbDir = exeDir
-		}
-	}
-
-	if _, err := os.Stat(kbDir); os.IsNotExist(err) {
-		return
-	}
-
-	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
-	if err != nil || len(files) == 0 {
-		return
-	}
-
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
-	configFiles := []string{"sssd.conf"}
-
-	activeSecModule := report.MACType
-
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			log.Printf("Warning: Failed to read KB article %s: %v", file, err)
-			continue
-		}
-
-		var article TIDArticle
-		if err := json.Unmarshal(content, &article); err != nil {
-			log.Printf("Warning: Invalid JSON in KB article %s: %v", file, err)
-			continue
-		}
-
-		isSELinuxArticle := strings.Contains(strings.ToLower(article.Title), "selinux") ||
-			strings.Contains(strings.ToLower(article.Description), "selinux")
-
-		for _, pat := range article.LogPatterns {
-			if strings.Contains(strings.ToLower(pat), "selinux") {
-				isSELinuxArticle = true
-				break
-			}
-		}
-
-		// Skip SELinux TIDs if we are on an AppArmor system to prevent false positives
-		if activeSecModule == "AppArmor" && isSELinuxArticle {
-			continue
-		}
-
-		article.Evidence = []string{}
-
-		logMatched := len(article.LogPatterns) == 0
-		if !logMatched {
-			for _, pattern := range article.LogPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(dirPath, logFiles, func(line string) {
-					if matcher.MatchString(line) {
-						logMatched = true
-						if len(article.Evidence) < 3 {
-							cleanLine := strings.TrimSpace(line)
-							isDupe := false
-							for _, ev := range article.Evidence {
-								if ev == cleanLine {
-									isDupe = true
-									break
-								}
-							}
-							if !isDupe {
-								article.Evidence = append(article.Evidence, cleanLine)
-							}
-						}
-					}
-				})
-			}
-		}
-
-		configMatched := len(article.ConfigPatterns) == 0
-		if !configMatched {
-			for _, pattern := range article.ConfigPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(dirPath, configFiles, func(line string) {
-					if matcher.MatchString(line) {
-						configMatched = true
-					}
-				})
-			}
-		}
-
-		if logMatched && configMatched {
-			if len(article.LogPatterns) > 0 || len(article.ConfigPatterns) > 0 {
-				report.MatchedTIDs = append(report.MatchedTIDs, article)
-			}
-		}
-	}
-}
-
-
-====================
 PATH: ./report.go
 ====================
 // report.go
@@ -543,881 +426,12 @@ type ReportData struct {
 
 
 ====================
-PATH: ./utils.go
-====================
-package main
-
-import (
-	"bufio"
-	"os"
-	"path/filepath"
-	"strings"
-)
-
-// anyFileContains streams files line-by-line, instantly stopping if a match is found (Near-zero RAM usage)
-func anyFileContains(dirPath string, files []string, search string) bool {
-	for _, name := range files {
-		f, err := os.Open(filepath.Join(dirPath, name))
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, 1024*1024) // Support long lines up to 1MB
-		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), search) {
-				f.Close()
-				return true
-			}
-		}
-		f.Close()
-	}
-	return false
-}
-
-// scanFiles streams files line-by-line and executes a callback, discarding the bytes immediately
-func scanFiles(dirPath string, files []string, lineFunc func(line string)) {
-	for _, name := range files {
-		f, err := os.Open(filepath.Join(dirPath, name))
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, 1024*1024)
-		for scanner.Scan() {
-			lineFunc(scanner.Text())
-		}
-		f.Close()
-	}
-}
-
-// extractSection streams a file and extracts a specific command block
-func extractSection(dirPath string, fileName string, header string) string {
-	f, err := os.Open(filepath.Join(dirPath, fileName))
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
-
-	var sb strings.Builder
-	inSection := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, header) {
-			inSection = true
-			continue
-		}
-		if inSection {
-			if strings.HasPrefix(line, "#==[") {
-				break
-			}
-			sb.WriteString(line + "\n")
-		}
-	}
-	return sb.String()
-}
-
-// readFileSafe reads a small file directly into a string (Used only for tiny configs like sssd.conf)
-func readFileSafe(dirPath string, fileName string) string {
-	b, err := os.ReadFile(filepath.Join(dirPath, fileName))
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-func isRelevantFile(name string) bool {
-	relevant := []string{
-		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
-		"systemd.txt", "basic-environment.txt", "updates.txt",
-		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
-		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
-		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
-		"memory.txt", "sar.txt", "messages", "messages.txt", "boot.txt",
-	}
-	for _, r := range relevant {
-		if name == r {
-			return true
-		}
-	}
-	return false
-}
-
-
-====================
-PATH: ./loaders.go
-====================
-package main
-
-import (
-	"archive/tar"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"github.com/ulikunitz/xz"
-)
-
-// extractArchiveToTemp safely extracts relevant files to a temporary directory.
-func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
-	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %v", err)
-	}
-
-	f, err := os.Open(archivePath)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return "", err
-	}
-	defer f.Close()
-
-	r, err := xz.NewReader(f)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return "", err
-	}
-
-	tr := tar.NewReader(r)
-	const maxFileSize = 2 * 1024 * 1024 * 1024 // 2GB max per file safety limit
-
-	if progressFunc != nil {
-		progressFunc("Decompressing archive securely to disk...", 5)
-	}
-
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("tar extraction error: %v", err)
-		}
-
-		if hdr.Typeflag != tar.TypeReg {
-			continue
-		}
-
-		fileName := filepath.Base(hdr.Name)
-		if isRelevantFile(fileName) {
-			// Prevent path traversal
-			targetPath := filepath.Join(tempDir, fileName)
-			if !strings.HasPrefix(targetPath, filepath.Clean(tempDir)+string(os.PathSeparator)) {
-				continue
-			}
-
-			// Prevent Zip/Tar Bombs
-			if hdr.Size > maxFileSize {
-				continue
-			}
-
-			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-			if err != nil {
-				continue
-			}
-
-			_, err = io.CopyN(outFile, tr, hdr.Size)
-			outFile.Close()
-		}
-	}
-	return tempDir, nil
-}
-
-
-====================
 PATH: ./package.json
 ====================
 {
   "dependencies": {
     "html2pdf.js": "^0.14.0"
   }
-}
-
-
-====================
-PATH: ./app.go
-====================
-package main
-
-import (
-	"context"
-	"encoding/base64"
-	"fmt"
-	"os"
-	"strings"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-)
-
-type App struct {
-	ctx context.Context
-}
-
-func NewApp() *App {
-	return &App{}
-}
-
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-}
-
-func (a *App) OpenFileBrowser() (string, error) {
-	options := runtime.OpenDialogOptions{
-		Title: "Select Supportconfig Archive",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Supportconfig Archives (*.txz, *.tar.xz)", Pattern: "*.txz;*.tar.xz"},
-			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
-		},
-	}
-	return runtime.OpenFileDialog(a.ctx, options)
-}
-
-// Analyze handles the secure extraction, routing, and cleanup of the target logs
-func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
-	// Emit progress directly to the Javascript UI
-	progressFunc := func(msg string, pct int) {
-		runtime.EventsEmit(a.ctx, "analyze-progress", msg, pct)
-	}
-
-	progressFunc("Initializing streaming engine...", 0)
-
-	info, err := os.Stat(targetPath)
-	if err != nil {
-		return ReportData{}, fmt.Errorf("error accessing path: %v", err)
-	}
-
-	var dirPath string
-
-	if info.IsDir() {
-		dirPath = targetPath
-	} else {
-		dirPath, err = extractArchiveToTemp(targetPath, progressFunc)
-		if err != nil {
-			return ReportData{}, err
-		}
-		// ALWAYS clean up the massive logs off the disk after analysis!
-		defer os.RemoveAll(dirPath)
-	}
-
-	report := analyzeData(dirPath, anonymize, progressFunc)
-	progressFunc("Analysis Complete!", 100)
-	return report, nil
-}
-
-func (a *App) SavePDF(b64 string) (string, error) {
-	parts := strings.SplitN(b64, "base64,", 2)
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid PDF data received from frontend")
-	}
-
-	pdfBytes, err := base64.StdEncoding.DecodeString(parts[1])
-	if err != nil {
-		return "", fmt.Errorf("failed to decode base64: %v", err)
-	}
-
-	options := runtime.SaveDialogOptions{
-		DefaultFilename: "SSSD_Analysis_Report.pdf",
-		Title:           "Save PDF Report",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "PDF Document (*.pdf)", Pattern: "*.pdf"},
-		},
-	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
-	if err != nil {
-		return "", err
-	}
-
-	if filePath == "" {
-		return "cancelled", nil
-	}
-
-	err = os.WriteFile(filePath, pdfBytes, 0644)
-	if err != nil {
-		return "", fmt.Errorf("failed to write file: %v", err)
-	}
-
-	return filePath, nil
-}
-
-func (a *App) SaveTXT(report ReportData) (string, error) {
-	options := runtime.SaveDialogOptions{
-		DefaultFilename: "SSSD_Analysis_Report.txt",
-		Title:           "Save TXT Report",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Text Document (*.txt)", Pattern: "*.txt"},
-		},
-	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
-	if err != nil {
-		return "", err
-	}
-	if filePath == "" {
-		return "cancelled", nil
-	}
-	txtContent := buildTextReport(report)
-	err = os.WriteFile(filePath, []byte(txtContent), 0644)
-	if err != nil {
-		return "", fmt.Errorf("failed to write file: %v", err)
-	}
-	return filePath, nil
-}
-
-
-====================
-PATH: ./main.go
-====================
-package main
-
-import (
-	"embed"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-)
-
-//go:embed all:frontend/dist
-var assets embed.FS
-
-func main() {
-	// 1. Setup CLI Flags
-	versionShort := flag.Bool("v", false, "Print program version")
-	cliPath := flag.String("analyze", "", "Path to the supportconfig directory or log file")
-	txtReport := flag.Bool("txt", false, "Generate a TXT report")
-	htmlReport := flag.Bool("html", false, "Generate an HTML report")
-	anonymize := flag.Bool("anonymize", false, "Redact PII (IPs, Domains) from the report")
-	flag.Parse()
-
-	if *versionShort {
-		fmt.Printf("sssd-analyzer-gui version 0.1.5 (Hybrid)\n")
-		os.Exit(0)
-	}
-
-	// 2. Traffic Cop Logic (If they used the strict -analyze flag)
-	if *cliPath != "" {
-		runCLI(*cliPath, *txtReport, *htmlReport, *anonymize)
-		os.Exit(0) // Exit immediately. Do not load the GUI.
-	}
-
-	// Fallback: If they provided a path WITHOUT -analyze, flag.Parse() stops parsing.
-	// We must manually scan the remaining arguments so that flags like -html or -anonymize
-	// placed AFTER the path still work perfectly.
-	if flag.NArg() > 0 {
-		path := flag.Arg(0)
-		isAnonymize := *anonymize
-		isTxt := *txtReport
-		isHtml := *htmlReport
-		hasExplicitFormat := false
-
-		// Manually scan remaining arguments for all our flags
-		for _, arg := range os.Args[1:] {
-			if strings.Contains(arg, "-anonymize") {
-				isAnonymize = true
-			}
-			if strings.Contains(arg, "-txt") {
-				isTxt = true
-				hasExplicitFormat = true
-			}
-			if strings.Contains(arg, "-html") {
-				isHtml = true
-				hasExplicitFormat = true
-			}
-		}
-
-		// If they just passed the path and NO format flags, default to both to match previous behavior
-		if !hasExplicitFormat && !*txtReport && !*htmlReport {
-			isTxt = true
-			isHtml = true
-		}
-
-		runCLI(path, isTxt, isHtml, isAnonymize)
-		os.Exit(0)
-	}
-
-	// 3. Launch the Wails GUI
-	app := NewApp()
-
-	err := wails.Run(&options.App{
-		Title:  "SSSD Inspector",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 244, G: 244, B: 249, A: 255},
-		OnStartup:        app.startup,
-		Bind: []interface{}{
-			app,
-		},
-		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop: true,
-		},
-	})
-
-	if err != nil {
-		println("Error:", err.Error())
-	}
-}
-
-func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) {
-	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
-	if anonymize {
-		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
-	}
-	fileMap := make(map[string]string)
-
-	info, err := os.Stat(path)
-	if err != nil {
-		log.Fatalf("Error accessing path: %v", err)
-	}
-
-	if info.IsDir() {
-		loadFromDir(path, fileMap)
-	} else {
-		loadFromArchive(path, fileMap)
-	}
-
-	report := analyzeData(fileMap, anonymize)
-
-	now := time.Now()
-	report.Timestamp = now.Format("02:01:2006 15:04:05")
-
-	reportText := buildTextReport(report)
-	fmt.Println(reportText)
-
-	baseName := filepath.Base(path)
-
-	if genTxt {
-		txtReportFile := baseName + "_report.txt"
-		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
-		if err != nil {
-			fmt.Printf("Error writing txt report: %v\n", err)
-		} else {
-			fmt.Printf("Text report saved to: %s\n", txtReportFile)
-		}
-	}
-
-	if genHtml {
-		htmlReportFile := baseName + "_report.html"
-		writeHTMLReportFile(report, htmlReportFile)
-		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
-	}
-}
-
-
-====================
-PATH: ./analyzer_core.go
-====================
-// analyzer_core.go
-package main
-
-import (
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-)
-
-// deduplicateProblems removes duplicate strings from a slice efficiently
-func deduplicateProblems(problems []string) []string {
-	seen := make(map[string]struct{})
-	var result []string
-	for _, p := range problems {
-		if _, exists := seen[p]; !exists {
-			seen[p] = struct{}{}
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-// getSSSDVersion safely extracts the major and minor version numbers from the SSSD rpm package string
-func getSSSDVersion(packages []string) (int, int) {
-	for _, pkg := range packages {
-		parts := strings.Fields(pkg)
-		for _, p := range parts {
-			// FIXED S1017: Unconditional TrimPrefix
-			p = strings.TrimPrefix(p, "sssd-")
-
-			if len(p) > 0 && p[0] >= '0' && p[0] <= '9' && strings.Contains(p, ".") {
-				vParts := strings.SplitN(p, ".", 3)
-				if len(vParts) >= 2 {
-					major, err1 := strconv.Atoi(vParts[0])
-					minor, err2 := strconv.Atoi(vParts[1])
-					if err1 == nil && err2 == nil {
-						return major, minor
-					}
-				}
-			}
-		}
-	}
-	return 0, 0
-}
-
-// analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
-func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
-	var report ReportData
-	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.2.0" // Major bump for Streaming Engine & PII Redaction
-	report.SssdService = "Not Running / Unknown"
-	report.WinbindService = "Not Running / Unknown"
-	report.NscdStatus = "Not Running / Unknown"
-	report.TimeService = "Not Running / Unknown"
-	report.KerberosRealm = "Not configured"
-	report.HardwareManufacturer = "Unknown"
-	report.HardwareModel = "Unknown"
-	report.Hypervisor = "Unknown"
-	report.VirtualIdentity = "Unknown"
-
-	if progressFunc != nil {
-		progressFunc("Scanning Hardware & OS Data...", 10)
-	}
-	analyzeBasicHealth(dirPath, &report)
-	analyzeOSAndHardware(dirPath, &report)
-	analyzeHostnameAndFQDN(dirPath, &report)
-	analyzeSCC(dirPath, &report)
-
-	if progressFunc != nil {
-		progressFunc("Analyzing Network & Kerberos state...", 25)
-	}
-	analyzeDNS(dirPath, &report)
-	analyzeTime(dirPath, &report)
-	analyzePerformance(dirPath, &report)
-	analyzeKerberosAndKeytab(dirPath, &report)
-
-	if progressFunc != nil {
-		progressFunc("Evaluating SSSD Configurations...", 40)
-	}
-	analyzePAM(dirPath, &report)
-	analyzeNSSwitch(dirPath, &report)
-	analyzeHosts(dirPath, &report)
-	analyzeNSCD(dirPath, &report)
-	analyzePackages(dirPath, &report)
-	analyzeSSSDVersionAge(&report)
-	analyzeServices(dirPath, &report)
-	analyzeMACStatus(dirPath, &report)
-	analyzeSSSDFilePermissions(dirPath, &report)
-	analyzeDiskSpace(dirPath, &report)
-
-	if progressFunc != nil {
-		progressFunc("Streaming and Parsing SSSD Logs...", 60)
-	}
-	analyzeSSSDConfigAndLogs(dirPath, &report)
-	analyzeMACDenials(dirPath, &report)
-
-	if progressFunc != nil {
-		progressFunc("Matching Knowledge Base Articles...", 85)
-	}
-	matchKBArticles(dirPath, &report)
-
-	// Clean up duplicate entries mapped during distributed analysis
-	report.Problems = deduplicateProblems(report.Problems)
-	report.Warnings = deduplicateProblems(report.Warnings)
-
-	// Final check: Validate if debug_level=9 was set during problems
-	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
-		hasDebug9 := false
-		checkDebug := func(line string) {
-			if hasDebug9 {
-				return
-			}
-			if strings.Contains(line, "debug_level") && strings.Contains(line, "9") {
-				trimmed := strings.ReplaceAll(line, " ", "")
-				if strings.Contains(trimmed, "debug_level=9") {
-					hasDebug9 = true
-				}
-			}
-		}
-		scanFiles(dirPath, []string{"sssd.conf", "sssd.txt"}, checkDebug)
-
-		if report.SssdConfigFound && !hasDebug9 {
-			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig.")
-		}
-	}
-
-	if anonymize {
-		if progressFunc != nil {
-			progressFunc("Sanitizing PII data...", 95)
-		}
-		anonymizeReport(&report)
-	}
-
-	return report
-}
-
-// anonymizeReport heavily scrubs PII from the report to ensure safe sharing
-func anonymizeReport(r *ReportData) {
-	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
-	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
-	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
-	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
-
-	maskString := func(s string) string {
-		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
-		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
-		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
-		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
-
-		if r.SearchDomain != "" && r.SearchDomain != "None" {
-			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
-			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
-		}
-		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
-			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
-			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
-		}
-		return s
-	}
-
-	r.HardwareManufacturer = "[REDACTED]"
-	r.HardwareModel = "[REDACTED]"
-	r.VirtualIdentity = "[REDACTED]"
-	r.SCCStatus = "[REDACTED]"
-
-	for i, ns := range r.Nameservers {
-		r.Nameservers[i] = maskString(ns)
-	}
-	r.SearchDomain = maskString(r.SearchDomain)
-	r.KerberosRealm = maskString(r.KerberosRealm)
-
-	for i, p := range r.Problems {
-		r.Problems[i] = maskString(p)
-	}
-	for i, w := range r.Warnings {
-		r.Warnings[i] = maskString(w)
-	}
-	for i, mac := range r.MACDenialExamples {
-		r.MACDenialExamples[i] = maskString(mac)
-	}
-	for i := range r.SSSDLogErrors {
-		r.SSSDLogErrors[i].Description = maskString(r.SSSDLogErrors[i].Description)
-		for j, ex := range r.SSSDLogErrors[i].Examples {
-			r.SSSDLogErrors[i].Examples[j] = maskString(ex)
-		}
-	}
-	for i := range r.MatchedTIDs {
-		for j, ev := range r.MatchedTIDs[i].Evidence {
-			r.MatchedTIDs[i].Evidence[j] = maskString(ev)
-		}
-	}
-	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
-}
-
-
-====================
-PATH: ./analyzer_system.go
-====================
-// analyzer_system.go
-package main
-
-import (
-	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
-)
-
-// Global regex for parsing systemd exit codes
-var reStatus = regexp.MustCompile(`status=(\d+)`)
-
-func analyzeBasicHealth(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-health-check.txt", "basic-environment.txt"}, func(line string) {
-		if strings.HasPrefix(line, "SR#:") {
-			report.SupportCaseID = strings.TrimSpace(strings.TrimPrefix(line, "SR#:"))
-		}
-	})
-}
-
-func analyzeOSAndHardware(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Linux") && strings.Contains(line, "SMP") {
-			report.KernelVersion = line
-		}
-		if strings.HasPrefix(line, "PRETTY_NAME=") {
-			report.SLESRlease = strings.Trim(strings.Split(line, "=")[1], "\"")
-		}
-		if strings.HasPrefix(line, "Manufacturer:") {
-			report.HardwareManufacturer = strings.TrimSpace(strings.TrimPrefix(line, "Manufacturer:"))
-		}
-		if strings.HasPrefix(line, "Hardware:") {
-			report.HardwareModel = strings.TrimSpace(strings.TrimPrefix(line, "Hardware:"))
-		}
-		if strings.HasPrefix(line, "Hypervisor:") {
-			report.Hypervisor = strings.TrimSpace(strings.TrimPrefix(line, "Hypervisor:"))
-		}
-		if strings.HasPrefix(line, "Identity:") {
-			report.VirtualIdentity = strings.TrimSpace(strings.TrimPrefix(line, "Identity:"))
-		}
-	})
-}
-
-func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Hostname:") {
-			hostname := strings.TrimSpace(strings.TrimPrefix(line, "Hostname:"))
-			if !strings.Contains(hostname, ".") {
-				report.Problems = append(report.Problems, "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.")
-			}
-		}
-	})
-}
-
-func analyzeSCC(dirPath string, report *ReportData) {
-	sccFound := false
-	scanFiles(dirPath, []string{"updates.txt"}, func(line string) {
-		if strings.Contains(line, "Registered") || strings.Contains(line, "Status: Active") {
-			report.SCCStatus = "Registered"
-			sccFound = true
-		}
-	})
-	if !sccFound {
-		report.SCCStatus = "Not Registered or Unknown"
-	}
-}
-
-func analyzePerformance(dirPath string, report *ReportData) {
-	if anyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
-		report.Problems = append(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
-	}
-
-	scanFiles(dirPath, []string{"sar.txt"}, func(line string) {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, "all") && !strings.Contains(line, "CPU") {
-			fields := strings.Fields(line)
-			if len(fields) >= 6 {
-				iowaitIndex := len(fields) - 3
-				if iowait, err := strconv.ParseFloat(fields[iowaitIndex], 64); err == nil && iowait > 20.0 {
-					report.Warnings = append(report.Warnings, fmt.Sprintf("[PERFORMANCE] High CPU %%iowait detected (>%.1f%%). This can cause SSSD watchdog terminations.", iowait))
-				}
-			}
-		}
-	})
-}
-
-func analyzeServices(dirPath string, report *ReportData) {
-	var sssdStatusBlock []string
-	inSssdStatus := false
-	scanFiles(dirPath, []string{"systemd.txt"}, func(line string) {
-		if strings.Contains(line, "sssd.service") && (strings.Contains(line, "Loaded:") || strings.HasPrefix(line, "●") || strings.Contains(line, "System Security Services Daemon")) {
-			inSssdStatus = true
-		}
-		if inSssdStatus && strings.HasPrefix(line, "●") && !strings.Contains(line, "sssd.service") {
-			inSssdStatus = false
-		}
-		if inSssdStatus {
-			sssdStatusBlock = append(sssdStatusBlock, line)
-		}
-
-		if strings.Contains(line, "winbind.service") && strings.Contains(line, "Active: active") {
-			report.WinbindService = "Running"
-			report.Problems = append(report.Problems, "Winbind is running. This can cause ID mapping conflicts with SSSD.")
-		}
-		if strings.Contains(line, "nscd.service") && strings.Contains(line, "Active: active") {
-			report.NscdStatus = "Running"
-		}
-	})
-
-	for _, line := range sssdStatusBlock {
-		if strings.Contains(line, "Active: active (running)") {
-			report.SssdService = "Running"
-		}
-
-		matches := reStatus.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			switch matches[1] {
-			case "1":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 1 (Generic Error). Often a crash or a failed dependency.")
-			case "2":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 2 (Invalid Usage). Incorrect command-line arguments.")
-			case "3":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service exited with code 3 (Not Running). The service is dead, but a PID file might still exist.")
-			case "4":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 4 (Configuration Error). Check sssd.conf for typos or syntax errors.")
-			case "6":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 6 (Not Configured). Usually means /etc/sssd/sssd.conf is missing or has incorrect permissions (0600 for older versions, 0640 root:sssd for 2.10+).")
-			case "7":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service exited with code 7 (Not Running).")
-			case "17":
-				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 17 (Bad File Permissions). Check ownership and mode of /etc/sssd/sssd.conf.")
-			}
-		}
-	}
-
-	if report.WinbindService == "Not Running / Unknown" {
-		report.WinbindService = "Not Running / Disabled"
-	}
-	if report.NscdStatus == "Not Running / Unknown" {
-		report.NscdStatus = "Disabled / Stopped"
-	}
-}
-
-func analyzeDiskSpace(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"fs-diskio.txt", "storage.txt"}, func(line string) {
-		fields := strings.Fields(line)
-		if len(fields) >= 5 && strings.HasSuffix(fields[len(fields)-2], "%") {
-			mount := fields[len(fields)-1]
-			if mount == "/" || mount == "/var" {
-				if usePct, err := strconv.Atoi(strings.TrimSuffix(fields[len(fields)-2], "%")); err == nil && usePct > 95 {
-					report.Problems = append(report.Problems, fmt.Sprintf("[CRITICAL] Partition %s is %d%% full. SSSD requires disk space for cache and logs.", mount, usePct))
-				}
-			}
-		}
-	})
-}
-
-func analyzeMACDenials(dirPath string, report *ReportData) {
-	var macDenials []string
-	scanFiles(dirPath, []string{"security-apparmor.txt", "security-selinux.txt"}, func(line string) {
-		lowerLine := strings.ToLower(line)
-		if (strings.Contains(lowerLine, "denied") || strings.Contains(lowerLine, "denying")) && strings.Contains(lowerLine, "sssd") {
-			if len(macDenials) < 5 {
-				macDenials = append(macDenials, strings.TrimSpace(line))
-			}
-		}
-	})
-
-	if len(macDenials) > 0 {
-		report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
-		report.MACDenialExamples = deduplicateProblems(macDenials)
-	}
-}
-
-func analyzeMACStatus(dirPath string, report *ReportData) {
-	report.MACType = "Unknown/None"
-
-	scanFiles(dirPath, []string{"boot.txt"}, func(line string) {
-		if strings.Contains(line, "security=apparmor") {
-			report.MACType = "AppArmor"
-		} else if strings.Contains(line, "security=selinux") || strings.Contains(line, "selinux=1") {
-			report.MACType = "SELinux"
-		}
-	})
-
-	if report.MACType == "Unknown/None" {
-		if anyFileContains(dirPath, []string{"security-apparmor.txt"}, "apparmor module is loaded") || anyFileContains(dirPath, []string{"security-apparmor.txt"}, "Active: active") {
-			report.MACType = "AppArmor"
-		} else if anyFileContains(dirPath, []string{"security-selinux.txt"}, "SELinux status:                 enabled") {
-			report.MACType = "SELinux"
-		}
-	}
 }
 
 
@@ -1777,6 +791,329 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 		} else {
 			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. SSSD version %d.%d strictly requires them to be owned by '%s:%s'. Please run 'chown -R %s:%s /var/lib/sss/' to fix.", varDirMistakes, major, minor, expectedVarOwner, expectedVarGroup, expectedVarOwner, expectedVarGroup))
 		}
+	}
+}
+
+
+====================
+PATH: ./analyzer_auth_test.go
+====================
+// analyzer_auth_test.go
+package main
+
+import (
+	"os"
+	"testing"
+)
+
+// Test: Verify the Kerberos 5-minute rule (Time Skew)
+func TestAnalyzeTime_KerberosSkew(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "Active: active (running) chronyd.service\n",
+		"ntp.txt":     "System time     : 312.450 seconds fast of NTP time\nSystem clock synchronized: yes\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeTime(dir, &report)
+
+	if !containsString(report.Problems, "System time offset is 312.45") {
+		t.Errorf("Failed to detect Kerberos Time Skew > 300 seconds via streaming")
+	}
+}
+
+// Test: Verify strict nsswitch.conf ordering (sss before files)
+func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"nsswitch.conf": "passwd: sss files\ngroup: files sss\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeNSSwitch(dir, &report)
+
+	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
+		t.Errorf("Failed to detect bad nsswitch.conf ordering")
+	}
+}
+
+
+====================
+PATH: ./analyzer_core.go
+====================
+// analyzer_core.go
+package main
+
+import (
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// deduplicateProblems removes duplicate strings from a slice efficiently
+func deduplicateProblems(problems []string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, p := range problems {
+		if _, exists := seen[p]; !exists {
+			seen[p] = struct{}{}
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// getSSSDVersion safely extracts the major and minor version numbers from the SSSD rpm package string
+func getSSSDVersion(packages []string) (int, int) {
+	for _, pkg := range packages {
+		parts := strings.Fields(pkg)
+		for _, p := range parts {
+			// FIXED S1017: Unconditional TrimPrefix
+			p = strings.TrimPrefix(p, "sssd-")
+
+			if len(p) > 0 && p[0] >= '0' && p[0] <= '9' && strings.Contains(p, ".") {
+				vParts := strings.SplitN(p, ".", 3)
+				if len(vParts) >= 2 {
+					major, err1 := strconv.Atoi(vParts[0])
+					minor, err2 := strconv.Atoi(vParts[1])
+					if err1 == nil && err2 == nil {
+						return major, minor
+					}
+				}
+			}
+		}
+	}
+	return 0, 0
+}
+
+// analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
+func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
+	var report ReportData
+	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
+	report.AppVersion = "0.2.0" // Major bump for Streaming Engine & PII Redaction
+	report.SssdService = "Not Running / Unknown"
+	report.WinbindService = "Not Running / Unknown"
+	report.NscdStatus = "Not Running / Unknown"
+	report.TimeService = "Not Running / Unknown"
+	report.KerberosRealm = "Not configured"
+	report.HardwareManufacturer = "Unknown"
+	report.HardwareModel = "Unknown"
+	report.Hypervisor = "Unknown"
+	report.VirtualIdentity = "Unknown"
+
+	if progressFunc != nil {
+		progressFunc("Scanning Hardware & OS Data...", 10)
+	}
+	analyzeBasicHealth(dirPath, &report)
+	analyzeOSAndHardware(dirPath, &report)
+	analyzeHostnameAndFQDN(dirPath, &report)
+	analyzeSCC(dirPath, &report)
+
+	if progressFunc != nil {
+		progressFunc("Analyzing Network & Kerberos state...", 25)
+	}
+	analyzeDNS(dirPath, &report)
+	analyzeTime(dirPath, &report)
+	analyzePerformance(dirPath, &report)
+	analyzeKerberosAndKeytab(dirPath, &report)
+
+	if progressFunc != nil {
+		progressFunc("Evaluating SSSD Configurations...", 40)
+	}
+	analyzePAM(dirPath, &report)
+	analyzeNSSwitch(dirPath, &report)
+	analyzeHosts(dirPath, &report)
+	analyzeNSCD(dirPath, &report)
+	analyzePackages(dirPath, &report)
+	analyzeSSSDVersionAge(&report)
+	analyzeServices(dirPath, &report)
+	analyzeMACStatus(dirPath, &report)
+	analyzeSSSDFilePermissions(dirPath, &report)
+	analyzeDiskSpace(dirPath, &report)
+
+	if progressFunc != nil {
+		progressFunc("Streaming and Parsing SSSD Logs...", 60)
+	}
+	analyzeSSSDConfigAndLogs(dirPath, &report)
+	analyzeMACDenials(dirPath, &report)
+
+	if progressFunc != nil {
+		progressFunc("Matching Knowledge Base Articles...", 85)
+	}
+	matchKBArticles(dirPath, &report)
+
+	// Clean up duplicate entries mapped during distributed analysis
+	report.Problems = deduplicateProblems(report.Problems)
+	report.Warnings = deduplicateProblems(report.Warnings)
+
+	// Final check: Validate if debug_level=9 was set during problems
+	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
+		hasDebug9 := false
+		checkDebug := func(line string) {
+			if hasDebug9 {
+				return
+			}
+			if strings.Contains(line, "debug_level") && strings.Contains(line, "9") {
+				trimmed := strings.ReplaceAll(line, " ", "")
+				if strings.Contains(trimmed, "debug_level=9") {
+					hasDebug9 = true
+				}
+			}
+		}
+		scanFiles(dirPath, []string{"sssd.conf", "sssd.txt"}, checkDebug)
+
+		if report.SssdConfigFound && !hasDebug9 {
+			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig.")
+		}
+	}
+
+	if anonymize {
+		if progressFunc != nil {
+			progressFunc("Sanitizing PII data...", 95)
+		}
+		anonymizeReport(&report)
+	}
+
+	return report
+}
+
+// anonymizeReport heavily scrubs PII from the report to ensure safe sharing
+func anonymizeReport(r *ReportData) {
+	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
+	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
+	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
+
+	maskString := func(s string) string {
+		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
+		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
+		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
+		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
+
+		if r.SearchDomain != "" && r.SearchDomain != "None" {
+			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
+		}
+		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
+			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
+			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
+		}
+		return s
+	}
+
+	r.HardwareManufacturer = "[REDACTED]"
+	r.HardwareModel = "[REDACTED]"
+	r.VirtualIdentity = "[REDACTED]"
+	r.SCCStatus = "[REDACTED]"
+
+	for i, ns := range r.Nameservers {
+		r.Nameservers[i] = maskString(ns)
+	}
+	r.SearchDomain = maskString(r.SearchDomain)
+	r.KerberosRealm = maskString(r.KerberosRealm)
+
+	for i, p := range r.Problems {
+		r.Problems[i] = maskString(p)
+	}
+	for i, w := range r.Warnings {
+		r.Warnings[i] = maskString(w)
+	}
+	for i, mac := range r.MACDenialExamples {
+		r.MACDenialExamples[i] = maskString(mac)
+	}
+	for i := range r.SSSDLogErrors {
+		r.SSSDLogErrors[i].Description = maskString(r.SSSDLogErrors[i].Description)
+		for j, ex := range r.SSSDLogErrors[i].Examples {
+			r.SSSDLogErrors[i].Examples[j] = maskString(ex)
+		}
+	}
+	for i := range r.MatchedTIDs {
+		for j, ev := range r.MatchedTIDs[i].Evidence {
+			r.MatchedTIDs[i].Evidence[j] = maskString(ev)
+		}
+	}
+	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+}
+
+
+====================
+PATH: ./analyzer_core_test.go
+====================
+// analyzer_core_test.go
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Shared Helper: Checks if a specific string exists in a slice
+func containsString(slice []string, expected string) bool {
+	for _, item := range slice {
+		if strings.Contains(item, expected) {
+			return true
+		}
+	}
+	return false
+}
+
+// Shared Helper: Sets up a mock temporary directory to test the streaming engine
+func setupMockDir(t *testing.T, fileMap map[string]string) string {
+	dir, err := os.MkdirTemp("", "test-sssd-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range fileMap {
+		err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// Test: Verify that SSSD version extraction works correctly
+func TestGetSSSDVersion(t *testing.T) {
+	packages := []string{"sssd-2.10.2-150700.9.17.1.x86_64", "sssd-ad-2.10.2"}
+	major, minor := getSSSDVersion(packages)
+
+	if major != 2 || minor != 10 {
+		t.Errorf("Expected version 2.10, but got %d.%d", major, minor)
+	}
+}
+
+// Test: Verify Deep PII Redaction (IPv6, MAC, Emails)
+func TestAnonymizeReport_DeepPII(t *testing.T) {
+	report := ReportData{
+		SearchDomain:  "suse.com",
+		KerberosRealm: "SUSE.COM",
+		SSSDLogErrors: []SSSDLogError{
+			{
+				Description: "Connection to AD failed for IPv6 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+				Examples: []string{
+					"Processing group user.name@suse.com",
+					"Hardware fault at MAC address 00:1B:44:11:3A:B7",
+				},
+			},
+		},
+	}
+
+	anonymizeReport(&report)
+
+	if strings.Contains(report.SSSDLogErrors[0].Description, "2001:0db8:85a3") {
+		t.Errorf("Failed to redact IPv6 address")
+	}
+	if strings.Contains(report.SSSDLogErrors[0].Examples[0], "user.name@suse.com") {
+		t.Errorf("Failed to redact UPN/Email address")
+	}
+	if strings.Contains(report.SSSDLogErrors[0].Examples[1], "00:1B:44:11:3A:B7") {
+		t.Errorf("Failed to redact MAC address")
+	}
+	if !strings.Contains(report.SSSDLogErrors[0].Examples[0], "example.com") {
+		t.Errorf("Failed to mask internal domain to example.com")
 	}
 }
 
@@ -2246,217 +1583,6 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 
 
 ====================
-PATH: ./analyzer_core_test.go
-====================
-// analyzer_test.go
-package main
-
-import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-)
-
-// Helper: Sets up a mock temporary directory to test the new streaming engine
-func setupMockDir(t *testing.T, fileMap map[string]string) string {
-	dir, err := os.MkdirTemp("", "test-sssd-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for name, content := range fileMap {
-		err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
-func containsString(slice []string, expected string) bool {
-	for _, item := range slice {
-		if strings.Contains(item, expected) {
-			return true
-		}
-	}
-	return false
-}
-
-// Test 1: Verify that SSSD version extraction works correctly
-func TestGetSSSDVersion(t *testing.T) {
-	packages := []string{"sssd-2.10.2-150700.9.17.1.x86_64", "sssd-ad-2.10.2"}
-	major, minor := getSSSDVersion(packages)
-
-	if major != 2 || minor != 10 {
-		t.Errorf("Expected version 2.10, but got %d.%d", major, minor)
-	}
-}
-
-// Test 2: Verify the Kerberos 5-minute rule (Time Skew) with streaming
-func TestAnalyzeTime_KerberosSkew(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"systemd.txt": "Active: active (running) chronyd.service\n",
-		"ntp.txt":     "System time     : 312.450 seconds fast of NTP time\nSystem clock synchronized: yes\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeTime(dir, &report)
-
-	if !containsString(report.Problems, "System time offset is 312.45") {
-		t.Errorf("Failed to detect Kerberos Time Skew > 300 seconds via streaming")
-	}
-}
-
-// Test 3: Verify the RC4 Downgrade bug is reported
-func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"messages": "Dec 10 12:00:00 server sssd: service key not available\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
-
-	if !containsString(report.Warnings, "[AD CRYPTO BUG]") {
-		t.Errorf("Failed to detect RC4 downgrade bug in streamed logs")
-	}
-}
-
-// Test 4: Verify Deep PII Redaction (IPv6, MAC, Emails)
-func TestAnonymizeReport_DeepPII(t *testing.T) {
-	report := ReportData{
-		SearchDomain:  "suse.com",
-		KerberosRealm: "SUSE.COM",
-		SSSDLogErrors: []SSSDLogError{
-			{
-				Description: "Connection to AD failed for IPv6 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-				Examples: []string{
-					"Processing group user.name@suse.com",
-					"Hardware fault at MAC address 00:1B:44:11:3A:B7",
-				},
-			},
-		},
-	}
-
-	anonymizeReport(&report)
-
-	if strings.Contains(report.SSSDLogErrors[0].Description, "2001:0db8:85a3") {
-		t.Errorf("Failed to redact IPv6 address")
-	}
-	if strings.Contains(report.SSSDLogErrors[0].Examples[0], "user.name@suse.com") {
-		t.Errorf("Failed to redact UPN/Email address")
-	}
-	if strings.Contains(report.SSSDLogErrors[0].Examples[1], "00:1B:44:11:3A:B7") {
-		t.Errorf("Failed to redact MAC address")
-	}
-	if !strings.Contains(report.SSSDLogErrors[0].Examples[0], "example.com") {
-		t.Errorf("Failed to mask internal domain to example.com")
-	}
-}
-
-// Test 5: Verify strict nsswitch.conf ordering (sss before files)
-func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"nsswitch.conf": "passwd: sss files\ngroup: files sss\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeNSSwitch(dir, &report)
-
-	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
-		t.Errorf("Failed to detect bad nsswitch.conf ordering")
-	}
-}
-
-// Test 6: Verify Disk Space warning for full partitions
-func TestAnalyzeDiskSpace_Critical(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"fs-diskio.txt": "/dev/sda1  100G  98G  2G  98% /\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeDiskSpace(dir, &report)
-
-	if !containsString(report.Problems, "[CRITICAL] Partition / is 98% full") {
-		t.Errorf("Failed to detect 98%% full root partition")
-	}
-}
-
-// Test 7: Verify SLES15 SP7 Bug Detection (sssd running unprivileged triggers warning)
-func TestAnalyzePermissions_SLES15SP7_UnprivilegedBug(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
-		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
-		"sssd.txt": `/var/lib/sss/:
-total 20
-drwx------ 2 sssd sssd   40 2026-03-01 10:39 db
-drwxr-xr-x 2 sssd sssd 4096 2026-03-01 10:28 mc
-
-/var/lib/sss/mc:
-total 33900
--rw-rw-r-- 1 sssd sssd  6940392 2026-03-01 10:38 group
-`,
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeOSAndHardware(dir, &report)
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
-
-	if !containsString(report.Problems, "it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1") {
-		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
-	}
-}
-
-
-====================
-PATH: ./analyzer_auth_test.go
-====================
-// analyzer_auth_test.go
-package main
-
-import (
-	"os"
-	"testing"
-)
-
-// Test: Verify the Kerberos 5-minute rule (Time Skew)
-func TestAnalyzeTime_KerberosSkew(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"systemd.txt": "Active: active (running) chronyd.service\n",
-		"ntp.txt":     "System time     : 312.450 seconds fast of NTP time\nSystem clock synchronized: yes\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeTime(dir, &report)
-
-	if !containsString(report.Problems, "System time offset is 312.45") {
-		t.Errorf("Failed to detect Kerberos Time Skew > 300 seconds via streaming")
-	}
-}
-
-// Test: Verify strict nsswitch.conf ordering (sss before files)
-func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
-	dir := setupMockDir(t, map[string]string{
-		"nsswitch.conf": "passwd: sss files\ngroup: files sss\n",
-	})
-	defer os.RemoveAll(dir)
-
-	var report ReportData
-	analyzeNSSwitch(dir, &report)
-
-	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
-		t.Errorf("Failed to detect bad nsswitch.conf ordering")
-	}
-}
-
-
-====================
 PATH: ./analyzer_logs_test.go
 ====================
 // analyzer_logs_test.go
@@ -2545,6 +1671,207 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 
 	if !foundError {
 		t.Errorf("Expected SELinux warnings to be preserved when SELinux is active.")
+	}
+}
+
+
+====================
+PATH: ./analyzer_system.go
+====================
+// analyzer_system.go
+package main
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Global regex for parsing systemd exit codes
+var reStatus = regexp.MustCompile(`status=(\d+)`)
+
+func analyzeBasicHealth(dirPath string, report *ReportData) {
+	scanFiles(dirPath, []string{"basic-health-check.txt", "basic-environment.txt"}, func(line string) {
+		if strings.HasPrefix(line, "SR#:") {
+			report.SupportCaseID = strings.TrimSpace(strings.TrimPrefix(line, "SR#:"))
+		}
+	})
+}
+
+func analyzeOSAndHardware(dirPath string, report *ReportData) {
+	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Linux") && strings.Contains(line, "SMP") {
+			report.KernelVersion = line
+		}
+		if strings.HasPrefix(line, "PRETTY_NAME=") {
+			report.SLESRlease = strings.Trim(strings.Split(line, "=")[1], "\"")
+		}
+		if strings.HasPrefix(line, "Manufacturer:") {
+			report.HardwareManufacturer = strings.TrimSpace(strings.TrimPrefix(line, "Manufacturer:"))
+		}
+		if strings.HasPrefix(line, "Hardware:") {
+			report.HardwareModel = strings.TrimSpace(strings.TrimPrefix(line, "Hardware:"))
+		}
+		if strings.HasPrefix(line, "Hypervisor:") {
+			report.Hypervisor = strings.TrimSpace(strings.TrimPrefix(line, "Hypervisor:"))
+		}
+		if strings.HasPrefix(line, "Identity:") {
+			report.VirtualIdentity = strings.TrimSpace(strings.TrimPrefix(line, "Identity:"))
+		}
+	})
+}
+
+func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
+	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Hostname:") {
+			hostname := strings.TrimSpace(strings.TrimPrefix(line, "Hostname:"))
+			if !strings.Contains(hostname, ".") {
+				report.Problems = append(report.Problems, "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.")
+			}
+		}
+	})
+}
+
+func analyzeSCC(dirPath string, report *ReportData) {
+	sccFound := false
+	scanFiles(dirPath, []string{"updates.txt"}, func(line string) {
+		if strings.Contains(line, "Registered") || strings.Contains(line, "Status: Active") {
+			report.SCCStatus = "Registered"
+			sccFound = true
+		}
+	})
+	if !sccFound {
+		report.SCCStatus = "Not Registered or Unknown"
+	}
+}
+
+func analyzePerformance(dirPath string, report *ReportData) {
+	if anyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
+		report.Problems = append(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
+	}
+
+	scanFiles(dirPath, []string{"sar.txt"}, func(line string) {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "all") && !strings.Contains(line, "CPU") {
+			fields := strings.Fields(line)
+			if len(fields) >= 6 {
+				iowaitIndex := len(fields) - 3
+				if iowait, err := strconv.ParseFloat(fields[iowaitIndex], 64); err == nil && iowait > 20.0 {
+					report.Warnings = append(report.Warnings, fmt.Sprintf("[PERFORMANCE] High CPU %%iowait detected (>%.1f%%). This can cause SSSD watchdog terminations.", iowait))
+				}
+			}
+		}
+	})
+}
+
+func analyzeServices(dirPath string, report *ReportData) {
+	var sssdStatusBlock []string
+	inSssdStatus := false
+	scanFiles(dirPath, []string{"systemd.txt"}, func(line string) {
+		if strings.Contains(line, "sssd.service") && (strings.Contains(line, "Loaded:") || strings.HasPrefix(line, "●") || strings.Contains(line, "System Security Services Daemon")) {
+			inSssdStatus = true
+		}
+		if inSssdStatus && strings.HasPrefix(line, "●") && !strings.Contains(line, "sssd.service") {
+			inSssdStatus = false
+		}
+		if inSssdStatus {
+			sssdStatusBlock = append(sssdStatusBlock, line)
+		}
+
+		if strings.Contains(line, "winbind.service") && strings.Contains(line, "Active: active") {
+			report.WinbindService = "Running"
+			report.Problems = append(report.Problems, "Winbind is running. This can cause ID mapping conflicts with SSSD.")
+		}
+		if strings.Contains(line, "nscd.service") && strings.Contains(line, "Active: active") {
+			report.NscdStatus = "Running"
+		}
+	})
+
+	for _, line := range sssdStatusBlock {
+		if strings.Contains(line, "Active: active (running)") {
+			report.SssdService = "Running"
+		}
+
+		matches := reStatus.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			switch matches[1] {
+			case "1":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 1 (Generic Error). Often a crash or a failed dependency.")
+			case "2":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 2 (Invalid Usage). Incorrect command-line arguments.")
+			case "3":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service exited with code 3 (Not Running). The service is dead, but a PID file might still exist.")
+			case "4":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 4 (Configuration Error). Check sssd.conf for typos or syntax errors.")
+			case "6":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 6 (Not Configured). Usually means /etc/sssd/sssd.conf is missing or has incorrect permissions (0600 for older versions, 0640 root:sssd for 2.10+).")
+			case "7":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service exited with code 7 (Not Running).")
+			case "17":
+				report.Problems = append(report.Problems, "[SERVICE] sssd.service crashed with exit code 17 (Bad File Permissions). Check ownership and mode of /etc/sssd/sssd.conf.")
+			}
+		}
+	}
+
+	if report.WinbindService == "Not Running / Unknown" {
+		report.WinbindService = "Not Running / Disabled"
+	}
+	if report.NscdStatus == "Not Running / Unknown" {
+		report.NscdStatus = "Disabled / Stopped"
+	}
+}
+
+func analyzeDiskSpace(dirPath string, report *ReportData) {
+	scanFiles(dirPath, []string{"fs-diskio.txt", "storage.txt"}, func(line string) {
+		fields := strings.Fields(line)
+		if len(fields) >= 5 && strings.HasSuffix(fields[len(fields)-2], "%") {
+			mount := fields[len(fields)-1]
+			if mount == "/" || mount == "/var" {
+				if usePct, err := strconv.Atoi(strings.TrimSuffix(fields[len(fields)-2], "%")); err == nil && usePct > 95 {
+					report.Problems = append(report.Problems, fmt.Sprintf("[CRITICAL] Partition %s is %d%% full. SSSD requires disk space for cache and logs.", mount, usePct))
+				}
+			}
+		}
+	})
+}
+
+func analyzeMACDenials(dirPath string, report *ReportData) {
+	var macDenials []string
+	scanFiles(dirPath, []string{"security-apparmor.txt", "security-selinux.txt"}, func(line string) {
+		lowerLine := strings.ToLower(line)
+		if (strings.Contains(lowerLine, "denied") || strings.Contains(lowerLine, "denying")) && strings.Contains(lowerLine, "sssd") {
+			if len(macDenials) < 5 {
+				macDenials = append(macDenials, strings.TrimSpace(line))
+			}
+		}
+	})
+
+	if len(macDenials) > 0 {
+		report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
+		report.MACDenialExamples = deduplicateProblems(macDenials)
+	}
+}
+
+func analyzeMACStatus(dirPath string, report *ReportData) {
+	report.MACType = "Unknown/None"
+
+	scanFiles(dirPath, []string{"boot.txt"}, func(line string) {
+		if strings.Contains(line, "security=apparmor") {
+			report.MACType = "AppArmor"
+		} else if strings.Contains(line, "security=selinux") || strings.Contains(line, "selinux=1") {
+			report.MACType = "SELinux"
+		}
+	})
+
+	if report.MACType == "Unknown/None" {
+		if anyFileContains(dirPath, []string{"security-apparmor.txt"}, "apparmor module is loaded") || anyFileContains(dirPath, []string{"security-apparmor.txt"}, "Active: active") {
+			report.MACType = "AppArmor"
+		} else if anyFileContains(dirPath, []string{"security-selinux.txt"}, "SELinux status:                 enabled") {
+			report.MACType = "SELinux"
+		}
 	}
 }
 
@@ -2769,6 +2096,603 @@ total 33900
 	if containsString(report.Problems, "incorrectly owned") {
 		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
 	}
+}
+
+
+====================
+PATH: ./app.go
+====================
+package main
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type App struct {
+	ctx context.Context
+}
+
+func NewApp() *App {
+	return &App{}
+}
+
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+}
+
+func (a *App) OpenFileBrowser() (string, error) {
+	options := runtime.OpenDialogOptions{
+		Title: "Select Supportconfig Archive",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Supportconfig Archives (*.txz, *.tar.xz)", Pattern: "*.txz;*.tar.xz"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	}
+	return runtime.OpenFileDialog(a.ctx, options)
+}
+
+// Analyze handles the secure extraction, routing, and cleanup of the target logs
+func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
+	// Emit progress directly to the Javascript UI
+	progressFunc := func(msg string, pct int) {
+		runtime.EventsEmit(a.ctx, "analyze-progress", msg, pct)
+	}
+
+	progressFunc("Initializing streaming engine...", 0)
+
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return ReportData{}, fmt.Errorf("error accessing path: %v", err)
+	}
+
+	var dirPath string
+
+	if info.IsDir() {
+		dirPath = targetPath
+	} else {
+		dirPath, err = extractArchiveToTemp(targetPath, progressFunc)
+		if err != nil {
+			return ReportData{}, err
+		}
+		// ALWAYS clean up the massive logs off the disk after analysis!
+		defer os.RemoveAll(dirPath)
+	}
+
+	report := analyzeData(dirPath, anonymize, progressFunc)
+	progressFunc("Analysis Complete!", 100)
+	return report, nil
+}
+
+func (a *App) SavePDF(b64 string) (string, error) {
+	parts := strings.SplitN(b64, "base64,", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid PDF data received from frontend")
+	}
+
+	pdfBytes, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %v", err)
+	}
+
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: "SSSD_Analysis_Report.pdf",
+		Title:           "Save PDF Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PDF Document (*.pdf)", Pattern: "*.pdf"},
+		},
+	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	if filePath == "" {
+		return "cancelled", nil
+	}
+
+	err = os.WriteFile(filePath, pdfBytes, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) SaveTXT(report ReportData) (string, error) {
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: "SSSD_Analysis_Report.txt",
+		Title:           "Save TXT Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Text Document (*.txt)", Pattern: "*.txt"},
+		},
+	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "cancelled", nil
+	}
+	txtContent := buildTextReport(report)
+	err = os.WriteFile(filePath, []byte(txtContent), 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+	return filePath, nil
+}
+
+
+====================
+PATH: ./kb.go
+====================
+// kb.go
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming
+func matchKBArticles(dirPath string, report *ReportData) {
+	exePath, err := os.Executable()
+	kbDir := "kb_articles"
+
+	if err == nil {
+		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+		if _, err := os.Stat(exeDir); !os.IsNotExist(err) {
+			kbDir = exeDir
+		}
+	}
+
+	if _, err := os.Stat(kbDir); os.IsNotExist(err) {
+		return
+	}
+
+	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
+	if err != nil || len(files) == 0 {
+		return
+	}
+
+	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
+	configFiles := []string{"sssd.conf"}
+
+	activeSecModule := report.MACType
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			log.Printf("Warning: Failed to read KB article %s: %v", file, err)
+			continue
+		}
+
+		var article TIDArticle
+		if err := json.Unmarshal(content, &article); err != nil {
+			log.Printf("Warning: Invalid JSON in KB article %s: %v", file, err)
+			continue
+		}
+
+		isSELinuxArticle := strings.Contains(strings.ToLower(article.Title), "selinux") ||
+			strings.Contains(strings.ToLower(article.Description), "selinux")
+
+		for _, pat := range article.LogPatterns {
+			if strings.Contains(strings.ToLower(pat), "selinux") {
+				isSELinuxArticle = true
+				break
+			}
+		}
+
+		// Skip SELinux TIDs if we are on an AppArmor system to prevent false positives
+		if activeSecModule == "AppArmor" && isSELinuxArticle {
+			continue
+		}
+
+		article.Evidence = []string{}
+
+		logMatched := len(article.LogPatterns) == 0
+		if !logMatched {
+			for _, pattern := range article.LogPatterns {
+				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				scanFiles(dirPath, logFiles, func(line string) {
+					if matcher.MatchString(line) {
+						logMatched = true
+						if len(article.Evidence) < 3 {
+							cleanLine := strings.TrimSpace(line)
+							isDupe := false
+							for _, ev := range article.Evidence {
+								if ev == cleanLine {
+									isDupe = true
+									break
+								}
+							}
+							if !isDupe {
+								article.Evidence = append(article.Evidence, cleanLine)
+							}
+						}
+					}
+				})
+			}
+		}
+
+		configMatched := len(article.ConfigPatterns) == 0
+		if !configMatched {
+			for _, pattern := range article.ConfigPatterns {
+				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				scanFiles(dirPath, configFiles, func(line string) {
+					if matcher.MatchString(line) {
+						configMatched = true
+					}
+				})
+			}
+		}
+
+		if logMatched && configMatched {
+			if len(article.LogPatterns) > 0 || len(article.ConfigPatterns) > 0 {
+				report.MatchedTIDs = append(report.MatchedTIDs, article)
+			}
+		}
+	}
+}
+
+
+====================
+PATH: ./loaders.go
+====================
+package main
+
+import (
+	"archive/tar"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/ulikunitz/xz"
+)
+
+// extractArchiveToTemp safely extracts relevant files to a temporary directory.
+func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
+	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %v", err)
+	}
+
+	f, err := os.Open(archivePath)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", err
+	}
+	defer f.Close()
+
+	r, err := xz.NewReader(f)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", err
+	}
+
+	tr := tar.NewReader(r)
+	const maxFileSize = 2 * 1024 * 1024 * 1024 // 2GB max per file safety limit
+
+	if progressFunc != nil {
+		progressFunc("Decompressing archive securely to disk...", 5)
+	}
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			os.RemoveAll(tempDir)
+			return "", fmt.Errorf("tar extraction error: %v", err)
+		}
+
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		fileName := filepath.Base(hdr.Name)
+		if isRelevantFile(fileName) {
+			// Prevent path traversal
+			targetPath := filepath.Join(tempDir, fileName)
+			if !strings.HasPrefix(targetPath, filepath.Clean(tempDir)+string(os.PathSeparator)) {
+				continue
+			}
+
+			// Prevent Zip/Tar Bombs
+			if hdr.Size > maxFileSize {
+				continue
+			}
+
+			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				continue
+			}
+
+			_, err = io.CopyN(outFile, tr, hdr.Size)
+			outFile.Close()
+		}
+	}
+	return tempDir, nil
+}
+
+
+====================
+PATH: ./main.go
+====================
+package main
+
+import (
+	"embed"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+)
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func main() {
+	// 1. Setup CLI Flags
+	versionShort := flag.Bool("v", false, "Print program version")
+	cliPath := flag.String("analyze", "", "Path to the supportconfig directory or log file")
+	txtReport := flag.Bool("txt", false, "Generate a TXT report")
+	htmlReport := flag.Bool("html", false, "Generate an HTML report")
+	anonymize := flag.Bool("anonymize", false, "Redact PII (IPs, Domains) from the report")
+	flag.Parse()
+
+	if *versionShort {
+		fmt.Printf("sssd-analyzer-gui version 0.2.0 (Hybrid)\n")
+		os.Exit(0)
+	}
+
+	// 2. Traffic Cop Logic (If they used the strict -analyze flag)
+	if *cliPath != "" {
+		runCLI(*cliPath, *txtReport, *htmlReport, *anonymize)
+		os.Exit(0) // Exit immediately. Do not load the GUI.
+	}
+
+	// Fallback: If they provided a path WITHOUT -analyze, flag.Parse() stops parsing.
+	// We must manually scan the remaining arguments so that flags like -html or -anonymize
+	// placed AFTER the path still work perfectly.
+	if flag.NArg() > 0 {
+		path := flag.Arg(0)
+		isAnonymize := *anonymize
+		isTxt := *txtReport
+		isHtml := *htmlReport
+		hasExplicitFormat := false
+
+		// Manually scan remaining arguments for all our flags
+		for _, arg := range os.Args[1:] {
+			if strings.Contains(arg, "-anonymize") {
+				isAnonymize = true
+			}
+			if strings.Contains(arg, "-txt") {
+				isTxt = true
+				hasExplicitFormat = true
+			}
+			if strings.Contains(arg, "-html") {
+				isHtml = true
+				hasExplicitFormat = true
+			}
+		}
+
+		// If they just passed the path and NO format flags, default to both to match previous behavior
+		if !hasExplicitFormat && !*txtReport && !*htmlReport {
+			isTxt = true
+			isHtml = true
+		}
+
+		runCLI(path, isTxt, isHtml, isAnonymize)
+		os.Exit(0)
+	}
+
+	// 3. Launch the Wails GUI
+	app := NewApp()
+
+	err := wails.Run(&options.App{
+		Title:  "SSSD Inspector",
+		Width:  1024,
+		Height: 768,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 244, G: 244, B: 249, A: 255},
+		OnStartup:        app.startup,
+		Bind: []interface{}{
+			app,
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
+		},
+	})
+
+	if err != nil {
+		println("Error:", err.Error())
+	}
+}
+
+func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) {
+	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
+	if anonymize {
+		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
+	}
+
+	// Mock progress func for CLI output so the streaming engine doesn't panic
+	progressFunc := func(msg string, pct int) {
+		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		log.Fatalf("Error accessing path: %v", err)
+	}
+
+	var dirPath string
+	if info.IsDir() {
+		dirPath = path
+	} else {
+		// Use the new secure archive extractor
+		dirPath, err = extractArchiveToTemp(path, progressFunc)
+		if err != nil {
+			log.Fatalf("Extract error: %v", err)
+		}
+		defer os.RemoveAll(dirPath) // Clean up temp files when done
+	}
+
+	// Use the updated analyzeData signature
+	report := analyzeData(dirPath, anonymize, progressFunc)
+
+	now := time.Now()
+	report.Timestamp = now.Format("02:01:2006 15:04:05")
+
+	reportText := buildTextReport(report)
+	fmt.Println("\n" + reportText)
+
+	baseName := filepath.Base(path)
+
+	if genTxt {
+		txtReportFile := baseName + "_report.txt"
+		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
+		if err != nil {
+			fmt.Printf("Error writing txt report: %v\n", err)
+		} else {
+			fmt.Printf("Text report saved to: %s\n", txtReportFile)
+		}
+	}
+
+	if genHtml {
+		htmlReportFile := baseName + "_report.html"
+		writeHTMLReportFile(report, htmlReportFile)
+		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+	}
+}
+
+
+====================
+PATH: ./utils.go
+====================
+package main
+
+import (
+	"bufio"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// anyFileContains streams files line-by-line, instantly stopping if a match is found (Near-zero RAM usage)
+func anyFileContains(dirPath string, files []string, search string) bool {
+	for _, name := range files {
+		f, err := os.Open(filepath.Join(dirPath, name))
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // Support long lines up to 1MB
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), search) {
+				f.Close()
+				return true
+			}
+		}
+		f.Close()
+	}
+	return false
+}
+
+// scanFiles streams files line-by-line and executes a callback, discarding the bytes immediately
+func scanFiles(dirPath string, files []string, lineFunc func(line string)) {
+	for _, name := range files {
+		f, err := os.Open(filepath.Join(dirPath, name))
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024)
+		for scanner.Scan() {
+			lineFunc(scanner.Text())
+		}
+		f.Close()
+	}
+}
+
+// extractSection streams a file and extracts a specific command block
+func extractSection(dirPath string, fileName string, header string) string {
+	f, err := os.Open(filepath.Join(dirPath, fileName))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	var sb strings.Builder
+	inSection := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, header) {
+			inSection = true
+			continue
+		}
+		if inSection {
+			if strings.HasPrefix(line, "#==[") {
+				break
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+	return sb.String()
+}
+
+// readFileSafe reads a small file directly into a string (Used only for tiny configs like sssd.conf)
+func readFileSafe(dirPath string, fileName string) string {
+	b, err := os.ReadFile(filepath.Join(dirPath, fileName))
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func isRelevantFile(name string) bool {
+	relevant := []string{
+		"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
+		"systemd.txt", "basic-environment.txt", "updates.txt",
+		"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
+		"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
+		"storage.txt", "security-apparmor.txt", "security-selinux.txt",
+		"memory.txt", "sar.txt", "messages", "messages.txt", "boot.txt",
+	}
+	for _, r := range relevant {
+		if name == r {
+			return true
+		}
+	}
+	return false
 }
 
 
@@ -3365,22 +3289,6 @@ export namespace main {
 
 
 ====================
-PATH: ./frontend/wailsjs/go/main/App.d.ts
-====================
-// Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
-// This file is automatically generated. DO NOT EDIT
-import {main} from '../models';
-
-export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
-
-export function OpenFileBrowser():Promise<string>;
-
-export function SavePDF(arg1:string):Promise<string>;
-
-export function SaveTXT(arg1:main.ReportData):Promise<string>;
-
-
-====================
 PATH: ./frontend/wailsjs/go/main/App.js
 ====================
 // @ts-check
@@ -3402,6 +3310,22 @@ export function SavePDF(arg1) {
 export function SaveTXT(arg1) {
   return window['go']['main']['App']['SaveTXT'](arg1);
 }
+
+
+====================
+PATH: ./frontend/wailsjs/go/main/App.d.ts
+====================
+// Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
+// This file is automatically generated. DO NOT EDIT
+import {main} from '../models';
+
+export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
+
+export function OpenFileBrowser():Promise<string>;
+
+export function SavePDF(arg1:string):Promise<string>;
+
+export function SaveTXT(arg1:main.ReportData):Promise<string>;
 
 
 ====================

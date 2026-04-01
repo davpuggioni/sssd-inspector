@@ -2,7 +2,9 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -84,5 +86,104 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 
 	if !foundError {
 		t.Errorf("Expected SELinux warnings to be preserved when SELinux is active.")
+	}
+}
+
+// Test: Verify KB Article Matching Engine
+func TestMatchKBArticles_Success(t *testing.T) {
+	// 1. Setup a temporary directory for the mock logs
+	dir := setupMockDir(t, map[string]string{
+		"messages": "Dec 10 12:00:00 server sssd: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	// 2. Setup a temporary directory for the mock KB JSON files
+	exePath, _ := os.Executable()
+	mockKBDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+	os.MkdirAll(mockKBDir, 0755)
+	defer os.RemoveAll(mockKBDir) // Clean up mock KB dir after test
+
+	// Create a mock KB Article matching TID-000020793
+	mockArticle := TIDArticle{
+		TIDID:       "TID-TEST-01",
+		Title:       "SSSD MEMORY Keytab Error",
+		Description: "Keytab is corrupted.",
+		// FIXED: Removed manual '\' escapes, as kb.go uses regexp.QuoteMeta internally
+		LogPatterns: []string{"Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]"},
+	}
+	articleBytes, _ := json.Marshal(mockArticle)
+	os.WriteFile(filepath.Join(mockKBDir, "test_article.json"), articleBytes, 0644)
+
+	var report ReportData
+	matchKBArticles(dir, &report)
+
+	if len(report.MatchedTIDs) == 0 {
+		t.Fatalf("Failed to match mock KB article against log evidence")
+	}
+
+	if report.MatchedTIDs[0].TIDID != "TID-TEST-01" {
+		t.Errorf("Expected TID-TEST-01, got %s", report.MatchedTIDs[0].TIDID)
+	}
+
+	if len(report.MatchedTIDs[0].Evidence) == 0 {
+		t.Errorf("Failed to extract log evidence for matched KB article")
+	}
+}
+
+// Test: Verify KB Article AppArmor Suppression Logic
+func TestMatchKBArticles_AppArmorSuppression(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"messages": "sssd: SELinux context evaluation failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	exePath, _ := os.Executable()
+	mockKBDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+	os.MkdirAll(mockKBDir, 0755)
+	defer os.RemoveAll(mockKBDir)
+
+	// Create a mock SELinux KB Article
+	mockArticle := TIDArticle{
+		TIDID:       "TID-SELINUX-TEST",
+		Title:       "SELinux mapping failed",
+		Description: "SELinux maps were recently updated",
+		LogPatterns: []string{"SELinux context evaluation failed"},
+	}
+	articleBytes, _ := json.Marshal(mockArticle)
+	os.WriteFile(filepath.Join(mockKBDir, "test_selinux.json"), articleBytes, 0644)
+
+	var report ReportData
+	// Simulate an AppArmor environment
+	report.MACType = "AppArmor"
+
+	matchKBArticles(dir, &report)
+
+	// The engine should explicitly ignore SELinux TIDs when AppArmor is active
+	if len(report.MatchedTIDs) > 0 {
+		t.Fatalf("KB Matching Engine failed to suppress SELinux article in an AppArmor environment")
+	}
+}
+
+// Test: Verify extractSection accurately pulls the sssd.conf block via streaming
+func TestExtractSection_Streaming(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": `Some junk data
+# /etc/sssd/sssd.conf
+[domain/ad]
+id_provider = ad
+enumerate = false
+#==[ Command ]======================================
+More junk data`,
+	})
+	defer os.RemoveAll(dir)
+
+	extracted := extractSection(dir, "sssd.txt", "# /etc/sssd/sssd.conf")
+
+	if !strings.Contains(extracted, "id_provider = ad") {
+		t.Errorf("Failed to extract 'id_provider = ad' from sssd.txt")
+	}
+
+	if strings.Contains(extracted, "More junk data") {
+		t.Errorf("extractSection leaked data past the boundary marker (#==[)")
 	}
 }
