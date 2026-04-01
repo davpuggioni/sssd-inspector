@@ -7,6 +7,12 @@ import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 
 document.querySelector('#app').innerHTML = `
     <style>
+    .timeline { border-left: 3px solid #0056b3; padding-left: 20px; margin: 20px 0 30px 10px; }
+        .timeline-event { margin-bottom: 20px; position: relative; }
+        .timeline-event::before { content: ''; position: absolute; left: -28px; top: 5px; width: 12px; height: 12px; background: #d9534f; border-radius: 50%; }
+        .timeline-time { font-weight: bold; color: #0056b3; font-size: 0.95em; }
+        .timeline-msg { font-weight: bold; color: #333; margin-top: 3px; }
+        .timeline-raw { font-family: monospace; font-size: 0.85em; color: #666; background: #f8f9fa; padding: 5px; margin-top: 5px; border-radius: 3px; border: 1px solid #ddd; }
         .report-wrapper { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 20px; text-align: left; }
         h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 5px; font-size: 1.8em; }
         h2 { color: #d9534f; border-bottom: 1px solid #d9534f; padding-bottom: 5px; margin-top: 30px; font-size: 1.4em;}
@@ -138,6 +144,19 @@ function renderReportHTML(report) {
             </td></tr>`;
         });
         html += `</table>`;
+    }
+
+    if (report.timeline && report.timeline.length > 0) {
+        html += `<h2>Chronological Event Timeline</h2><div class="timeline">`;
+        report.timeline.forEach(ev => {
+            html += `
+            <div class="timeline-event">
+                <div class="timeline-time">🕒 ${ev.timestamp}</div>
+                <div class="timeline-msg">${ev.message}</div>
+                <div class="timeline-raw">${ev.raw_log}</div>
+            </div>`;
+        });
+        html += `</div>`;
     }
 
     if (report.mac_denial_examples && report.mac_denial_examples.length > 0) {

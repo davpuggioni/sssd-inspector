@@ -419,9 +419,17 @@ type ReportData struct {
 	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
 	MACDenialExamples []string       `json:"mac_denial_examples"`
 
-	Problems    []string     `json:"problems"`
-	Warnings    []string     `json:"warnings"`
-	MatchedTIDs []TIDArticle `json:"matched_tids"`
+	Problems    []string        `json:"problems"`
+	Warnings    []string        `json:"warnings"`
+	MatchedTIDs []TIDArticle    `json:"matched_tids"`
+	Timeline    []TimelineEvent `json:"timeline"`
+}
+
+// TimelineEvent represents a single chronological log occurrence
+type TimelineEvent struct {
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message"`
+	RawLog    string `json:"raw_log"`
 }
 
 
@@ -1128,6 +1136,7 @@ import (
 	"bufio"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -1444,6 +1453,12 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	}
 	errorRegex := regexp.MustCompile("(?i)(" + strings.Join(errorKeys, "|") + ")")
 
+	// Regex to match standard SSSD log timestamps: (YYYY-MM-DD HH:MM:SS)
+	// and standard syslog timestamps: Dec 10 12:00:00
+	timeRegex := regexp.MustCompile(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}))`)
+
+	var timelineEvents []TimelineEvent
+
 	scanFiles(dirPath, logFiles, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 
@@ -1479,10 +1494,32 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 				}
 				if !isDupe {
 					detectedLogErrors[description] = append(detectedLogErrors[description], lineTrimmed)
+
+					tsMatch := timeRegex.FindStringSubmatch(lineTrimmed)
+					ts := "Unknown Time"
+					if len(tsMatch) > 1 && tsMatch[1] != "" {
+						ts = tsMatch[1] // SSSD native format
+					} else if len(tsMatch) > 2 && tsMatch[2] != "" {
+						ts = tsMatch[2] // Syslog format
+					}
+
+					timelineEvents = append(timelineEvents, TimelineEvent{
+						Timestamp: ts,
+						Message:   description,
+						RawLog:    lineTrimmed,
+					})
 				}
 			}
 		}
+
 	})
+
+	// Sort the timeline chronologically
+	sort.SliceStable(timelineEvents, func(i, j int) bool {
+		return timelineEvents[i].Timestamp < timelineEvents[j].Timestamp
+	})
+
+	report.Timeline = timelineEvents
 
 	for desc, lines := range detectedLogErrors {
 		report.SSSDLogErrors = append(report.SSSDLogErrors, SSSDLogError{Description: desc, Examples: lines})
@@ -1589,7 +1626,9 @@ PATH: ./analyzer_logs_test.go
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -1671,6 +1710,143 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 
 	if !foundError {
 		t.Errorf("Expected SELinux warnings to be preserved when SELinux is active.")
+	}
+}
+
+// Test: Verify KB Article Matching Engine
+func TestMatchKBArticles_Success(t *testing.T) {
+	// 1. Setup a temporary directory for the mock logs
+	dir := setupMockDir(t, map[string]string{
+		"messages": "Dec 10 12:00:00 server sssd: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	// 2. Setup a temporary directory for the mock KB JSON files
+	exePath, _ := os.Executable()
+	mockKBDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+	os.MkdirAll(mockKBDir, 0755)
+	defer os.RemoveAll(mockKBDir) // Clean up mock KB dir after test
+
+	// Create a mock KB Article matching TID-000020793
+	mockArticle := TIDArticle{
+		TIDID:       "TID-TEST-01",
+		Title:       "SSSD MEMORY Keytab Error",
+		Description: "Keytab is corrupted.",
+		LogPatterns: []string{"Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]"},
+	}
+	articleBytes, _ := json.Marshal(mockArticle)
+	os.WriteFile(filepath.Join(mockKBDir, "test_article.json"), articleBytes, 0644)
+
+	var report ReportData
+	matchKBArticles(dir, &report)
+
+	if len(report.MatchedTIDs) == 0 {
+		t.Fatalf("Failed to match mock KB article against log evidence")
+	}
+
+	if report.MatchedTIDs[0].TIDID != "TID-TEST-01" {
+		t.Errorf("Expected TID-TEST-01, got %s", report.MatchedTIDs[0].TIDID)
+	}
+
+	if len(report.MatchedTIDs[0].Evidence) == 0 {
+		t.Errorf("Failed to extract log evidence for matched KB article")
+	}
+}
+
+// Test: Verify KB Article AppArmor Suppression Logic
+func TestMatchKBArticles_AppArmorSuppression(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"messages": "sssd: SELinux context evaluation failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	exePath, _ := os.Executable()
+	mockKBDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
+	os.MkdirAll(mockKBDir, 0755)
+	defer os.RemoveAll(mockKBDir)
+
+	// Create a mock SELinux KB Article
+	mockArticle := TIDArticle{
+		TIDID:       "TID-SELINUX-TEST",
+		Title:       "SELinux mapping failed",
+		Description: "SELinux maps were recently updated",
+		LogPatterns: []string{"SELinux context evaluation failed"},
+	}
+	articleBytes, _ := json.Marshal(mockArticle)
+	os.WriteFile(filepath.Join(mockKBDir, "test_selinux.json"), articleBytes, 0644)
+
+	var report ReportData
+	// Simulate an AppArmor environment
+	report.MACType = "AppArmor"
+
+	matchKBArticles(dir, &report)
+
+	// The engine should explicitly ignore SELinux TIDs when AppArmor is active
+	if len(report.MatchedTIDs) > 0 {
+		t.Fatalf("KB Matching Engine failed to suppress SELinux article in an AppArmor environment")
+	}
+}
+
+// Test: Verify extractSection accurately pulls the sssd.conf block via streaming
+func TestExtractSection_Streaming(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": `Some junk data
+# /etc/sssd/sssd.conf
+[domain/ad]
+id_provider = ad
+enumerate = false
+#==[ Command ]======================================
+More junk data`,
+	})
+	defer os.RemoveAll(dir)
+
+	extracted := extractSection(dir, "sssd.txt", "# /etc/sssd/sssd.conf")
+
+	if !strings.Contains(extracted, "id_provider = ad") {
+		t.Errorf("Failed to extract 'id_provider = ad' from sssd.txt")
+	}
+
+	if strings.Contains(extracted, "More junk data") {
+		t.Errorf("extractSection leaked data past the boundary marker (#==[)")
+	}
+}
+
+// Test: Verify Chronological Timeline Extraction and Sorting
+func TestAnalyzeSSSDConfigAndLogs_TimelineExtraction(t *testing.T) {
+	// Create mock files with mixed timestamps out of chronological order
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": `(2026-04-01 12:00:00) [sssd] [krb5_child] service key not available
+(2026-04-01 10:00:00) [sssd] [watchdog] terminated by own WATCHDOG
+(2026-04-01 11:00:00) [sssd] [sysdb] database disk image is malformed
+`,
+		"messages": "Dec 10 12:05:00 server sssd: Preauthentication failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeSSSDConfigAndLogs(dir, &report)
+
+	if len(report.Timeline) != 4 {
+		t.Fatalf("Expected 4 timeline events, got %d", len(report.Timeline))
+	}
+
+	// Verify sorting applied correctly (lexicographical check)
+	// Expected Order:
+	// 1. "2026-04-01 10:00:00"
+	// 2. "2026-04-01 11:00:00"
+	// 3. "2026-04-01 12:00:00"
+	// 4. "Dec 10 12:05:00"
+	if report.Timeline[0].Timestamp != "2026-04-01 10:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 10:00:00' first, got '%s'", report.Timeline[0].Timestamp)
+	}
+	if report.Timeline[1].Timestamp != "2026-04-01 11:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 11:00:00' second, got '%s'", report.Timeline[1].Timestamp)
+	}
+	if report.Timeline[2].Timestamp != "2026-04-01 12:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 12:00:00' third, got '%s'", report.Timeline[2].Timestamp)
+	}
+	if report.Timeline[3].Timestamp != "Dec 10 12:05:00" {
+		t.Errorf("Timeline sorting failed, expected 'Dec 10 12:05:00' fourth, got '%s'", report.Timeline[3].Timestamp)
 	}
 }
 
@@ -2831,6 +3007,12 @@ import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 
 document.querySelector('#app').innerHTML = `
     <style>
+    .timeline { border-left: 3px solid #0056b3; padding-left: 20px; margin: 20px 0 30px 10px; }
+        .timeline-event { margin-bottom: 20px; position: relative; }
+        .timeline-event::before { content: ''; position: absolute; left: -28px; top: 5px; width: 12px; height: 12px; background: #d9534f; border-radius: 50%; }
+        .timeline-time { font-weight: bold; color: #0056b3; font-size: 0.95em; }
+        .timeline-msg { font-weight: bold; color: #333; margin-top: 3px; }
+        .timeline-raw { font-family: monospace; font-size: 0.85em; color: #666; background: #f8f9fa; padding: 5px; margin-top: 5px; border-radius: 3px; border: 1px solid #ddd; }
         .report-wrapper { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 20px; text-align: left; }
         h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 5px; font-size: 1.8em; }
         h2 { color: #d9534f; border-bottom: 1px solid #d9534f; padding-bottom: 5px; margin-top: 30px; font-size: 1.4em;}
@@ -2962,6 +3144,19 @@ function renderReportHTML(report) {
             </td></tr>`;
         });
         html += `</table>`;
+    }
+
+    if (report.timeline && report.timeline.length > 0) {
+        html += `<h2>Chronological Event Timeline</h2><div class="timeline">`;
+        report.timeline.forEach(ev => {
+            html += `
+            <div class="timeline-event">
+                <div class="timeline-time">🕒 ${ev.timestamp}</div>
+                <div class="timeline-msg">${ev.message}</div>
+                <div class="timeline-raw">${ev.raw_log}</div>
+            </div>`;
+        });
+        html += `</div>`;
     }
 
     if (report.mac_denial_examples && report.mac_denial_examples.length > 0) {
@@ -3146,6 +3341,22 @@ PATH: ./frontend/wailsjs/go/models.ts
 ====================
 export namespace main {
 	
+	export class TimelineEvent {
+	    timestamp: string;
+	    message: string;
+	    raw_log: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelineEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.message = source["message"];
+	        this.raw_log = source["raw_log"];
+	    }
+	}
 	export class TIDArticle {
 	    tid_id: string;
 	    title: string;
@@ -3219,6 +3430,7 @@ export namespace main {
 	    problems: string[];
 	    warnings: string[];
 	    matched_tids: TIDArticle[];
+	    timeline: TimelineEvent[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ReportData(source);
@@ -3262,6 +3474,7 @@ export namespace main {
 	        this.problems = source["problems"];
 	        this.warnings = source["warnings"];
 	        this.matched_tids = this.convertValues(source["matched_tids"], TIDArticle);
+	        this.timeline = this.convertValues(source["timeline"], TimelineEvent);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -3282,6 +3495,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	
 
 }

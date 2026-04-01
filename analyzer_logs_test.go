@@ -108,7 +108,6 @@ func TestMatchKBArticles_Success(t *testing.T) {
 		TIDID:       "TID-TEST-01",
 		Title:       "SSSD MEMORY Keytab Error",
 		Description: "Keytab is corrupted.",
-		// FIXED: Removed manual '\' escapes, as kb.go uses regexp.QuoteMeta internally
 		LogPatterns: []string{"Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]"},
 	}
 	articleBytes, _ := json.Marshal(mockArticle)
@@ -185,5 +184,44 @@ More junk data`,
 
 	if strings.Contains(extracted, "More junk data") {
 		t.Errorf("extractSection leaked data past the boundary marker (#==[)")
+	}
+}
+
+// Test: Verify Chronological Timeline Extraction and Sorting
+func TestAnalyzeSSSDConfigAndLogs_TimelineExtraction(t *testing.T) {
+	// Create mock files with mixed timestamps out of chronological order
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": `(2026-04-01 12:00:00) [sssd] [krb5_child] service key not available
+(2026-04-01 10:00:00) [sssd] [watchdog] terminated by own WATCHDOG
+(2026-04-01 11:00:00) [sssd] [sysdb] database disk image is malformed
+`,
+		"messages": "Dec 10 12:05:00 server sssd: Preauthentication failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeSSSDConfigAndLogs(dir, &report)
+
+	if len(report.Timeline) != 4 {
+		t.Fatalf("Expected 4 timeline events, got %d", len(report.Timeline))
+	}
+
+	// Verify sorting applied correctly (lexicographical check)
+	// Expected Order:
+	// 1. "2026-04-01 10:00:00"
+	// 2. "2026-04-01 11:00:00"
+	// 3. "2026-04-01 12:00:00"
+	// 4. "Dec 10 12:05:00"
+	if report.Timeline[0].Timestamp != "2026-04-01 10:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 10:00:00' first, got '%s'", report.Timeline[0].Timestamp)
+	}
+	if report.Timeline[1].Timestamp != "2026-04-01 11:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 11:00:00' second, got '%s'", report.Timeline[1].Timestamp)
+	}
+	if report.Timeline[2].Timestamp != "2026-04-01 12:00:00" {
+		t.Errorf("Timeline sorting failed, expected '2026-04-01 12:00:00' third, got '%s'", report.Timeline[2].Timestamp)
+	}
+	if report.Timeline[3].Timestamp != "Dec 10 12:05:00" {
+		t.Errorf("Timeline sorting failed, expected 'Dec 10 12:05:00' fourth, got '%s'", report.Timeline[3].Timestamp)
 	}
 }

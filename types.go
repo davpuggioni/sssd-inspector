@@ -64,7 +64,15 @@ type ReportData struct {
 	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
 	MACDenialExamples []string       `json:"mac_denial_examples"`
 
-	Problems    []string     `json:"problems"`
-	Warnings    []string     `json:"warnings"`
-	MatchedTIDs []TIDArticle `json:"matched_tids"`
+	Problems    []string        `json:"problems"`
+	Warnings    []string        `json:"warnings"`
+	MatchedTIDs []TIDArticle    `json:"matched_tids"`
+	Timeline    []TimelineEvent `json:"timeline"`
+}
+
+// TimelineEvent represents a single chronological log occurrence
+type TimelineEvent struct {
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message"`
+	RawLog    string `json:"raw_log"`
 }

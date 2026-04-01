@@ -1,5 +1,21 @@
 export namespace main {
 	
+	export class TimelineEvent {
+	    timestamp: string;
+	    message: string;
+	    raw_log: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelineEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.message = source["message"];
+	        this.raw_log = source["raw_log"];
+	    }
+	}
 	export class TIDArticle {
 	    tid_id: string;
 	    title: string;
@@ -73,6 +89,7 @@ export namespace main {
 	    problems: string[];
 	    warnings: string[];
 	    matched_tids: TIDArticle[];
+	    timeline: TimelineEvent[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ReportData(source);
@@ -116,6 +133,7 @@ export namespace main {
 	        this.problems = source["problems"];
 	        this.warnings = source["warnings"];
 	        this.matched_tids = this.convertValues(source["matched_tids"], TIDArticle);
+	        this.timeline = this.convertValues(source["timeline"], TimelineEvent);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -136,6 +154,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	
 
 }

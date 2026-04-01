@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -321,6 +322,13 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	}
 	errorRegex := regexp.MustCompile("(?i)(" + strings.Join(errorKeys, "|") + ")")
 
+	// Regex to match standard SSSD log timestamps: (YYYY-MM-DD HH:MM:SS)
+	// standard syslog timestamps: Dec 10 12:00:00
+	// and ISO 8601 timestamps: 2026-03-11T12:03:17.574746+01:00
+	timeRegex := regexp.MustCompile(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
+
+	var timelineEvents []TimelineEvent
+
 	scanFiles(dirPath, logFiles, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 
@@ -356,10 +364,34 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 				}
 				if !isDupe {
 					detectedLogErrors[description] = append(detectedLogErrors[description], lineTrimmed)
+
+					tsMatch := timeRegex.FindStringSubmatch(lineTrimmed)
+					ts := "Unknown Time"
+					if len(tsMatch) > 1 && tsMatch[1] != "" {
+						ts = tsMatch[1] // SSSD native format
+					} else if len(tsMatch) > 2 && tsMatch[2] != "" {
+						ts = tsMatch[2] // Syslog format
+					} else if len(tsMatch) > 3 && tsMatch[3] != "" {
+						ts = tsMatch[3] // ISO 8601 format
+					}
+
+					timelineEvents = append(timelineEvents, TimelineEvent{
+						Timestamp: ts,
+						Message:   description,
+						RawLog:    lineTrimmed,
+					})
 				}
 			}
 		}
+
 	})
+
+	// Sort the timeline chronologically
+	sort.SliceStable(timelineEvents, func(i, j int) bool {
+		return timelineEvents[i].Timestamp < timelineEvents[j].Timestamp
+	})
+
+	report.Timeline = timelineEvents
 
 	for desc, lines := range detectedLogErrors {
 		report.SSSDLogErrors = append(report.SSSDLogErrors, SSSDLogError{Description: desc, Examples: lines})
