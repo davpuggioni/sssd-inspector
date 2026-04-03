@@ -294,7 +294,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 		"ID mapping out of range":             "Range Conflict: An AD user's calculated ID falls outside the 'min_id' or 'max_id' limits. The user will be unable to log in or own files.",
 	}
 
-	// Conditionally filter SELinux-specific noise based on the OS context
+	// Conditionally filter SELinux-specific noise based on the OS context [cite: 1]
 	if report.MACType != "SELinux" {
 		for key, desc := range errorPatterns {
 			if strings.Contains(desc, "SELinux") && !strings.Contains(desc, "AppArmor") {
@@ -315,16 +315,18 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 		report.Warnings = append(report.Warnings, "[AD CRYPTO BUG] Crypto mismatch or 'service key not available' detected. Microsoft AD forces deprecated RC4 encryption if the 'operatingSystemVersion' attribute in AD starts with a number less than 6 (e.g., '5.14.21'). If your Linux crypto-policy disables RC4, authentication will fail. Fix: Prepend the AD attribute with 'Linux ' (e.g., 'Linux 5.14'), OR re-enable RC4 on this host using 'update-crypto-policies --set DEFAULT:AD-SUPPORT' and reboot.")
 	}
 
-	// Compile regex for efficient scanning
+	// Compile regex for efficient scanning [cite: 1]
 	var errorKeys []string
-	for pattern := range errorPatterns {
+
+	// ---> NEW FAST LOOKUP ENGINE
+	fastLookup := make(map[string]string)
+	for pattern, desc := range errorPatterns {
 		errorKeys = append(errorKeys, regexp.QuoteMeta(pattern))
+		fastLookup[strings.ToLower(pattern)] = desc
 	}
 	errorRegex := regexp.MustCompile("(?i)(" + strings.Join(errorKeys, "|") + ")")
 
-	// Regex to match standard SSSD log timestamps: (YYYY-MM-DD HH:MM:SS)
-	// standard syslog timestamps: Dec 10 12:00:00
-	// and ISO 8601 timestamps: 2026-03-11T12:03:17.574746+01:00
+	// Regex to match standard SSSD log timestamps, standard syslog timestamps, and ISO 8601 timestamps [cite: 1]
 	timeRegex := regexp.MustCompile(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
 
 	var timelineEvents []TimelineEvent
@@ -332,23 +334,16 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	scanFiles(dirPath, logFiles, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 
-		// Ignore logs from winbindd to prevent false positives in /var/log/messages
+		// Ignore logs from winbindd to prevent false positives in /var/log/messages [cite: 1]
 		if strings.Contains(strings.ToLower(lineTrimmed), "winbindd") {
 			return
 		}
 
 		matches := errorRegex.FindAllString(lineTrimmed, -1)
 		for _, match := range matches {
-			// Find the exact key we matched to pull the description
-			var matchedKey string
-			for key := range errorPatterns {
-				if strings.EqualFold(match, key) {
-					matchedKey = key
-					break
-				}
-			}
 
-			description, ok := errorPatterns[matchedKey]
+			// ---> O(1) LOOKUP INSTEAD OF O(N) NESTED LOOP
+			description, ok := fastLookup[strings.ToLower(match)]
 			if !ok {
 				continue
 			}
@@ -386,7 +381,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 
 	})
 
-	// Sort the timeline chronologically
+	// Sort the timeline chronologically [cite: 1]
 	sort.SliceStable(timelineEvents, func(i, j int) bool {
 		return timelineEvents[i].Timestamp < timelineEvents[j].Timestamp
 	})
@@ -397,7 +392,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 		report.SSSDLogErrors = append(report.SSSDLogErrors, SSSDLogError{Description: desc, Examples: lines})
 	}
 
-	// Parse SSSD Config misconfigurations safely
+	// Parse SSSD Config misconfigurations safely [cite: 1]
 	if sssdConfContent != "" {
 		report.SssdConfigFound = true
 		scanner := bufio.NewScanner(strings.NewReader(sssdConfContent))
