@@ -1,0 +1,808 @@
+/**
+ * Report Styles for SSSD Inspector Frontend
+ * Styles for analysis report display and printing
+ * @version 2.0.0
+ */
+
+/* ==========================================================================
+   Report Container
+   ========================================================================== */
+
+.report-wrapper {
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f9;
+  color: #333333;
+  padding: 20px;
+  text-align: left;
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+.report-wrapper h1 {
+  color: #0056b3;
+  border-bottom: 2px solid #0056b3;
+  padding-bottom: 10px;
+  margin-bottom: 5px;
+  font-size: 1.8em;
+  font-weight: 600;
+  margin-top: 0;
+}
+
+.report-wrapper h2 {
+  color: #d9534f;
+  border-bottom: 1px solid #d9534f;
+  padding-bottom: 5px;
+  margin-top: 30px;
+  font-size: 1.4em;
+  font-weight: 600;
+}
+
+.report-wrapper h2.warn-header {
+  color: #17a2b8;
+  border-bottom: 1px solid #17a2b8;
+}
+
+.report-wrapper h3 {
+  color: #495057;
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-top: 25px;
+  margin-bottom: 15px;
+}
+
+.report-wrapper h4 {
+  color: #6c757d;
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.report-wrapper p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.report-wrapper strong,
+.report-wrapper b {
+  font-weight: 600;
+  color: #495057;
+}
+
+/* ==========================================================================
+   Links
+   ========================================================================== */
+
+.report-wrapper a {
+  color: #0056b3;
+  text-decoration: none;
+  border-bottom: 1px dotted #0056b3;
+  transition: all 0.2s ease;
+}
+
+.report-wrapper a:hover {
+  color: #004085;
+  border-bottom-style: solid;
+}
+
+.report-wrapper a:visited {
+  color: #6f42c1;
+  border-bottom-color: #6f42c1;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+
+.info-table {
+  border-collapse: collapse;
+  width: 100%;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.info-table th,
+.info-table td {
+  padding: 12px 15px;
+  border: 1px solid #dee2e6;
+  text-align: left;
+  font-size: 0.95em;
+  vertical-align: top;
+}
+
+.info-table th {
+  background-color: #0056b3;
+  color: #ffffff;
+  font-weight: 600;
+  width: 35%;
+}
+
+.info-table tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+.info-table tr:hover {
+  background-color: #e9ecef;
+}
+
+.section-title {
+  background-color: #e9ecef !important;
+  color: #333333 !important;
+  font-weight: 600;
+  text-align: center;
+  font-size: 1.1em;
+}
+
+/* ==========================================================================
+   Lists
+   ========================================================================== */
+
+.problem-list {
+  padding: 15px 15px 15px 35px;
+  border-left: 5px solid #d9534f;
+  list-style-type: square;
+  background: #ffebee;
+  margin: 15px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.problem-list li {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #b71c1c;
+  line-height: 1.5;
+}
+
+.problem-list li:last-child {
+  margin-bottom: 0;
+}
+
+.warn-list {
+  padding: 15px 15px 15px 35px;
+  border-left: 5px solid #17a2b8;
+  list-style-type: square;
+  background: #e2f3f5;
+  margin: 15px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.warn-list li {
+  margin-bottom: 8px;
+  color: #0c5460;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.warn-list li:last-child {
+  margin-bottom: 0;
+}
+
+.info-list {
+  padding: 15px 15px 15px 35px;
+  border-left: 5px solid #28a745;
+  list-style-type: square;
+  background: #d4edda;
+  margin: 15px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.info-list li {
+  margin-bottom: 8px;
+  color: #155724;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.info-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Status Indicators
+   ========================================================================== */
+
+.success-text {
+  color: #28a745;
+  font-weight: 600;
+  font-size: 1.1em;
+}
+
+.success {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.fail {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.warn {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.info {
+  color: #17a2b8;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Code and Preformatted Text
+   ========================================================================== */
+
+.report-wrapper code {
+  background-color: #f1f3f4;
+  color: #d73a49;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  border-radius: 3px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.report-wrapper pre {
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  border: 1px solid #e1e4e8;
+}
+
+.report-wrapper pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* ==========================================================================
+   Log Blocks
+   ========================================================================== */
+
+.log-block {
+  margin-top: 5px;
+  background: #f8f9fa;
+  padding: 12px;
+  border-left: 3px solid #d9534f;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85em;
+  overflow-x: auto;
+  color: #333333;
+  border-radius: 0 4px 4px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.mac-block {
+  background: #fff3cd;
+  border-left: 3px solid #ffc107;
+  color: #856404;
+}
+
+.info-block {
+  background: #d1ecf1;
+  border-left: 3px solid #17a2b8;
+  color: #0c5460;
+}
+
+/* ==========================================================================
+   Timeline
+   ========================================================================== */
+
+.timeline {
+  border-left: 3px solid #0056b3;
+  padding-left: 20px;
+  margin: 20px 0 30px 10px;
+  position: relative;
+}
+
+.timeline-event {
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.timeline-event::before {
+  content: '';
+  position: absolute;
+  left: -28px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  background: #d9534f;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #0056b3;
+}
+
+.timeline-time {
+  font-weight: 600;
+  color: #0056b3;
+  font-size: 0.95em;
+  margin-bottom: 3px;
+}
+
+.timeline-msg {
+  font-weight: 600;
+  color: #333333;
+  margin-top: 3px;
+  margin-bottom: 5px;
+}
+
+.timeline-raw {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85em;
+  color: #666666;
+  background: #f8f9fa;
+  padding: 8px;
+  margin-top: 5px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ==========================================================================
+   Details/Summary Elements
+   ========================================================================== */
+
+.report-wrapper details {
+  margin: 15px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.report-wrapper summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #495057;
+  padding: 12px 15px;
+  outline: none;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  user-select: none;
+}
+
+.report-wrapper summary:hover {
+  color: #000000;
+  background-color: #e9ecef;
+}
+
+.report-wrapper summary::-webkit-details-marker {
+  color: #0056b3;
+  margin-right: 8px;
+}
+
+.report-wrapper details[open] > summary {
+  background-color: #e9ecef;
+  border-bottom-color: transparent;
+}
+
+.report-wrapper details[open] > summary + * {
+  padding: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+/* ==========================================================================
+   Blockquotes
+   ========================================================================== */
+
+.report-wrapper blockquote {
+  margin: 1rem 0;
+  padding: 1rem 1.5rem;
+  border-left: 5px solid #0056b3;
+  background-color: #f8f9fa;
+  color: #495057;
+  font-style: italic;
+}
+
+.report-wrapper blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Horizontal Rules
+   ========================================================================== */
+
+.report-wrapper hr {
+  border: 0;
+  height: 1px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0), #0056b3, rgba(0, 0, 0, 0));
+  margin: 2rem 0;
+}
+
+/* ==========================================================================
+   Knowledge Base Articles
+   ========================================================================== */
+
+.kb-article {
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 15px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.kb-article h4 {
+  margin-top: 0;
+  color: #0056b3;
+}
+
+.kb-article .tid-id {
+  font-size: 0.9em;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+.kb-article .tid-link {
+  color: #0056b3;
+  text-decoration: none;
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.kb-article .tid-link:hover {
+  text-decoration: underline;
+}
+
+.kb-article .kb-description {
+  margin: 10px 0;
+  line-height: 1.6;
+}
+
+.kb-article .kb-evidence {
+  background: #f8f9fa;
+  border-left: 3px solid #17a2b8;
+  padding: 10px;
+  margin-top: 10px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85em;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ==========================================================================
+   Loading and Empty States
+   ========================================================================== */
+
+.loading-state {
+  text-align: center;
+  color: #777777;
+  margin: 50px 0;
+  font-size: 1.1em;
+}
+
+.loading-state .spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #0056b3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  color: #777777;
+  margin: 50px 0;
+  font-size: 1.1em;
+}
+
+.empty-state .icon {
+  font-size: 3em;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+/* ==========================================================================
+   Zoom Controls for Report
+   ========================================================================== */
+
+.report-zoom-container {
+  position: sticky;
+  top: 10px;
+  z-index: 100;
+  margin-bottom: 20px;
+  text-align: right;
+}
+
+.report-zoom-controls {
+  display: inline-flex;
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.report-zoom-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #6c757d;
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.report-zoom-btn:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.report-zoom-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.report-zoom-btn:first-child {
+  border-radius: 4px 0 0 4px;
+  border-right: 1px solid #5a6268;
+}
+
+.report-zoom-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.report-zoom-level {
+  padding: 8px 12px;
+  font-size: 12px;
+  background: #f8f9fa;
+  color: #495057;
+  font-weight: 600;
+  border-left: 1px solid #dee2e6;
+  border-right: 1px solid #dee2e6;
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .report-wrapper {
+    padding: 15px;
+    font-size: 0.9em;
+  }
+  
+  .report-wrapper h1 {
+    font-size: 1.5em;
+  }
+  
+  .report-wrapper h2 {
+    font-size: 1.2em;
+  }
+  
+  .info-table th,
+  .info-table td {
+    padding: 8px 10px;
+    font-size: 0.9em;
+  }
+  
+  .info-table th {
+    width: 40%;
+  }
+  
+  .timeline {
+    padding-left: 15px;
+    margin-left: 5px;
+  }
+  
+  .timeline-event::before {
+    left: -23px;
+  }
+  
+  .problem-list,
+  .warn-list,
+  .info-list {
+    padding-left: 25px;
+  }
+  
+  .kb-article {
+    padding: 12px;
+  }
+  
+  .log-block {
+    padding: 8px;
+    font-size: 0.8em;
+  }
+}
+
+@media (max-width: 480px) {
+  .report-wrapper {
+    padding: 10px;
+  }
+  
+  .report-wrapper h1 {
+    font-size: 1.3em;
+  }
+  
+  .report-wrapper h2 {
+    font-size: 1.1em;
+  }
+  
+  .info-table {
+    font-size: 0.8em;
+  }
+  
+  .info-table th,
+  .info-table td {
+    padding: 6px 8px;
+  }
+  
+  .info-table th {
+    width: 45%;
+  }
+  
+  .timeline {
+    border-left-width: 2px;
+    padding-left: 12px;
+  }
+  
+  .timeline-event::before {
+    left: -20px;
+    width: 10px;
+    height: 10px;
+  }
+  
+  .problem-list,
+  .warn-list,
+  .info-list {
+    padding-left: 20px;
+    padding-right: 10px;
+  }
+  
+  .log-block {
+    padding: 6px;
+    font-size: 0.75em;
+  }
+  
+  .report-zoom-container {
+    text-align: center;
+  }
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+
+@media print {
+  .report-wrapper {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+  
+  .report-wrapper h1 {
+    color: #000000 !important;
+    border-bottom-color: #000000 !important;
+    font-size: 16pt;
+  }
+  
+  .report-wrapper h2 {
+    color: #000000 !important;
+    border-bottom-color: #000000 !important;
+    font-size: 14pt;
+  }
+  
+  .report-wrapper h2.warn-header {
+    color: #000000 !important;
+    border-bottom-color: #000000 !important;
+  }
+  
+  .info-table {
+    box-shadow: none !important;
+    border-collapse: collapse;
+  }
+  
+  .info-table th,
+  .info-table td {
+    border: 1px solid #000000 !important;
+    padding: 6pt 8pt;
+    font-size: 9pt;
+  }
+  
+  .info-table th {
+    background-color: #f0f0f0 !important;
+    color: #000000 !important;
+  }
+  
+  .problem-list,
+  .warn-list,
+  .info-list {
+    background: #ffffff !important;
+    border-left: 2px solid #000000 !important;
+  }
+  
+  .problem-list li {
+    color: #000000 !important;
+  }
+  
+  .warn-list li {
+    color: #000000 !important;
+  }
+  
+  .log-block,
+  .mac-block,
+  .info-block {
+    background: #f5f5f5 !important;
+    border-left: 2px solid #000000 !important;
+    color: #000000 !important;
+  }
+  
+  .timeline {
+    border-left: 2px solid #000000 !important;
+  }
+  
+  .timeline-event::before {
+    background: #000000 !important;
+    border-color: #ffffff !important;
+    box-shadow: 0 0 0 1px #000000 !important;
+  }
+  
+  .timeline-time,
+  .timeline-msg {
+    color: #000000 !important;
+  }
+  
+  .timeline-raw {
+    background: #f5f5f5 !important;
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+  }
+  
+  .kb-article {
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+  
+  .kb-evidence {
+    background: #f5f5f5 !important;
+    border-left: 2px solid #000000 !important;
+    color: #000000 !important;
+  }
+  
+  .report-zoom-container {
+    display: none !important;
+  }
+  
+  .loading-state,
+  .empty-state {
+    display: none !important;
+  }
+  
+  a {
+    color: #000000 !important;
+    text-decoration: none !important;
+    border-bottom: none !important;
+  }
+  
+  .success,
+  .fail,
+  .warn,
+  .info,
+  .success-text {
+    color: #000000 !important;
+    font-weight: 600;
+  }
+}
