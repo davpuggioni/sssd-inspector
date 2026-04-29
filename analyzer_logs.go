@@ -392,6 +392,11 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 		report.SSSDLogErrors = append(report.SSSDLogErrors, SSSDLogError{Description: desc, Examples: lines})
 	}
 
+	// Sort the errors alphabetically by description so the report is deterministic
+	sort.Slice(report.SSSDLogErrors, func(i, j int) bool {
+		return report.SSSDLogErrors[i].Description < report.SSSDLogErrors[j].Description
+	})
+
 	// Parse SSSD Config misconfigurations safely [cite: 1]
 	if sssdConfContent != "" {
 		report.SssdConfigFound = true

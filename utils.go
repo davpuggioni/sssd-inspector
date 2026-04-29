@@ -77,6 +77,10 @@ func (fp *FileProcessor) ScanFiles(dirPath string, files []string, lineFunc func
 func (fp *FileProcessor) scanFile(filePath string, lineFunc func(line string)) error {
 	f, err := os.Open(filePath)
 	if err != nil {
+		// If the file simply doesn't exist in the supportconfig, silently ignore it.
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to open file %s: %w", filePath, err)
 	}
 	defer f.Close()

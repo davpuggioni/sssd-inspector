@@ -1,3 +1,5 @@
+//go:build !cli
+
 // Package main provides the main application structure for SSSD Inspector
 // This file contains the App struct and methods that handle the Wails framework integration,
 // providing the bridge between the Go backend and the JavaScript frontend.
