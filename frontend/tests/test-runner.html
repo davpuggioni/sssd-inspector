@@ -244,6 +244,7 @@
             <button id="runAllTests" class="btn btn-primary">Run All Tests</button>
             <button id="runValidatorTests" class="btn btn-secondary">Run Validator Tests</button>
             <button id="runComponentTests" class="btn btn-secondary">Run Component Tests</button>
+            <button id="runDragDropTests" class="btn btn-secondary">Run Drag/Drop Tests</button>
             <button id="clearOutput" class="btn btn-danger">Clear Output</button>
             <button id="exportResults" class="btn btn-success" disabled>Export Results</button>
         </div>
@@ -285,6 +286,7 @@
         // Import test modules
         import { TestRunner as ValidatorTestRunner } from './validators.test.js';
         import { TestRunner as ComponentTestRunner } from './components.test.js';
+        import { DragDropTestRunner } from './dragdrop.test.js';
         
         // Test runner class
         class FrontendTestRunner {
@@ -304,6 +306,7 @@
                     runAllTests: document.getElementById('runAllTests'),
                     runValidatorTests: document.getElementById('runValidatorTests'),
                     runComponentTests: document.getElementById('runComponentTests'),
+                    runDragDropTests: document.getElementById('runDragDropTests'),
                     clearOutput: document.getElementById('clearOutput'),
                     exportResults: document.getElementById('exportResults'),
                     progressBar: document.getElementById('progressBar'),
@@ -321,6 +324,7 @@
                 this.elements.runAllTests.addEventListener('click', () => this.runAllTests());
                 this.elements.runValidatorTests.addEventListener('click', () => this.runValidatorTests());
                 this.elements.runComponentTests.addEventListener('click', () => this.runComponentTests());
+                this.elements.runDragDropTests.addEventListener('click', () => this.runDragDropTests());
                 this.elements.clearOutput.addEventListener('click', () => this.clearOutput());
                 this.elements.exportResults.addEventListener('click', () => this.exportResults());
             }
@@ -388,7 +392,8 @@
             async runAllTests() {
                 await this.runTests([
                     { name: 'Validators', runner: ValidatorTestRunner },
-                    { name: 'Components', runner: ComponentTestRunner }
+                    { name: 'Components', runner: ComponentTestRunner },
+                    { name: 'Drag & Drop', runner: DragDropTestRunner }
                 ]);
             }
             
@@ -401,6 +406,12 @@
             async runComponentTests() {
                 await this.runTests([
                     { name: 'Components', runner: ComponentTestRunner }
+                ]);
+            }
+            
+            async runDragDropTests() {
+                await this.runTests([
+                    { name: 'Drag & Drop', runner: DragDropTestRunner }
                 ]);
             }
             
@@ -509,6 +520,7 @@
                         this.elements.runAllTests.disabled = true;
                         this.elements.runValidatorTests.disabled = true;
                         this.elements.runComponentTests.disabled = true;
+                        this.elements.runDragDropTests.disabled = true;
                         this.elements.progressBar.classList.remove('hidden');
                         this.elements.testResults.classList.remove('hidden');
                         break;
@@ -518,6 +530,7 @@
                         this.elements.runAllTests.disabled = false;
                         this.elements.runValidatorTests.disabled = false;
                         this.elements.runComponentTests.disabled = false;
+                        this.elements.runDragDropTests.disabled = false;
                         this.elements.progressBar.classList.add('hidden');
                         break;
                 }

@@ -239,9 +239,9 @@ EventsOn('analyze-progress', (message, percentage) => {
     }
 });
 
-OnFileDrop((files, x, y) => {
+OnFileDrop((x, y, files) => {
     if (files.length > 0) filePathInput.value = files[0];
-});
+}, false);
 
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey) {
