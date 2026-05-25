@@ -37,6 +37,15 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// emitEvent safely emits a Wails runtime event, silently skipping if no
+// valid context is available (e.g., during unit tests or CLI mode).
+func (a *App) emitEvent(event string, args ...interface{}) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, event, args...)
+}
+
 // OpenFileBrowser opens a native file browser dialog for selecting supportconfig archives.
 // It returns the selected file path or an empty string if the user cancels the dialog.
 // The dialog filters for supportconfig archive files (.txz, .tar.xz) but also allows
@@ -75,7 +84,7 @@ func (a *App) OpenFileBrowser() (string, error) {
 func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 	// Emit progress directly to the Javascript UI
 	progressFunc := func(msg string, pct int) {
-		runtime.EventsEmit(a.ctx, constants.EventAnalyzeProgress, msg, pct)
+		a.emitEvent(constants.EventAnalyzeProgress, msg, pct)
 	}
 
 	progressFunc(constants.MsgInitializing, constants.ProgressStart)

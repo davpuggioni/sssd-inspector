@@ -133,14 +133,26 @@ func TestBackendFrontendIntegration(t *testing.T) {
 			t.Error("index.html is empty")
 		}
 
-		// Try to read JavaScript file (check for hashed filename)
-		jsFile, err := assets.ReadFile("frontend/dist/assets/index.ceca9ebd.js")
+		// Dynamically discover the JS file in the assets directory
+		// to avoid hardcoding content-hash filenames that change on rebuild
+		dirEntries, err := assets.ReadDir("frontend/dist/assets")
 		if err != nil {
-			// Try the generic name as fallback
-			jsFile, err = assets.ReadFile("frontend/dist/assets/index.js")
-			if err != nil {
-				t.Error("Failed to read embedded JS file:", err)
+			t.Fatal("Failed to read embedded assets directory:", err)
+		}
+
+		var jsFile []byte
+		for _, entry := range dirEntries {
+			name := entry.Name()
+			if len(name) > 3 && name[len(name)-3:] == ".js" {
+				jsFile, err = assets.ReadFile("frontend/dist/assets/" + name)
+				if err == nil {
+					break
+				}
 			}
+		}
+
+		if jsFile == nil {
+			t.Error("Failed to find or read any .js file in embedded assets")
 		}
 
 		if len(jsFile) == 0 {
@@ -247,16 +259,25 @@ func TestConfigurationIntegration(t *testing.T) {
 		}
 	})
 
-	// Test 3: Verify configuration loading
+	// Test 3: Verify configuration loading with non-existent path
 	t.Run("ConfigurationLoading", func(t *testing.T) {
-		// Test loading non-existent config (should use defaults)
+		// When a specific path is provided and the file doesn't exist,
+		// LoadConfig should return an error and nil config.
 		loadedConfig, err := config.LoadConfig("/nonexistent/config.yaml")
 		if err == nil {
-			t.Error("Expected error for non-existent config")
+			t.Error("Expected error for non-existent config path")
+		}
+		if loadedConfig != nil {
+			t.Error("Expected nil config when loading specific non-existent path")
 		}
 
-		if loadedConfig == nil {
-			t.Error("Should return default config even on error")
+		// When no path is provided, LoadConfig should return defaults
+		defaultConfig, err := config.LoadConfig("")
+		if err != nil {
+			t.Error("Expected no error when loading default config, got:", err)
+		}
+		if defaultConfig == nil {
+			t.Error("Expected default config when loading empty path")
 		}
 	})
 }

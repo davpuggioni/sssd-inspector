@@ -71,6 +71,10 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			}
 
 			_, err = io.CopyN(outFile, tr, hdr.Size)
+			if err != nil {
+				outFile.Close()
+				continue
+			}
 			outFile.Close()
 		}
 	}
