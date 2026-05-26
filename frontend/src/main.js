@@ -109,6 +109,16 @@ document.querySelector('#app').innerHTML = `
             </div>
         </div>
     </div>
+    <!-- Progress bar container (hidden by default) -->
+    <div id="progressContainer" style="display: none; padding: 20px 40px; background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+        <div class="progress-container">
+            <div class="progress-status" id="progressStatus">Initializing analysis...</div>
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+            <div class="progress-percentage" id="progressPercentage">0%</div>
+        </div>
+    </div>
     <div id="pdfContentArea">
         <div id="resultBox" class="report-wrapper" style="min-height: 80vh;">
             <div style="text-align: center; color: #777; margin-top: 50px;">Waiting for supportconfig file...</div>
@@ -145,6 +155,17 @@ analyzeBtn.addEventListener('click', async () => {
     analyzeBtn.textContent = 'Analyzing...';
     browseBtn.disabled = true;
     filePathInput.disabled = true;
+
+    // Show progress bar and reset to 0%
+    const progressContainer = document.querySelector('#progressContainer');
+    const progressFill = document.querySelector('#progressFill');
+    const progressStatus = document.querySelector('#progressStatus');
+    const progressPercentage = document.querySelector('#progressPercentage');
+    progressContainer.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressStatus.textContent = 'Starting analysis...';
+    progressPercentage.textContent = '0%';
+
     try {
         const report = await Analyze(filePath, anonymizeCheck.checked);
         currentReport = report;
@@ -158,47 +179,14 @@ analyzeBtn.addEventListener('click', async () => {
         alert('Analysis failed: ' + error);
         resultBox.innerHTML = `<div style="text-align: center; color: #d9534f; margin-top: 50px;">Analysis failed: ${error}</div>`;
     } finally {
+        // Hide progress bar when done
+        progressContainer.style.display = 'none';
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = 'Analyze';
         browseBtn.disabled = false;
         filePathInput.disabled = false;
     }
 });
-
-function generatePDFContent(report) {
-    // Generate HTML content for PDF
-    let html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>SSSD Analysis Report</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-            h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
-            h2 { color: #d9534f; border-bottom: 1px solid #d9534f; padding-bottom: 5px; margin-top: 30px; }
-            h2.warn-header { color: #17a2b8; border-bottom: 1px solid #17a2b8; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-            th { background-color: #0056b3; color: white; }
-            .section-title { background-color: #e9ecef !important; color: #333 !important; font-weight: bold; text-align: center; }
-            .problem-list { padding: 15px 15px 15px 35px; border-left: 5px solid #d9534f; list-style-type: square; background: #ffebee; }
-            .warn-list { padding: 15px 15px 15px 35px; border-left: 5px solid #17a2b8; list-style-type: square; background: #e2f3f5; }
-            .success { color: green; font-weight: bold; }
-            .fail { color: red; font-weight: bold; }
-            .log-block { margin-top: 5px; background: #f8f9fa; padding: 10px; border-left: 3px solid #d9534f; font-family: monospace; font-size: 0.85em; overflow-x: auto; }
-            .timeline { border-left: 3px solid #0056b3; padding-left: 20px; margin: 20px 0; }
-            .timeline-event { margin-bottom: 20px; }
-            .timeline-time { font-weight: bold; color: #0056b3; }
-            pre { white-space: pre-wrap; margin: 10px 0; }
-        </style>
-    </head>
-    <body>
-        ${renderReportHTML(report)}
-    </body>
-    </html>`;
-    return html;
-}
 
 exportPdfBtn.addEventListener('click', () => {
     if (!currentReport) return;
@@ -234,8 +222,25 @@ function applyZoom() {
 }
 
 EventsOn('analyze-progress', (message, percentage) => {
+    // Update progress bar elements
+    const progressFill = document.querySelector('#progressFill');
+    const progressStatus = document.querySelector('#progressStatus');
+    const progressPercentage = document.querySelector('#progressPercentage');
+    
+    if (progressFill && progressStatus && progressPercentage) {
+        progressFill.style.width = `${percentage}%`;
+        progressStatus.textContent = message;
+        progressPercentage.textContent = `${percentage}%`;
+    }
+    
+    // Also update button text for redundancy
     if (percentage > 0 && percentage < 100) {
         analyzeBtn.textContent = `${percentage}% - ${message}`;
+    } else if (percentage >= 100) {
+        analyzeBtn.textContent = 'Complete!';
+        progressStatus.textContent = 'Analysis complete!';
+        progressPercentage.textContent = '100%';
+        progressFill.style.width = '100%';
     }
 });
 
