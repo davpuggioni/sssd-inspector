@@ -69,7 +69,8 @@ func matchKBArticles(dirPath string, report *ReportData) {
 		logMatched := len(article.LogPatterns) == 0
 		if !logMatched {
 			for _, pattern := range article.LogPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				// Use global regex cache to avoid recompiling the same pattern for every KB article
+				matcher := globalRegexCache.Get("(?i)" + regexp.QuoteMeta(pattern))
 				scanFiles(dirPath, logFiles, func(line string) {
 					if matcher.MatchString(line) {
 						logMatched = true
@@ -94,7 +95,8 @@ func matchKBArticles(dirPath string, report *ReportData) {
 		configMatched := len(article.ConfigPatterns) == 0
 		if !configMatched {
 			for _, pattern := range article.ConfigPatterns {
-				matcher := regexp.MustCompile("(?i)" + regexp.QuoteMeta(pattern))
+				// Use global regex cache for compiled regex reusability
+				matcher := globalRegexCache.Get("(?i)" + regexp.QuoteMeta(pattern))
 				scanFiles(dirPath, configFiles, func(line string) {
 					if matcher.MatchString(line) {
 						configMatched = true

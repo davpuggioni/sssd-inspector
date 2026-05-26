@@ -46,6 +46,9 @@ func getSSSDVersion(packages []string) (int, int) {
 
 // analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
 func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
+	// Clear file cache from previous analysis to ensure fresh data
+	globalFileCache.Clear()
+
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
 	report.AppVersion = "0.2.0" // Major bump for Streaming Engine & PII Redaction

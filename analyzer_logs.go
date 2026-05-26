@@ -410,10 +410,11 @@ func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[
 		errorKeys = append(errorKeys, regexp.QuoteMeta(pattern))
 		fastLookup[strings.ToLower(pattern)] = desc
 	}
-	errorRegex := regexp.MustCompile("(?i)(" + strings.Join(errorKeys, "|") + ")")
+	// Use global regex cache to avoid recompiling this large pattern on every analysis
+	errorRegex := globalRegexCache.Get("(?i)(" + strings.Join(errorKeys, "|") + ")")
 
 	// Regex to match standard SSSD log timestamps, standard syslog timestamps, and ISO 8601 timestamps
-	timeRegex := regexp.MustCompile(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
+	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
 
 	scanFiles(dirPath, logFileNames, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)

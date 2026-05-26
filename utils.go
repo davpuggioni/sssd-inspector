@@ -157,13 +157,15 @@ func NewSafeFileReader() *SafeFileReader {
 // ReadFileSafe reads a small file directly into a string
 // This method is designed for tiny configuration files like sssd.conf.
 // For large files, use the streaming methods instead.
+// Uses the global FileCache to avoid reading the same file multiple times
+// during a single analysis pass.
 func (sfr *SafeFileReader) ReadFileSafe(dirPath string, fileName string) string {
-	filePath := filepath.Join(dirPath, fileName)
-	data, err := os.ReadFile(filePath)
-	if err != nil {
+	// Use FileCache to avoid reading the same config file multiple times
+	lines := globalFileCache.GetLines(dirPath, fileName)
+	if lines == nil {
 		return ""
 	}
-	return string(data)
+	return strings.Join(lines, "\n")
 }
 
 // FileFilter determines which files are relevant for analysis

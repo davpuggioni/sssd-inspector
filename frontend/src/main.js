@@ -165,6 +165,9 @@ analyzeBtn.addEventListener('click', async () => {
     progressFill.style.width = '0%';
     progressStatus.textContent = 'Starting analysis...';
     progressPercentage.textContent = '0%';
+    
+    // Hide the "Waiting for supportconfig file..." placeholder text
+    resultBox.innerHTML = '';
 
     try {
         const report = await Analyze(filePath, anonymizeCheck.checked);
