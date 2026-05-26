@@ -3,13 +3,18 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"sssd-inspector/constants"
 )
+
+// DefaultFileScanTimeout is the maximum time to spend scanning a single file
+const DefaultFileScanTimeout = 30 * time.Second
 
 // FileProcessor provides streaming file processing capabilities
 type FileProcessor struct {
@@ -251,4 +256,90 @@ func readFileSafe(dirPath string, fileName string) string {
 // Legacy function maintained for backward compatibility
 func isRelevantFile(name string) bool {
 	return defaultFileFilter.IsRelevantFile(name)
+}
+
+// Context-aware scanning functions
+// These provide timeout/cancellation support for file scanning operations.
+
+// scanFilesWithContext scans files with context support (timeout/cancellation).
+// If the context is cancelled or exceeds deadline, scanning stops immediately.
+func scanFilesWithContext(ctx context.Context, dirPath string, files []string, lineFunc func(line string)) {
+	for _, name := range files {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Warning: scan of %s cancelled: %v\n", name, ctx.Err())
+			return
+		default:
+		}
+		if err := scanFileWithContext(ctx, filepath.Join(dirPath, name), lineFunc); err != nil {
+			fmt.Printf("Warning: failed to scan file %s: %v\n", name, err)
+		}
+	}
+}
+
+// scanFileWithContext scans a single file with context support.
+// Uses the pooled scanner for reduced allocations.
+func scanFileWithContext(ctx context.Context, filePath string, lineFunc func(line string)) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to open file %s: %w", filePath, err)
+	}
+	defer f.Close()
+
+	scanner := createPooledScanner(f)
+	for scanner.Scan() {
+		// Check context cancellation between lines
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("scan cancelled: %w", ctx.Err())
+		default:
+		}
+		lineFunc(scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scanner error for file %s: %w", filePath, err)
+	}
+	return nil
+}
+
+// anyFileContainsWithContext checks if any file contains a pattern with context support.
+// Returns true immediately upon first match, respects context cancellation.
+func anyFileContainsWithContext(ctx context.Context, dirPath string, files []string, search string) bool {
+	for _, name := range files {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		if fileContainsWithContext(ctx, filepath.Join(dirPath, name), search) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileContainsWithContext checks a single file for a pattern with context support.
+func fileContainsWithContext(ctx context.Context, filePath, search string) bool {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	scanner := createPooledScanner(f)
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		if strings.Contains(scanner.Text(), search) {
+			return true
+		}
+	}
+	return false
 }

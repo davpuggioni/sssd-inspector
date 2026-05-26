@@ -165,6 +165,24 @@ func (fc *FileCache) Clear() {
 	fc.curFiles = 0
 }
 
+// scannerPool provides reusable buffer allocations for scanners.
+// bufio.Scanner doesn't support Reset, but we can reuse the underlying byte slice
+// allocation to reduce GC pressure.
+var scannerPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, 64*1024)
+	},
+}
+
+// createPooledScanner creates a new bufio.Scanner with a buffer from the pool.
+// The buffer will be returned to the pool via GC after the scanner is discarded.
+func createPooledScanner(f *os.File) *bufio.Scanner {
+	buf := scannerPool.Get().([]byte)
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(buf, 1024*1024)
+	return scanner
+}
+
 // globalRegexCache is the application-wide regex cache
 var globalRegexCache = NewRegexCache()
 
