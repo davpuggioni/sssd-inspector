@@ -45,6 +45,7 @@ func getSSSDVersion(packages []string) (int, int) {
 }
 
 // analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
+// Now uses Single-Pass scanning for log files to eliminate ~29 redundant scans.
 func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
 	// Clear file cache from previous analysis to ensure fresh data
 	globalFileCache.Clear()
@@ -62,8 +63,9 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	report.Hypervisor = "Unknown"
 	report.VirtualIdentity = "Unknown"
 
+	// ---- Phase 1: System analysis (no log scanning) ----
 	if progressFunc != nil {
-		progressFunc("Scanning Hardware & OS Data...", 10)
+		progressFunc("Scanning Hardware & OS Data...", 5)
 	}
 	analyzeBasicHealth(dirPath, &report)
 	analyzeOSAndHardware(dirPath, &report)
@@ -71,15 +73,15 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	analyzeSCC(dirPath, &report)
 
 	if progressFunc != nil {
-		progressFunc("Analyzing Network & Kerberos state...", 25)
+		progressFunc("Analyzing Network & Kerberos state...", 15)
 	}
 	analyzeDNS(dirPath, &report)
 	analyzeTime(dirPath, &report)
 	analyzePerformance(dirPath, &report)
-	analyzeKerberosAndKeytab(dirPath, &report)
 
+	// ---- Phase 2: Config analysis (also no log scanning) ----
 	if progressFunc != nil {
-		progressFunc("Evaluating SSSD Configurations...", 40)
+		progressFunc("Evaluating SSSD Configurations...", 25)
 	}
 	analyzePAM(dirPath, &report)
 	analyzeNSSwitch(dirPath, &report)
@@ -92,17 +94,69 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	analyzeSSSDFilePermissions(dirPath, &report)
 	analyzeDiskSpace(dirPath, &report)
 
+	// ---- Phase 3: Single-Pass Log Scanning ----
+	// ONE scan of all log files extracts ALL information simultaneously,
+	// replacing ~29 separate scans that were previously performed.
 	if progressFunc != nil {
-		progressFunc("Streaming and Parsing SSSD Logs...", 60)
+		progressFunc("Single-pass scanning and parsing SSSD Logs...", 40)
 	}
-	analyzeSSSDConfigAndLogs(dirPath, &report)
+
+	// Load KB articles for combined pattern matching
+	kbArticles := loadKBArticles(dirPath)
+	singlePassResult := performSinglePassScan(dirPath, report.MACType, kbArticles)
+
+	// Apply single-pass results to report
+	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
+	report.Timeline = singlePassResult.Timeline
+	report.Problems = append(report.Problems, singlePassResult.Problems...)
+	report.Warnings = append(report.Warnings, singlePassResult.Warnings...)
+
+	// Keytab results from single-pass
+	if singlePassResult.KeytabFound {
+		report.KeytabFound = true
+	}
+
+	// ---- Phase 4: Kerberos config analysis (krb5.conf only, no log scanning) ----
+	if progressFunc != nil {
+		progressFunc("Analyzing Kerberos configuration...", 55)
+	}
+	// Analyze krb5.conf without scanning logs (already done in single-pass)
+	analyzeKerberosConfig(dirPath, &report)
+
+	if !singlePassResult.KeytabFound && !singlePassResult.KeytabNotFound && !singlePassResult.NoKeytabPrincipal {
+		report.Problems = append(report.Problems, "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.")
+	}
+
+	// ---- Phase 5: SSSD Config & remaining log-based analysis ----
+	if progressFunc != nil {
+		progressFunc("Evaluating SSSD Configurations...", 65)
+	}
+	// Read sssd.conf (uses file cache)
+	sssdConfContent := readFileSafe(dirPath, "sssd.conf")
+	if sssdConfContent == "" {
+		sssdConfContent = extractSection(dirPath, "sssd.txt", "# /etc/sssd/sssd.conf")
+	}
+	if sssdConfContent != "" {
+		analyzeSSSDConfig(sssdConfContent, &report)
+	} else {
+		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
+	}
+
+	if report.SssdService != "Running" {
+		report.Problems = append(report.Problems, "sssd.service is not actively running.")
+	}
+
+	// MAC denials (from security-*.txt files, not from log scanning)
 	analyzeMACDenials(dirPath, &report)
 
+	// ---- Phase 6: KB Article matching (using single-pass evidence) ----
 	if progressFunc != nil {
-		progressFunc("Matching Knowledge Base Articles...", 85)
+		progressFunc("Matching Knowledge Base Articles...", 80)
 	}
-	matchKBArticles(dirPath, &report)
+	// Match KB using single-pass evidence and config-only patterns
+	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence)
 
+	// ---- Phase 7: Final checks ----
 	// Clean up duplicate entries mapped during distributed analysis
 	report.Problems = deduplicateProblems(report.Problems)
 	report.Warnings = deduplicateProblems(report.Warnings)
