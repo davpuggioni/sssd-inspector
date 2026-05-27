@@ -1,18 +1,36 @@
-// Hybrid main.js - preserves original synchronous rendering, imports modular CSS
+// SSSD Inspector Frontend - Main Application
+// Uses modular UI components, CSS classes, and structured error handling
 import './styles/layout.css';
 import './styles/components.css';
 import './styles/report.css';
 
 import { Analyze, OpenFileBrowser, SaveTXT, SavePDF } from '../wailsjs/go/main/App';
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
+import { UI, CSS_CLASSES, COLORS, ZOOM, FILES } from './config/constants.js';
+import { FileValidator } from './utils/validators.js';
+import { ProgressBar, StatusMessage } from './components/UIComponents.js';
+
+// ==========================================================================
+// Helper Functions
+// ==========================================================================
 
 const yesNo = (bool) => bool ? '<span class="success">Yes</span>' : '<span class="fail">No</span>';
 const listItems = (arr) => arr && arr.length > 0 ? arr.map(i => `<li>${i}</li>`).join('') : '';
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+// ==========================================================================
+// Report Rendering
+// ==========================================================================
+
 function renderReportHTML(report) {
     let html = `<h1>Analysis Report</h1>`;
     html += `
-    <div style="margin-bottom: 20px; font-size: 1.1em; color: #555;">
+    <div class="report-meta">
         <strong>Analysis Date:</strong> ${report.timestamp}<br/>
         ${report.support_case_id ? `<strong>Support Case (SR#):</strong> ${report.support_case_id}` : ''}
     </div>
@@ -26,7 +44,7 @@ function renderReportHTML(report) {
         <tr><th>MAC Security</th><td>${report.mac_type || 'Unknown/None'}</td></tr>
         <tr><td colspan="2" class="section-title">Base Authentication Services</td></tr>
         <tr><th>SSSD Installed</th><td>${yesNo(report.sssd_installed)}</td></tr>
-        <tr><th>SSSD Packages</th><td>${report.sssd_packages && report.sssd_packages.length > 0 ? `<pre style="margin:0;font-family:monospace;font-size:0.9em;">${report.sssd_packages.join('\n')}</pre>` : 'None Detected'}</td></tr>
+        <tr><th>SSSD Packages</th><td>${report.sssd_packages && report.sssd_packages.length > 0 ? `<pre class="pkg-list">${report.sssd_packages.join('\n')}</pre>` : 'None Detected'}</td></tr>
         <tr><th>SSSD Config Found</th><td>${yesNo(report.sssd_config_found)}</td></tr>
         <tr><th>SSSD Service Status</th><td>${report.sssd_service || 'Unknown'}</td></tr>
         <tr><th>Winbind Service</th><td>${report.winbind_service || 'Unknown'}</td></tr>
@@ -52,7 +70,7 @@ function renderReportHTML(report) {
             ${report.sssd_config_snippet ? `
             <details>
                 <summary style="cursor: pointer; font-weight: bold; padding: 5px 0;">View sssd.conf</summary>
-                <pre class="log-block" style="white-space: pre-wrap; margin-top: 10px;">${report.sssd_config_snippet}</pre>
+                <pre class="log-block" style="white-space: pre-wrap; margin-top: 10px;">${escapeHtml(report.sssd_config_snippet)}</pre>
             </details>` : 'sssd.conf not found / not readable'}
         </td></tr>
     </table>`;
@@ -66,65 +84,85 @@ function renderReportHTML(report) {
     if (report.sssd_log_errors && report.sssd_log_errors.length > 0) {
         html += `<h2>SSSD Log Errors</h2>`;
         report.sssd_log_errors.forEach(error => {
-            html += `<div style="margin-bottom: 15px;"><h3 style="color: #d9534f; font-size: 1.1em; margin-bottom: 8px;">${error.description}</h3>${error.examples && error.examples.length > 0 ? `<div class="log-block">${error.examples.map(ex => ex.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br>')}</div>` : ''}</div>`;
+            html += `<div class="error-item"><h3 class="error-title">${escapeHtml(error.description)}</h3>${error.examples && error.examples.length > 0 ? `<div class="log-block">${error.examples.map(ex => escapeHtml(ex)).join('<br>')}</div>` : ''}</div>`;
         });
     }
     if (report.mac_denial_examples && report.mac_denial_examples.length > 0) {
-        html += `<h2>MAC Security Denials</h2><div class="mac-block">${report.mac_denial_examples.map(ex => ex.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br>')}</div>`;
+        html += `<h2>MAC Security Denials</h2><div class="mac-block">${report.mac_denial_examples.map(ex => escapeHtml(ex)).join('<br>')}</div>`;
     }
     if (report.timeline && report.timeline.length > 0) {
         html += `<h2>Event Timeline</h2><div class="timeline">`;
         report.timeline.forEach(event => {
-            html += `<div class="timeline-event"><div class="timeline-time">${event.timestamp}</div><div class="timeline-msg">${event.message}</div>${event.raw_log ? `<div class="timeline-raw">${event.raw_log.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}</div>`;
+            html += `<div class="timeline-event"><div class="timeline-time">${event.timestamp}</div><div class="timeline-msg">${escapeHtml(event.message)}</div>${event.raw_log ? `<div class="timeline-raw">${escapeHtml(event.raw_log)}</div>` : ''}</div>`;
         });
         html += `</div>`;
     }
     if (report.matched_tids && report.matched_tids.length > 0) {
-        html += `<h2>Relevant Knowledge Base Articles</h2>`;
+        html += `<h2 class="kb-header">Relevant Knowledge Base Articles</h2>`;
         report.matched_tids.forEach(tid => {
-            html += `<div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;"><h3 style="margin-top: 0; color: #0056b3;"><a href="${tid.url}" target="_blank" style="text-decoration: none; color: inherit;">${tid.title}</a></h3><p style="margin-bottom: 10px; color: #666; font-size: 0.9em;">TID: ${tid.tid_id}</p><p>${tid.description}</p>${tid.evidence && tid.evidence.length > 0 ? `<details><summary>Evidence Found</summary><div class="log-block">${tid.evidence.map(ex => ex.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br>')}</div></details>` : ''}</div>`;
+            html += `<div class="kb-article"><h4><a href="${escapeHtml(tid.url)}" target="_blank" class="tid-link">${escapeHtml(tid.title)}</a></h4><p class="tid-id">TID: ${escapeHtml(tid.tid_id)}</p><p class="kb-description">${escapeHtml(tid.description)}</p>${tid.evidence && tid.evidence.length > 0 ? `<details><summary>Evidence Found</summary><div class="kb-evidence">${tid.evidence.map(ex => escapeHtml(ex)).join('<br>')}</div></details>` : ''}</div>`;
         });
     }
     return html;
 }
 
+// ==========================================================================
+// Application State
+// ==========================================================================
+
 let currentReport = null;
 let currentZoom = 1.0;
 
+// UI Component instances
+let progressBar = null;
+let statusMessage = null;
+
+// ==========================================================================
+// Application Template
+// ==========================================================================
+
 document.querySelector('#app').innerHTML = `
-    <div id="topBar" style="padding: 20px; background-color: #1e1e2e; color: white; text-align: center; border-bottom: 4px solid #0056b3;">
-        <h2 style="margin: 0 0 10px 0; border: none; color: #fff;">SSSD Supportconfig Analyzer</h2>
-        <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
-            <input id="filePath" type="text" placeholder="Select or paste path to supportconfig.txz..." style="width: 450px; padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc;"/>
-            <button id="browseBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px; font-weight: bold;">Browse...</button>
-            <label style="color: white; margin-left: 5px; margin-right: 5px; display: flex; align-items: center; font-size: 14px; cursor: pointer;" title="Redacts IP Addresses and Domain Names from the report">
-                <input type="checkbox" id="anonymizeCheck" style="margin-right: 5px; cursor: pointer; transform: scale(1.2);"> Anonymize PII
+    <div class="top-bar">
+        <h2>${UI.APP_TITLE}</h2>
+        <div class="top-bar-controls">
+            <input id="filePath" type="text" class="file-path-input" placeholder="${UI.PLACEHOLDERS.FILE_PATH}" />
+            <button id="browseBtn" class="btn btn-secondary">${UI.BUTTONS.BROWSE}</button>
+            <label class="anonymize-label" title="${UI.TOOLTIPS.ANONYMIZE}">
+                <input type="checkbox" id="anonymizeCheck" class="anonymize-check" /> ${UI.BUTTONS.ANONYMIZE || 'Anonymize PII'}
             </label>
-            <button id="analyzeBtn" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-weight: bold;">Analyze</button>
-            <button id="exportPdfBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold;">Export PDF</button>
-            <button id="exportTxtBtn" style="display: none; padding: 10px 20px; font-size: 14px; cursor: pointer; background-color: #17a2b8; color: white; border: none; border-radius: 4px; font-weight: bold;">Export TXT</button>
-            <div id="zoomControls" style="display: none; margin-left: 5px;">
-                <button id="zoomOutBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 4px 0 0 4px; border-right: 1px solid #5a6268; font-weight: bold;">A-</button>
-                <button id="zoomInBtn" style="padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 0 4px 4px 0; font-weight: bold;">A+</button>
+            <button id="analyzeBtn" class="btn btn-primary">${UI.BUTTONS.ANALYZE}</button>
+            <button id="exportPdfBtn" class="btn btn-success" style="display:none">${UI.BUTTONS.EXPORT_PDF || 'Export PDF'}</button>
+            <button id="exportTxtBtn" class="btn btn-info" style="display:none">${UI.BUTTONS.EXPORT_TXT || 'Export TXT'}</button>
+            <div id="zoomControls" class="zoom-controls" style="display:none">
+                <button id="zoomOutBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_OUT}</button>
+                <button id="zoomInBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_IN}</button>
             </div>
         </div>
     </div>
     <!-- Progress bar container (hidden by default) -->
-    <div id="progressContainer" style="display: none; padding: 20px 40px; background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+    <div id="progressContainer" class="progress-container-wrapper">
         <div class="progress-container">
             <div class="progress-status" id="progressStatus">Initializing analysis...</div>
             <div class="progress-bar-wrapper">
-                <div class="progress-bar-fill" id="progressFill" style="width: 0%;"></div>
+                <div class="progress-bar-fill" id="progressFill"></div>
             </div>
             <div class="progress-percentage" id="progressPercentage">0%</div>
         </div>
     </div>
-    <div id="pdfContentArea">
-        <div id="resultBox" class="report-wrapper" style="min-height: 80vh;">
-            <div style="text-align: center; color: #777; margin-top: 50px;">Waiting for supportconfig file...</div>
+    <div id="statusMessageContainer" class="status-message-container"></div>
+    <div class="pdf-content-area">
+        <div id="resultBox" class="result-box report-wrapper">
+            <div class="empty-state">
+                <div class="icon">🔍</div>
+                <p>Waiting for supportconfig file...</p>
+            </div>
         </div>
     </div>
 `;
+
+// ==========================================================================
+// DOM References
+// ==========================================================================
 
 const filePathInput = document.querySelector('#filePath');
 const browseBtn = document.querySelector('#browseBtn');
@@ -135,38 +173,82 @@ const exportTxtBtn = document.querySelector('#exportTxtBtn');
 const zoomInBtn = document.querySelector('#zoomInBtn');
 const zoomOutBtn = document.querySelector('#zoomOutBtn');
 const resultBox = document.querySelector('#resultBox');
+const statusContainer = document.querySelector('#statusMessageContainer');
+const zoomControls = document.querySelector('#zoomControls');
+
+// Initialize progress bar component
+const progressContainer = document.querySelector('#progressContainer');
+const progressFill = document.querySelector('#progressFill');
+const progressStatus = document.querySelector('#progressStatus');
+const progressPercentage = document.querySelector('#progressPercentage');
+
+// ==========================================================================
+// Status Message Helper
+// ==========================================================================
+
+function showStatus(message, type = 'info') {
+    if (statusMessage) {
+        statusMessage.destroy();
+    }
+    statusMessage = new StatusMessage({
+        message: message,
+        type: type,
+        dismissible: true,
+        autoHide: type === 'success' ? 5000 : type === 'info' ? 3000 : 0
+    });
+    statusContainer.appendChild(statusMessage.getElement());
+}
+
+// ==========================================================================
+// Event Handlers
+// ==========================================================================
 
 browseBtn.addEventListener('click', async () => {
     try {
         const path = await OpenFileBrowser();
-        if (path) filePathInput.value = path;
+        if (path) {
+            filePathInput.value = path;
+            // Validate the selected file
+            const validation = FileValidator.validateFileExtension(path);
+            if (!validation.isValid) {
+                showStatus(validation.message, 'warning');
+            }
+        }
     } catch (error) {
-        alert('Failed to open file browser: ' + error);
+        showStatus('Failed to open file browser: ' + error, 'error');
     }
 });
 
 analyzeBtn.addEventListener('click', async () => {
     const filePath = filePathInput.value.trim();
+    
+    // Validate file path
     if (!filePath) {
-        alert('Please select a supportconfig file to analyze');
+        showStatus('Please select a supportconfig file to analyze', 'warning');
+        filePathInput.focus();
         return;
     }
+
+    // Validate file extension
+    const validation = FileValidator.validateFileExtension(filePath);
+    if (!validation.isValid) {
+        showStatus(validation.message, 'warning');
+        return;
+    }
+
+    // Disable controls during analysis
     analyzeBtn.disabled = true;
-    analyzeBtn.textContent = 'Analyzing...';
+    analyzeBtn.textContent = `${UI.BUTTONS.ANALYZE}...`;
     browseBtn.disabled = true;
     filePathInput.disabled = true;
 
-    // Show progress bar and reset to 0%
-    const progressContainer = document.querySelector('#progressContainer');
-    const progressFill = document.querySelector('#progressFill');
-    const progressStatus = document.querySelector('#progressStatus');
-    const progressPercentage = document.querySelector('#progressPercentage');
+    // Show progress bar and reset
     progressContainer.style.display = 'block';
     progressFill.style.width = '0%';
     progressStatus.textContent = 'Starting analysis...';
     progressPercentage.textContent = '0%';
     
-    // Hide the "Waiting for supportconfig file..." placeholder text
+    // Hide placeholder
     resultBox.innerHTML = '';
 
     try {
@@ -177,15 +259,15 @@ analyzeBtn.addEventListener('click', async () => {
         applyZoom();
         exportPdfBtn.style.display = 'inline-block';
         exportTxtBtn.style.display = 'inline-block';
-        zoomControls.style.display = 'inline-block';
+        zoomControls.style.display = 'inline-flex';
+        showStatus('Analysis completed successfully', 'success');
     } catch (error) {
-        alert('Analysis failed: ' + error);
-        resultBox.innerHTML = `<div style="text-align: center; color: #d9534f; margin-top: 50px;">Analysis failed: ${error}</div>`;
+        showStatus('Analysis failed: ' + error, 'error');
+        resultBox.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p style="color: #d9534f;">Analysis failed: ${escapeHtml(String(error))}</p></div>`;
     } finally {
-        // Hide progress bar when done
         progressContainer.style.display = 'none';
         analyzeBtn.disabled = false;
-        analyzeBtn.textContent = 'Analyze';
+        analyzeBtn.textContent = UI.BUTTONS.ANALYZE;
         browseBtn.disabled = false;
         filePathInput.disabled = false;
     }
@@ -193,6 +275,7 @@ analyzeBtn.addEventListener('click', async () => {
 
 exportPdfBtn.addEventListener('click', () => {
     if (!currentReport) return;
+    showStatus('Preparing PDF export...', 'info');
     const now = new Date();
     const timestamp = now.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
     const originalTitle = document.title;
@@ -203,20 +286,31 @@ exportPdfBtn.addEventListener('click', () => {
 
 exportTxtBtn.addEventListener('click', async () => {
     if (!currentReport) return;
+    showStatus('Exporting text report...', 'info');
     try {
         const result = await SaveTXT(currentReport);
-        if (result !== 'cancelled') alert('Text report saved to: ' + result);
+        if (result !== 'cancelled') {
+            showStatus('Text report saved to: ' + result, 'success');
+        } else {
+            showStatus('Export cancelled', 'info');
+        }
     } catch (error) {
-        alert('Failed to export text: ' + error);
+        showStatus('Failed to export text: ' + error, 'error');
     }
 });
 
 zoomInBtn.addEventListener('click', () => {
-    if (currentZoom < 1.5) { currentZoom += 0.1; applyZoom(); }
+    if (currentZoom < ZOOM.MAX) {
+        currentZoom = Math.round((currentZoom + ZOOM.STEP) * 10) / 10;
+        applyZoom();
+    }
 });
 
 zoomOutBtn.addEventListener('click', () => {
-    if (currentZoom > 0.8) { currentZoom -= 0.1; applyZoom(); }
+    if (currentZoom > ZOOM.MIN) {
+        currentZoom = Math.round((currentZoom - ZOOM.STEP) * 10) / 10;
+        applyZoom();
+    }
 });
 
 function applyZoom() {
@@ -224,19 +318,17 @@ function applyZoom() {
     resultBox.style.transformOrigin = 'top left';
 }
 
+// ==========================================================================
+// Wails Events
+// ==========================================================================
+
 EventsOn('analyze-progress', (message, percentage) => {
-    // Update progress bar elements
-    const progressFill = document.querySelector('#progressFill');
-    const progressStatus = document.querySelector('#progressStatus');
-    const progressPercentage = document.querySelector('#progressPercentage');
-    
     if (progressFill && progressStatus && progressPercentage) {
         progressFill.style.width = `${percentage}%`;
         progressStatus.textContent = message;
         progressPercentage.textContent = `${percentage}%`;
     }
     
-    // Also update button text for redundancy
     if (percentage > 0 && percentage < 100) {
         analyzeBtn.textContent = `${percentage}% - ${message}`;
     } else if (percentage >= 100) {
@@ -248,8 +340,20 @@ EventsOn('analyze-progress', (message, percentage) => {
 });
 
 OnFileDrop((x, y, files) => {
-    if (files.length > 0) filePathInput.value = files[0];
+    if (files.length > 0) {
+        const path = files[0];
+        filePathInput.value = path;
+        // Validate dropped file
+        const validation = FileValidator.validateFileExtension(path);
+        if (!validation.isValid) {
+            showStatus(validation.message, 'warning');
+        }
+    }
 }, false);
+
+// ==========================================================================
+// Keyboard Shortcuts
+// ==========================================================================
 
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey) {
@@ -261,3 +365,18 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// ==========================================================================
+// Dark Mode Detection
+// ==========================================================================
+
+function applyTheme() {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark-mode', prefersDark);
+}
+
+// Apply theme on load
+applyTheme();
+
+// Listen for theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
