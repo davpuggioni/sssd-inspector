@@ -424,18 +424,55 @@ body {
     display: none !important;
   }
   
-  #app,
-  .pdf-content-area,
-  .result-box {
-    background: #ffffff !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    color: #000000;
+  /* Fix: rimuovi altezza fissa viewport e flex che causano troncamento */
+  #app {
+    height: auto !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  
+  .pdf-content-area {
+    overflow: visible !important;
+    flex: none !important;
+    display: block !important;
   }
   
   .result-box {
     box-shadow: none !important;
-    min-height: auto;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    transform: none !important;
+    max-height: none !important;
+    padding: 20px !important;
+    margin: 0 auto !important;
+    max-width: 100% !important;
+  }
+  
+  /* Forza il report a fluire su più pagine */
+  .report-wrapper {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    page-break-inside: avoid;
+  }
+  
+  /* Previene interruzioni di pagina indesiderate */
+  .info-table {
+    page-break-inside: avoid;
+  }
+  
+  .problem-list,
+  .warn-list {
+    page-break-inside: avoid;
+  }
+  
+  .timeline-event {
+    page-break-inside: avoid;
+  }
+  
+  .kb-article {
+    page-break-inside: avoid;
   }
   
   .container {
@@ -447,7 +484,8 @@ body {
   .btn,
   .zoom-controls,
   .status-message,
-  .progress-container {
+  .progress-container,
+  .progress-container-wrapper {
     display: none !important;
   }
   
