@@ -137,6 +137,7 @@ document.querySelector('#app').innerHTML = `
                 <button id="zoomOutBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_OUT}</button>
                 <button id="zoomInBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_IN}</button>
             </div>
+            <button id="themeToggleBtn" class="btn btn-outline" title="Toggle dark/light mode" style="font-size: 18px; padding: 5px 10px;">☀️</button>
         </div>
     </div>
     <!-- Progress bar container (hidden by default) -->
@@ -367,16 +368,46 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ==========================================================================
-// Dark Mode Detection
+// Theme / Dark Mode Toggle
 // ==========================================================================
 
-function applyTheme() {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.classList.toggle('dark-mode', prefersDark);
+function getPreferredTheme() {
+    const saved = localStorage.getItem('sssd-inspector-theme');
+    if (saved) {
+        return saved; // 'dark' or 'light'
+    }
+    // If no saved preference, use system preference
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-// Apply theme on load
-applyTheme();
+function applyTheme(theme) {
+    const isDark = theme === 'dark';
+    document.documentElement.classList.toggle('dark-mode', isDark);
+    // Update toggle button icon
+    const themeBtn = document.querySelector('#themeToggleBtn');
+    if (themeBtn) {
+        themeBtn.textContent = isDark ? '🌙' : '☀️';
+        themeBtn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    }
+}
 
-// Listen for theme changes
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+function toggleTheme() {
+    const currentTheme = document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('sssd-inspector-theme', newTheme);
+    applyTheme(newTheme);
+}
+
+// Initialize theme
+const initialTheme = getPreferredTheme();
+applyTheme(initialTheme);
+
+// Theme toggle button click handler
+document.querySelector('#themeToggleBtn').addEventListener('click', toggleTheme);
+
+// Listen for system theme changes (only if user hasn't set a manual preference)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem('sssd-inspector-theme')) {
+        applyTheme(e.matches ? 'dark' : 'light');
+    }
+});

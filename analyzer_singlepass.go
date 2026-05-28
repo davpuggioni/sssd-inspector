@@ -163,6 +163,17 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
 	defer cancel()
 
+	// Pre-allocate timeline with reasonable capacity to reduce reallocations
+	// Most supportconfig files have < 1000 error lines
+	timelineCapacity := 1000
+	if len(errorPatterns) > 0 {
+		timelineCapacity = len(errorPatterns) * 2 // upper bound estimate
+		if timelineCapacity > 5000 {
+			timelineCapacity = 5000
+		}
+	}
+	result.Timeline = make([]TimelineEvent, 0, timelineCapacity)
+
 	// STEP 3: SINGLE PASS through all log files
 	logFileNames := []string{"sssd.txt", "messages", "messages.txt"}
 	scanFilesWithContext(ctx, dirPath, logFileNames, func(line string) {
@@ -171,8 +182,34 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 			return
 		}
 
+		// Quick pre-filter: skip lines that don't contain SSSD-related keywords.
+		// This avoids running the expensive mega-regex on ~90% of syslog lines
+		// that are unrelated (kernel messages, sshd, cron, etc.)
+		// The ToLower call here is a bottleneck but avoids regex on 90% of lines.
+		lowered := strings.ToLower(lineTrimmed)
+		if !strings.Contains(lowered, "sssd") &&
+			!strings.Contains(lowered, "krb5") &&
+			!strings.Contains(lowered, "ldap") &&
+			!strings.Contains(lowered, "keytab") &&
+			!strings.Contains(lowered, "winbind") &&
+			!strings.Contains(lowered, "ad ") &&
+			!strings.Contains(lowered, "gpo") &&
+			!strings.Contains(lowered, "pam") &&
+			!strings.Contains(lowered, "nss") &&
+			!strings.Contains(lowered, "hbac") &&
+			!strings.Contains(lowered, "ipa") &&
+			!strings.Contains(lowered, "kdc") &&
+			!strings.Contains(lowered, "tgt ") &&
+			!strings.Contains(lowered, "tls") &&
+			!strings.Contains(lowered, "gssapi") &&
+			!strings.Contains(lowered, "library") &&
+			!strings.Contains(lowered, "dlopen") &&
+			!strings.Contains(lowered, "shared") {
+			return
+		}
+
 		// Ignore winbindd lines to prevent false positives
-		if strings.Contains(strings.ToLower(lineTrimmed), "winbindd") {
+		if strings.Contains(lowered, "winbindd") {
 			return
 		}
 

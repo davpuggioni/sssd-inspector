@@ -463,11 +463,291 @@ body {
 
 /* ==========================================================================
    Dark Mode Support
+   .dark-mode class = manual toggle via the UI button
+   @media (prefers-color-scheme: dark) = automatic system preference
    ========================================================================== */
 
+.dark-mode {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}
+
+.dark-mode .top-bar {
+  background-color: #16213e;
+  border-bottom-color: #0f3460;
+}
+
+.dark-mode .result-box {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}
+
+.dark-mode .info-table {
+  background: #16213e;
+  color: #e0e0e0;
+}
+
+.dark-mode .info-table th {
+  background-color: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .info-table td {
+  border-color: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .info-table tr:nth-child(even) {
+  background-color: #1a1a2e;
+}
+
+.dark-mode .info-table tr:hover {
+  background-color: #0f3460;
+}
+
+.dark-mode .section-title {
+  background-color: #0f3460 !important;
+  color: #e0e0e0 !important;
+}
+
+.dark-mode .report-wrapper {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}
+
+.dark-mode .report-wrapper h1 {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+.dark-mode .report-wrapper h2 {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+.dark-mode .report-wrapper h2.warn-header {
+  color: #17a2b8;
+  border-bottom-color: #17a2b8;
+}
+
+.dark-mode .report-wrapper h2.kb-header {
+  color: #28a745;
+  border-bottom-color: #28a745;
+}
+
+.dark-mode .report-wrapper h3,
+.dark-mode .report-wrapper h4 {
+  color: #e0e0e0;
+}
+
+.dark-mode .report-wrapper a {
+  color: #e94560;
+}
+
+.dark-mode .report-wrapper a:hover {
+  color: #ff6b6b;
+}
+
+.dark-mode .problem-list {
+  background: #2d1b1b;
+  border-left-color: #e94560;
+}
+
+.dark-mode .problem-list li {
+  color: #ff6b6b;
+}
+
+.dark-mode .warn-list {
+  background: #1b2d2d;
+  border-left-color: #17a2b8;
+}
+
+.dark-mode .warn-list li {
+  color: #6bc5d0;
+}
+
+.dark-mode .log-block {
+  background: #16213e;
+  color: #e0e0e0;
+  border-left-color: #e94560;
+}
+
+.dark-mode .mac-block {
+  background: #2d2d1b;
+  color: #ffc107;
+  border-left-color: #ffc107;
+}
+
+.dark-mode .timeline {
+  border-left-color: #e94560;
+}
+
+.dark-mode .timeline-event::before {
+  background: #e94560;
+  border-color: #1a1a2e;
+  box-shadow: 0 0 0 2px #e94560;
+}
+
+.dark-mode .timeline-time {
+  color: #e94560;
+}
+
+.dark-mode .timeline-msg {
+  color: #e0e0e0;
+}
+
+.dark-mode .timeline-raw {
+  background: #16213e;
+  color: #b0b0b0;
+  border-color: #0f3460;
+}
+
+.dark-mode .kb-article {
+  background: #16213e;
+  border-color: #0f3460;
+}
+
+.dark-mode .kb-article h4 {
+  color: #e94560;
+}
+
+.dark-mode .kb-article .tid-id {
+  color: #b0b0b0;
+}
+
+.dark-mode .kb-evidence {
+  background: #1a1a2e;
+  border-left-color: #17a2b8;
+}
+
+.dark-mode .report-wrapper summary {
+  background-color: #16213e;
+  color: #e0e0e0;
+  border-bottom-color: #0f3460;
+}
+
+.dark-mode .report-wrapper summary:hover {
+  background-color: #0f3460;
+  color: #ffffff;
+}
+
+.dark-mode .report-wrapper details {
+  border-color: #0f3460;
+}
+
+.dark-mode .report-wrapper pre {
+  background-color: #16213e;
+  border-color: #0f3460;
+}
+
+.dark-mode .report-wrapper code {
+  background-color: #16213e;
+  color: #e94560;
+}
+
+.dark-mode .file-path-input {
+  background-color: #16213e;
+  color: #e0e0e0;
+  border-color: #0f3460;
+}
+
+.dark-mode .file-path-input:focus {
+  border-color: #e94560;
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.25);
+}
+
+.dark-mode .btn-primary {
+  background-color: #e94560;
+  border-color: #e94560;
+}
+
+.dark-mode .btn-primary:hover:not(:disabled) {
+  background-color: #c0392b;
+  border-color: #c0392b;
+}
+
+.dark-mode .btn-secondary,
+.dark-mode .btn-info {
+  background-color: #0f3460;
+  border-color: #0f3460;
+}
+
+.dark-mode .btn-secondary:hover:not(:disabled),
+.dark-mode .btn-info:hover:not(:disabled) {
+  background-color: #16213e;
+  border-color: #16213e;
+}
+
+.dark-mode .btn-success {
+  background-color: #2d6a4f;
+  border-color: #2d6a4f;
+}
+
+.dark-mode .btn-success:hover:not(:disabled) {
+  background-color: #1b4332;
+  border-color: #1b4332;
+}
+
+.dark-mode .progress-bar-wrapper {
+  background-color: #16213e;
+  border-color: #0f3460;
+}
+
+.dark-mode .progress-bar-fill {
+  background-color: #e94560;
+}
+
+.dark-mode .progress-status,
+.dark-mode .progress-percentage {
+  color: #b0b0b0;
+}
+
+.dark-mode .status-info {
+  background-color: #0f3460;
+  border-color: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .status-success {
+  background-color: #1b4332;
+  border-color: #2d6a4f;
+  color: #a0d0b0;
+}
+
+.dark-mode .status-warning {
+  background-color: #2d2d1b;
+  border-color: #856404;
+  color: #ffc107;
+}
+
+.dark-mode .status-error {
+  background-color: #2d1b1b;
+  border-color: #e94560;
+  color: #ff6b6b;
+}
+
+.dark-mode .zoom-btn {
+  background-color: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .zoom-btn:hover:not(:disabled) {
+  background-color: #16213e;
+}
+
+.dark-mode .loading-state,
+.dark-mode .empty-state {
+  color: #b0b0b0;
+}
+
+/* Auto dark mode via system preference */
 @media (prefers-color-scheme: dark) {
   html {
     background-color: #1a1a2e;
+    color: #e0e0e0;
+  }
+
+  body {
     color: #e0e0e0;
   }
 
