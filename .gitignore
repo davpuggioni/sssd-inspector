@@ -1,15 +1,36 @@
-build/bin
-node_modules
-frontend/dist
-sssd-inspector
+# --- NODE / FRONTEND ---
+# Ignore  these  packets 
+node_modules/
+frontend/dist/
 
+# npm/yarn error logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- GO / BINARIES ---
+# Build folder and compiled bynary
+build/bin/
+sssd-inspector
+sssd-inspector-cli
+
+# --- SECURITY ---
+.env
+.env.local
+.env.*.local
+
+# --- REPORT AND SPECIFIC LOGS ---
 supportconfig_sssd_report_*.txt
 supportconfig_sssd_report_*.html
 
+# --- ARCHIVES ---
 *.txz
 *.tar.xz
 *.tar.gz
 *.zip
 
+# --- IDE & SITEMA OPERATIVO ---
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
