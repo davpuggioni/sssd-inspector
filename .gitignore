@@ -1,0 +1,15 @@
+build/bin
+node_modules
+frontend/dist
+sssd-inspector
+
+supportconfig_sssd_report_*.txt
+supportconfig_sssd_report_*.html
+
+*.txz
+*.tar.xz
+*.tar.gz
+*.zip
+
+.vscode/
+.idea/
