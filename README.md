@@ -146,6 +146,8 @@ The CLI produces:
 
 ## 🖥️ GUI Usage
 
+<img width="1020" height="791" alt="image" src="https://github.com/user-attachments/assets/610df91a-4e31-4665-9902-ddbeb2ae14b7" />
+
 ### Building and Running
 
 ```bash
