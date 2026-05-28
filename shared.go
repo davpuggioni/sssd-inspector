@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"sssd-inspector/config"
@@ -71,6 +72,76 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 	fmt.Println("\n" + reportText)
 
 	baseName := filepath.Base(path)
+
+	if genTxt {
+		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat
+		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing txt report: %w", err)
+		}
+		fmt.Printf("Text report saved to: %s\n", txtReportFile)
+	}
+
+	if genHtml {
+		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
+		writeHTMLReportFile(report, htmlReportFile)
+		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+	}
+
+	return nil
+}
+
+// runLogDirAnalyze analyzes raw SSSD log files directly from a directory (e.g., /var/log/sssd/).
+// Unlike runCLI, it does not expect a supportconfig archive or directory layout.
+// It scans *.log files for SSSD error patterns and generates a report with log-only findings.
+func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool) error {
+	fmt.Printf("Analyzing raw SSSD log directory: %s\n", dirPath)
+	if anonymize {
+		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
+	}
+
+	// Verify the directory exists
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return fmt.Errorf("error accessing log directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dirPath)
+	}
+
+	// Progress func for CLI output
+	progressFunc := func(msg string, pct int) {
+		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
+	}
+
+	// Find all .log files in the directory
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return fmt.Errorf("error reading log directory: %w", err)
+	}
+
+	var logFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".log") {
+			logFiles = append(logFiles, entry.Name())
+		}
+	}
+
+	if len(logFiles) == 0 {
+		return fmt.Errorf("no .log files found in directory: %s", dirPath)
+	}
+
+	fmt.Printf("Found %d SSSD log files\n", len(logFiles))
+
+	report := analyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+
+	report.Timestamp = time.Now().Format(constants.TimestampFormat)
+	report.AppVersion = constants.AppVersion
+
+	reportText := buildTextReport(report)
+	fmt.Println("\n" + reportText)
+
+	baseName := filepath.Base(dirPath)
 
 	if genTxt {
 		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat

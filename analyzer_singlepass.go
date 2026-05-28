@@ -63,6 +63,14 @@ type SinglePassResult struct {
 // account status, KB article evidence, and timeline events.
 // This eliminates the ~29 separate scans that were previously performed.
 func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArticle) *SinglePassResult {
+	return performSinglePassScanOnFiles(dirPath, []string{"sssd.txt", "messages", "messages.txt"}, macType, kbArticles)
+}
+
+// performSinglePassScanOnFiles does ONE scan of the specified log files
+// and extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
+// account status, KB article evidence, and timeline events.
+// This variant allows specifying custom log files (e.g., *.log from /var/log/sssd/).
+func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType string, kbArticles []TIDArticle) *SinglePassResult {
 	result := &SinglePassResult{
 		KBEvidence: make(map[string][]string),
 	}
@@ -174,9 +182,8 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	}
 	result.Timeline = make([]TimelineEvent, 0, timelineCapacity)
 
-	// STEP 3: SINGLE PASS through all log files
-	logFileNames := []string{"sssd.txt", "messages", "messages.txt"}
-	scanFilesWithContext(ctx, dirPath, logFileNames, func(line string) {
+	// STEP 3: SINGLE PASS through all specified log files
+	scanFilesWithContext(ctx, dirPath, logFiles, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 		if lineTrimmed == "" {
 			return

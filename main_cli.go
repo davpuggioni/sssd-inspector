@@ -18,6 +18,7 @@ func main() {
 	// Setup CLI Flags using configuration constants
 	versionShort := flag.Bool(constants.FlagVersion, false, constants.DescVersion)
 	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
+	logDir := flag.String(constants.FlagLogDir, "", constants.DescLogDir)
 	txtReport := flag.Bool(constants.FlagTXT, false, constants.DescTXT)
 	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
 	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
@@ -25,6 +26,15 @@ func main() {
 
 	if *versionShort {
 		fmt.Printf("%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
+		os.Exit(0)
+	}
+
+	// LogDir mode: analyze raw SSSD log files directly (e.g., /var/log/sssd/)
+	if *logDir != "" {
+		if err := runLogDirAnalyze(*logDir, *txtReport, *htmlReport, *anonymize); err != nil {
+			fmt.Fprintf(os.Stderr, "LogDir analysis failed: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -76,6 +86,7 @@ func main() {
 	fmt.Println("\nOptions:")
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagVersion, "version", constants.DescVersion)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagAnalyze, "analyze", constants.DescAnalyze)
+	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagLogDir, "logdir", constants.DescLogDir)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagTXT, "txt", constants.DescTXT)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagHTML, "html", constants.DescHTML)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagAnonymize, "anonymize", constants.DescAnonymize)
@@ -83,5 +94,6 @@ func main() {
 	fmt.Println("  sssd-inspector -analyze /path/to/supportconfig.txz")
 	fmt.Println("  sssd-inspector /path/to/supportconfig.txz -txt -html")
 	fmt.Println("  sssd-inspector /path/to/supportconfig.txz -anonymize")
-	os.Exit(1)
+	fmt.Println("  sssd-inspector -logdir /var/log/sssd")
+	os.Exit(0)
 }

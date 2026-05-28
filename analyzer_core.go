@@ -3,6 +3,7 @@ package main
 
 import (
 	"regexp"
+	"sssd-inspector/constants"
 	"strconv"
 	"strings"
 	"time"
@@ -248,4 +249,67 @@ func anonymizeReport(r *ReportData) {
 		}
 	}
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+}
+
+// analyzeLogsOnly performs a lightweight analysis on raw SSSD log files only.
+// This is used by -logdir mode where no supportconfig metadata is available.
+// It skips all system/config analysis and only scans the provided log files
+// for SSSD error patterns, building a timeline and collecting problems/warnings.
+func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
+	globalFileCache.Clear()
+
+	var report ReportData
+	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
+	report.AppVersion = constants.AppVersion
+
+	// Mark all system-level info as N/A since we have no supportconfig
+	report.SssdService = "N/A (raw log mode)"
+	report.WinbindService = "N/A (raw log mode)"
+	report.NscdStatus = "N/A (raw log mode)"
+	report.TimeService = "N/A (raw log mode)"
+	report.KerberosRealm = "N/A (raw log mode)"
+	report.HardwareManufacturer = "N/A (raw log mode)"
+	report.HardwareModel = "N/A (raw log mode)"
+	report.Hypervisor = "N/A (raw log mode)"
+	report.VirtualIdentity = "N/A (raw log mode)"
+	report.MACType = "Unknown"
+	report.SssdInstalled = true
+
+	if progressFunc != nil {
+		progressFunc("Scanning raw SSSD log files...", 10)
+	}
+
+	// Use an empty KB article list since we can't match KB without config files
+	var kbArticles []TIDArticle
+
+	// Perform single-pass scan on the provided log files
+	singlePassResult := performSinglePassScanOnFiles(dirPath, logFiles, report.MACType, kbArticles)
+
+	// Apply single-pass results to report
+	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
+	report.Timeline = singlePassResult.Timeline
+	report.Problems = append(report.Problems, singlePassResult.Problems...)
+	report.Warnings = append(report.Warnings, singlePassResult.Warnings...)
+
+	// Keytab results from single-pass
+	if singlePassResult.KeytabFound {
+		report.KeytabFound = true
+	}
+
+	if progressFunc != nil {
+		progressFunc("Compiling log analysis results...", 80)
+	}
+
+	// Deduplicate
+	report.Problems = deduplicateProblems(report.Problems)
+	report.Warnings = deduplicateProblems(report.Warnings)
+
+	if anonymize {
+		if progressFunc != nil {
+			progressFunc("Sanitizing PII data...", 95)
+		}
+		anonymizeReport(&report)
+	}
+
+	return report
 }
