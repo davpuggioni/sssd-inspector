@@ -61,6 +61,16 @@
 
 ## 🚀 Installation
 
+### Setup
+
+```bash
+# Install dependencies
+go mod tidy
+cd frontend && npm install
+
+# Run in development mode
+wails dev
+```
 
 ### Build from Source
 
@@ -140,7 +150,14 @@ The CLI produces:
 
 ```bash
 # Build the GUI
+# Linux
 wails build -platform linux/amd64
+
+# Windows
+wails build -platform windows/amd64
+
+# macOS
+wails build -platform darwin/amd64
 
 # Run (or launch the binary)
 ./sssd-inspector
@@ -250,6 +267,22 @@ sssd-inspector/
 └── docs/                    # Documentation
 ```
 
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │    │   File System  │
+│   (JavaScript)  │◄──►│   (Go/Wails)    │◄──►│   Archives      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │   Knowledge     │
+                       │   Base (TIDs)   │
+                       └─────────────────┘
+```
+
+
+
 ### Single-Pass Scanning Engine
 
 SSSD Inspector uses a single-pass log scanning engine. Instead of reading the same log files ~29 times during analysis, the engine:
@@ -276,6 +309,9 @@ go test -count=1 ./...
 
 # Run with verbose output
 go test -count=1 -v ./...
+
+# Run with coverage
+go test -cover ./..
 
 # Run benchmarks
 go test -bench=. -benchmem -count=1 ./...
