@@ -22,6 +22,7 @@ analysis:
   
   # Analysis timeouts
   timeout: "30m"
+  extraction_timeout: "30m"  # Max time to extract an archive
   
   # Progress reporting
   progress_steps: 10

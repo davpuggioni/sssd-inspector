@@ -33,12 +33,13 @@ type AppConfig struct {
 
 // AnalysisConfig contains analysis-related settings
 type AnalysisConfig struct {
-	MaxFileSize    string   `yaml:"max_file_size"`
-	MaxLineLength  string   `yaml:"max_line_length"`
-	BufferSize     string   `yaml:"buffer_size"`
-	ArchiveFormats []string `yaml:"archive_formats"`
-	Timeout        string   `yaml:"timeout"`
-	ProgressSteps  int      `yaml:"progress_steps"`
+	MaxFileSize       string   `yaml:"max_file_size"`
+	MaxLineLength     string   `yaml:"max_line_length"`
+	BufferSize        string   `yaml:"buffer_size"`
+	ArchiveFormats    []string `yaml:"archive_formats"`
+	Timeout           string   `yaml:"timeout"`
+	ExtractionTimeout string   `yaml:"extraction_timeout"`
+	ProgressSteps     int      `yaml:"progress_steps"`
 }
 
 // FilesConfig contains file-related settings
@@ -124,23 +125,24 @@ type CLIConfig struct {
 
 // Constants for default values
 const (
-	DefaultAppName       = "SSSD Inspector"
-	DefaultAppVersion    = "0.2.0"
-	DefaultMaxFileSize   = "100MB"
-	DefaultMaxLineLength = "1MB"
-	DefaultBufferSize    = "64KB"
-	DefaultTimeout       = "30m"
-	DefaultProgressSteps = 10
-	DefaultWindowWidth   = 1024
-	DefaultWindowHeight  = 768
-	DefaultWindowTitle   = "SSSD Inspector"
-	DefaultMaxWorkers    = 4
-	DefaultGCPercent     = 100
-	DefaultChunkSize     = "32KB"
-	DefaultOutputSuffix  = "_report"
-	DefaultLogLevel      = "info"
-	DefaultLogFormat     = "json"
-	DefaultMaxBackups    = 5
+	DefaultAppName           = "SSSD Inspector"
+	DefaultAppVersion        = "0.2.0"
+	DefaultMaxFileSize       = "100MB"
+	DefaultMaxLineLength     = "1MB"
+	DefaultBufferSize        = "64KB"
+	DefaultTimeout           = "30m"
+	DefaultExtractionTimeout = "30m"
+	DefaultProgressSteps     = 10
+	DefaultWindowWidth       = 1024
+	DefaultWindowHeight      = 768
+	DefaultWindowTitle       = "SSSD Inspector"
+	DefaultMaxWorkers        = 4
+	DefaultGCPercent         = 100
+	DefaultChunkSize         = "32KB"
+	DefaultOutputSuffix      = "_report"
+	DefaultLogLevel          = "info"
+	DefaultLogFormat         = "json"
+	DefaultMaxBackups        = 5
 )
 
 // DefaultConfig returns a default configuration
@@ -151,12 +153,13 @@ func DefaultConfig() *Config {
 			Version: DefaultAppVersion,
 		},
 		Analysis: AnalysisConfig{
-			MaxFileSize:    DefaultMaxFileSize,
-			MaxLineLength:  DefaultMaxLineLength,
-			BufferSize:     DefaultBufferSize,
-			ArchiveFormats: []string{"txz", "tar.xz", "tar.gz"},
-			Timeout:        DefaultTimeout,
-			ProgressSteps:  DefaultProgressSteps,
+			MaxFileSize:       DefaultMaxFileSize,
+			MaxLineLength:     DefaultMaxLineLength,
+			BufferSize:        DefaultBufferSize,
+			ArchiveFormats:    []string{"txz", "tar.xz", "tar.gz"},
+			Timeout:           DefaultTimeout,
+			ExtractionTimeout: DefaultExtractionTimeout,
+			ProgressSteps:     DefaultProgressSteps,
 		},
 		Files: FilesConfig{
 			RelevantFiles: []string{
