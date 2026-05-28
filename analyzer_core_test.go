@@ -74,3 +74,36 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 		t.Errorf("Failed to mask internal domain to example.com")
 	}
 }
+
+// Test: Verify mixed-case domain redaction (e.g., "Corp.Example.Com")
+// This tests the case-insensitive regex replacement for domains
+func TestAnonymizeReport_MixedCaseDomain(t *testing.T) {
+	// Test with domain containing mixed case like "Corp.Suse.Com"
+	report := ReportData{
+		SearchDomain:  "corp.suse.com",
+		KerberosRealm: "SUSE.COM",
+		Problems: []string{
+			"In Corp.Suse.Com domain, Kerberos ticket expired",
+			"In CORP.SUSE.COM domain, LDAP connection failed",
+			"In corp.suse.com domain, everything is fine",
+			"Kerberos realm SUSE.COM is unreachable",
+			"Kerberos realm suse.com is unreachable",
+			"Kerberos realm SuSe.CoM is unreachable",
+		},
+	}
+
+	anonymizeReport(&report)
+
+	// All variants should now be redacted to "example.com" / "EXAMPLE.COM"
+	for _, p := range report.Problems {
+		if strings.Contains(p, "suse") || strings.Contains(p, "SUSE") || strings.Contains(p, "SuSe") || strings.Contains(p, "CoM") {
+			t.Errorf("Mixed-case domain not fully redacted: got %q", p)
+		}
+	}
+	if !strings.Contains(report.Problems[0], "example.com") {
+		t.Errorf("Mixed-case 'Corp.Suse.Com' should be redacted to example.com, got: %q", report.Problems[0])
+	}
+	if !strings.Contains(report.Problems[3], "EXAMPLE.COM") {
+		t.Errorf("Kerberos realm should be redacted to EXAMPLE.COM, got: %q", report.Problems[3])
+	}
+}

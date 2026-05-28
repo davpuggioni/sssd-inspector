@@ -200,19 +200,28 @@ func anonymizeReport(r *ReportData) {
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
 	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
 
+	// Capture domain and realm before any mutation, since r.SearchDomain and
+	// r.KerberosRealm get overwritten to their replacement values later in this
+	// function (lines 230-231), and subsequent maskString calls would lose the
+	// original values needed for redaction.
+	origDomain := r.SearchDomain
+	origRealm := r.KerberosRealm
+
 	maskString := func(s string) string {
 		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
 		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
 		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
 		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
-		if r.SearchDomain != "" && r.SearchDomain != "None" {
-			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
-			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
+		if origDomain != "" && origDomain != "None" {
+			// Case-insensitive domain redaction using (?i) flag and regexp.QuoteMeta
+			// to protect against mixed-case variants like "Corp.Example.Com"
+			domainRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(origDomain))
+			s = domainRegex.ReplaceAllString(s, "example.com")
 		}
-		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
-			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
-			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
+		if origRealm != "" && origRealm != "Not configured" {
+			realmRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(origRealm))
+			s = realmRegex.ReplaceAllString(s, "EXAMPLE.COM")
 		}
 		return s
 	}
