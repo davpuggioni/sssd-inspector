@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSSD Inspector Frontend Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #0056b3;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        h2 {
+            color: #495057;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background-color: #0056b3;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #004085;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .output-container {
+            margin-top: 20px;
+        }
+        
+        .console-output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-bottom: 20px;
+        }
+        
+        .test-results {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .test-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .test-stats {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        
+        .test-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .test-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .test-item:last-child {
+            border-bottom: none;
+        }
+        
+        .test-item.passed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .test-item.failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .test-item.running {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .test-name {
+            font-weight: 500;
+        }
+        
+        .test-status {
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #0056b3;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #0056b3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .error-details {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SSSD Inspector Frontend Tests</h1>
+        
+        <div class="test-controls">
+            <button id="runAllTests" class="btn btn-primary">Run All Tests</button>
+            <button id="runValidatorTests" class="btn btn-secondary">Run Validator Tests</button>
+            <button id="runComponentTests" class="btn btn-secondary">Run Component Tests</button>
+            <button id="runDragDropTests" class="btn btn-secondary">Run Drag/Drop Tests</button>
+            <button id="clearOutput" class="btn btn-danger">Clear Output</button>
+            <button id="exportResults" class="btn btn-success" disabled>Export Results</button>
+        </div>
+        
+        <div class="progress-bar hidden" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="test-results hidden" id="testResults">
+            <div class="test-summary">
+                <h2>Test Results</h2>
+                <div class="test-stats">
+                    <div class="stat">
+                        <span class="stat-value success" id="passedCount">0</span>
+                        <span>Passed</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value error" id="failedCount">0</span>
+                        <span>Failed</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value info" id="totalCount">0</span>
+                        <span>Total</span>
+                    </div>
+                </div>
+            </div>
+            <ul class="test-list" id="testList"></ul>
+        </div>
+        
+        <div class="output-container">
+            <h2>Console Output</h2>
+            <div class="console-output" id="consoleOutput">
+                Ready to run tests. Click "Run All Tests" to begin.
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import test modules
+        import { TestRunner as ValidatorTestRunner } from './validators.test.js';
+        import { TestRunner as ComponentTestRunner } from './components.test.js';
+        import { DragDropTestRunner } from './dragdrop.test.js';
+        
+        // Test runner class
+        class FrontendTestRunner {
+            constructor() {
+                this.testResults = [];
+                this.currentTestIndex = 0;
+                this.totalTests = 0;
+                this.isRunning = false;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.setupConsoleCapture();
+            }
+            
+            initializeElements() {
+                this.elements = {
+                    runAllTests: document.getElementById('runAllTests'),
+                    runValidatorTests: document.getElementById('runValidatorTests'),
+                    runComponentTests: document.getElementById('runComponentTests'),
+                    runDragDropTests: document.getElementById('runDragDropTests'),
+                    clearOutput: document.getElementById('clearOutput'),
+                    exportResults: document.getElementById('exportResults'),
+                    progressBar: document.getElementById('progressBar'),
+                    progressFill: document.getElementById('progressFill'),
+                    testResults: document.getElementById('testResults'),
+                    passedCount: document.getElementById('passedCount'),
+                    failedCount: document.getElementById('failedCount'),
+                    totalCount: document.getElementById('totalCount'),
+                    testList: document.getElementById('testList'),
+                    consoleOutput: document.getElementById('consoleOutput')
+                };
+            }
+            
+            setupEventListeners() {
+                this.elements.runAllTests.addEventListener('click', () => this.runAllTests());
+                this.elements.runValidatorTests.addEventListener('click', () => this.runValidatorTests());
+                this.elements.runComponentTests.addEventListener('click', () => this.runComponentTests());
+                this.elements.runDragDropTests.addEventListener('click', () => this.runDragDropTests());
+                this.elements.clearOutput.addEventListener('click', () => this.clearOutput());
+                this.elements.exportResults.addEventListener('click', () => this.exportResults());
+            }
+            
+            setupConsoleCapture() {
+                // Override console methods to capture output
+                this.originalConsole = {
+                    log: console.log,
+                    error: console.error,
+                    warn: console.warn,
+                    info: console.info
+                };
+                
+                console.log = (...args) => {
+                    this.appendOutput('log', ...args);
+                    this.originalConsole.log(...args);
+                };
+                
+                console.error = (...args) => {
+                    this.appendOutput('error', ...args);
+                    this.originalConsole.error(...args);
+                };
+                
+                console.warn = (...args) => {
+                    this.appendOutput('warn', ...args);
+                    this.originalConsole.warn(...args);
+                };
+                
+                console.info = (...args) => {
+                    this.appendOutput('info', ...args);
+                    this.originalConsole.info(...args);
+                };
+            }
+            
+            restoreConsole() {
+                Object.assign(console, this.originalConsole);
+            }
+            
+            appendOutput(level, ...args) {
+                const message = args.map(arg => {
+                    if (typeof arg === 'object') {
+                        try {
+                            return JSON.stringify(arg, null, 2);
+                        } catch (e) {
+                            return String(arg);
+                        }
+                    }
+                    return String(arg);
+                }).join(' ');
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const formattedMessage = `[${timestamp}] ${level.toUpperCase()}: ${message}\n`;
+                
+                this.elements.consoleOutput.textContent += formattedMessage;
+                this.elements.consoleOutput.scrollTop = this.elements.consoleOutput.scrollHeight;
+            }
+            
+            clearOutput() {
+                this.elements.consoleOutput.textContent = 'Console output cleared.\n';
+                this.testResults = [];
+                this.updateTestResults();
+                this.elements.exportResults.disabled = true;
+            }
+            
+            async runAllTests() {
+                await this.runTests([
+                    { name: 'Validators', runner: ValidatorTestRunner },
+                    { name: 'Components', runner: ComponentTestRunner },
+                    { name: 'Drag & Drop', runner: DragDropTestRunner }
+                ]);
+            }
+            
+            async runValidatorTests() {
+                await this.runTests([
+                    { name: 'Validators', runner: ValidatorTestRunner }
+                ]);
+            }
+            
+            async runComponentTests() {
+                await this.runTests([
+                    { name: 'Components', runner: ComponentTestRunner }
+                ]);
+            }
+            
+            async runDragDropTests() {
+                await this.runTests([
+                    { name: 'Drag & Drop', runner: DragDropTestRunner }
+                ]);
+            }
+            
+            async runTests(testSuites) {
+                if (this.isRunning) return;
+                
+                this.isRunning = true;
+                this.testResults = [];
+                this.currentTestIndex = 0;
+                this.totalTests = testSuites.length;
+                
+                this.setUIState('running');
+                this.clearOutput();
+                
+                try {
+                    for (const suite of testSuites) {
+                        await this.runTestSuite(suite);
+                        this.currentTestIndex++;
+                        this.updateProgress();
+                    }
+                    
+                    this.setUIState('completed');
+                    this.showFinalResults();
+                    
+                } catch (error) {
+                    this.appendOutput('error', 'Test runner error:', error);
+                    this.setUIState('error');
+                } finally {
+                    this.isRunning = false;
+                    this.elements.exportResults.disabled = false;
+                }
+            }
+            
+            async runTestSuite(suite) {
+                const startTime = Date.now();
+                let passed = false;
+                let error = null;
+                
+                this.addTestResult(suite.name, 'running');
+                
+                try {
+                    const result = await suite.runAllTests();
+                    passed = result;
+                    
+                    if (passed) {
+                        this.addTestResult(suite.name, 'passed');
+                        this.appendOutput('info', `✅ ${suite.name} tests passed`);
+                    } else {
+                        this.addTestResult(suite.name, 'failed', 'Some tests failed');
+                        this.appendOutput('error', `❌ ${suite.name} tests failed`);
+                    }
+                    
+                } catch (err) {
+                    error = err;
+                    passed = false;
+                    this.addTestResult(suite.name, 'failed', err.message);
+                    this.appendOutput('error', `❌ ${suite.name} tests failed:`, err.message);
+                }
+                
+                const duration = Date.now() - startTime;
+                this.testResults.push({
+                    name: suite.name,
+                    passed,
+                    error,
+                    duration
+                });
+            }
+            
+            addTestResult(testName, status, error = null) {
+                const testItem = document.createElement('li');
+                testItem.className = `test-item ${status}`;
+                testItem.innerHTML = `
+                    <span class="test-name">${testName}</span>
+                    <span class="test-status">${status.toUpperCase()}</span>
+                `;
+                
+                if (error) {
+                    const errorDetails = document.createElement('div');
+                    errorDetails.className = 'error-details';
+                    errorDetails.textContent = error;
+                    testItem.appendChild(errorDetails);
+                }
+                
+                this.elements.testList.appendChild(testItem);
+                this.updateTestResults();
+            }
+            
+            updateTestResults() {
+                const passed = this.testResults.filter(r => r.passed).length;
+                const failed = this.testResults.filter(r => !r.passed).length;
+                const total = this.testResults.length;
+                
+                this.elements.passedCount.textContent = passed;
+                this.elements.failedCount.textContent = failed;
+                this.elements.totalCount.textContent = total;
+            }
+            
+            updateProgress() {
+                const percentage = (this.currentTestIndex / this.totalTests) * 100;
+                this.elements.progressFill.style.width = `${percentage}%`;
+            }
+            
+            setUIState(state) {
+                switch (state) {
+                    case 'running':
+                        this.elements.runAllTests.disabled = true;
+                        this.elements.runValidatorTests.disabled = true;
+                        this.elements.runComponentTests.disabled = true;
+                        this.elements.runDragDropTests.disabled = true;
+                        this.elements.progressBar.classList.remove('hidden');
+                        this.elements.testResults.classList.remove('hidden');
+                        break;
+                    
+                    case 'completed':
+                    case 'error':
+                        this.elements.runAllTests.disabled = false;
+                        this.elements.runValidatorTests.disabled = false;
+                        this.elements.runComponentTests.disabled = false;
+                        this.elements.runDragDropTests.disabled = false;
+                        this.elements.progressBar.classList.add('hidden');
+                        break;
+                }
+            }
+            
+            showFinalResults() {
+                const passed = this.testResults.filter(r => r.passed).length;
+                const failed = this.testResults.filter(r => !r.passed).length;
+                const total = this.testResults.length;
+                
+                if (failed === 0) {
+                    this.appendOutput('info', `🎉 All ${total} test suites passed successfully!`);
+                } else {
+                    this.appendOutput('error', `❌ ${failed} of ${total} test suites failed`);
+                }
+                
+                const totalDuration = this.testResults.reduce((sum, r) => sum + r.duration, 0);
+                this.appendOutput('info', `Total execution time: ${totalDuration}ms`);
+            }
+            
+            exportResults() {
+                const results = {
+                    timestamp: new Date().toISOString(),
+                    summary: {
+                        total: this.testResults.length,
+                        passed: this.testResults.filter(r => r.passed).length,
+                        failed: this.testResults.filter(r => !r.passed).length
+                    },
+                    results: this.testResults,
+                    consoleOutput: this.elements.consoleOutput.textContent
+                };
+                
+                const blob = new Blob([JSON.stringify(results, null, 2)], {
+                    type: 'application/json'
+                });
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sssd-inspector-test-results-${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+        }
+        
+        // Initialize test runner when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.testRunner = new FrontendTestRunner();
+        });
+    </script>
+</body>
+</html>
