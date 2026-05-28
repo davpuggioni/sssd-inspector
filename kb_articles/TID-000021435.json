@@ -1,0 +1,11 @@
+{
+  "tid_id": "TID-000021435",
+  "title": "SSSD fails to start when ifp is enabled",
+  "url": "https://support.scc.suse.com/s/kb/SSSD-fails-to-start-when-ifp-is-enabled?language=en_US",
+  "description": "CAUSE:\nThe problem is caused by a missing dependency: the package sssd-dbus which provides sssd_ifp is not installed in the system.\n\nRESOLUTION:\nInstall the package sssd-dbus:\n# zypper install sssd-dbus\nthen restart SSSD:\n# systemctl restart sssd",
+  "log_patterns": [
+    "Could not exec /usr/lib/sssd/sssd_ifp --uid 0 --gid 0 --logger=files, reason: No such file or directory",
+    "Exiting the SSSD. Could not restart critical service [ifp]."
+  ],
+  "config_patterns": []
+}

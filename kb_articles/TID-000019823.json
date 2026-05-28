@@ -1,0 +1,11 @@
+{
+  "tid_id": "TID-000019823",
+  "title": "SSSD fails with 'service key not available' due to AD RC4 deprecation",
+  "url": "https://support.scc.suse.com/s/article/000019823",
+  "conditions": {
+    "log_patterns": ["service key not available", "TGT failed verification"],
+    "config_patterns": [],
+    "min_sssd_version": "2.9.0"
+  },
+  "description": "Microsoft AD forza la crittografia RC4 se l'attributo operatingSystemVersion inizia con un numero inferiore a 6."
+}
