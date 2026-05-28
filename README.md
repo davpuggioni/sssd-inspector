@@ -118,6 +118,7 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 |------|-------------|
 | `-v, --version` | Print program version |
 | `-analyze <path>` | Path to supportconfig directory or archive |
+| `-logdir <path>` | Path to a directory containing raw SSSD log files (e.g., /var/log/sssd) |
 | `-txt` | Generate a TXT report (default: both formats) |
 | `-html` | Generate an HTML report (default: both formats) |
 | `-anonymize` | Redact PII (IPs, domains, emails) from the report |
@@ -130,6 +131,12 @@ sssd-inspector /tmp/supportconfig-abc123.txz -txt -html -anonymize
 
 # Quick analysis with default TXT output
 sssd-inspector /var/log/supportconfig/
+
+# Analyze raw SSSD logs directly from /var/log/sssd
+sssd-inspector -logdir /var/log/sssd -txt -html
+
+# Analyze raw SSSD logs with PII redaction
+sssd-inspector -logdir /var/log/sssd -anonymize
 
 # Version check
 sssd-inspector -v
