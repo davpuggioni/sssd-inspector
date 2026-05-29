@@ -1,6 +1,6 @@
 // interfaces.go - Core interfaces for dependency injection and testability
 
-package main
+package analyzer
 
 // FileScanner defines the interface for file scanning operations
 // This interface enables dependency injection and makes the code more testable
@@ -80,7 +80,7 @@ var defaultArchiveExtractor ArchiveExtractor = &defaultArchiveExtractorImpl{}
 type defaultArchiveExtractorImpl struct{}
 
 func (d *defaultArchiveExtractorImpl) ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
-	return extractArchiveToTemp(archivePath, progressFunc)
+	return ExtractArchiveToTemp(archivePath, progressFunc)
 }
 
 // defaultReportGenerator provides default report generation implementation
@@ -89,11 +89,11 @@ var defaultReportGenerator ReportGenerator = &defaultReportGeneratorImpl{}
 type defaultReportGeneratorImpl struct{}
 
 func (d *defaultReportGeneratorImpl) BuildTextReport(report ReportData) string {
-	return buildTextReport(report)
+	return BuildTextReport(report)
 }
 
 func (d *defaultReportGeneratorImpl) WriteHTMLReportFile(report ReportData, filename string) {
-	writeHTMLReportFile(report, filename)
+	WriteHTMLReportFile(report, filename)
 }
 
 // defaultKBArticleMatcher provides default KB matching implementation
@@ -132,5 +132,5 @@ func (d *defaultAnalysisEngineImpl) Analyze(dirPath string, anonymize bool, prog
 	}
 
 	// Use existing analyzeData function for backward compatibility
-	return analyzeData(dirPath, anonymize, progressFunc)
+	return AnalyzeData(dirPath, anonymize, progressFunc)
 }

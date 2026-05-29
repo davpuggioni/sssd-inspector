@@ -1,0 +1,48 @@
+[tools]
+go = "1.23"
+node = "20"
+npm = "9"
+"go:github.com/wailsapp/wails/v2/cmd/wails" = "2.11"
+
+[tasks.setup]
+description = "Install backend and frontend dependencies"
+run = """
+go mod tidy
+cd frontend && npm install
+"""
+
+[tasks."dev"]
+description = "Run the application in development mode with hot-reloading"
+depends = ["setup"]
+run = "wails dev"
+
+[tasks."build:deps"]
+description = "Install frontend dependencies for production build"
+run = "npm install --prefix frontend"
+
+[tasks."build:cli"]
+description = "Build highly optimized, minimal headless CLI binary"
+run = "go build -ldflags='-s -w' -trimpath -o sssd-inspector-cli cmd/sssd-inspector-cli/main.go"
+
+[tasks."build:gui"]
+description = "Build the standard GUI binary"
+depends = ["build:deps"]
+run = "wails build -platform linux/amd64 -ldflags '-w -s' -clean"
+
+[tasks."build:gui-webkit"]
+description = "Build the GUI binary using the legacy webkit2_41"
+depends = ["build:deps"]
+run = "wails build -platform linux/amd64 -tags webkit2_41 -ldflags '-w -s' -clean"
+
+[tasks.build]
+description = "Build both standard GUI and CLI binaries sequentially"
+depends = ["build:cli", "build:gui"]
+
+[tasks.run]
+description = "Run the application"
+depends = ["build"]
+run = "sssd-inspector"
+
+[tasks.test]
+description = "Run all unit and integration tests recursively with race detection"
+run = "go test -v -race -timeout=5m ./..."

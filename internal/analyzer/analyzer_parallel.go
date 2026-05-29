@@ -1,22 +1,18 @@
-// analyzer_parallel.go - Parallel analysis phases for SSSD Inspector
-// Provides concurrent execution of independent analysis steps
-// to improve performance on multi-core systems.
-
-package main
+// Package analyzer provides concurrent execution blocks and synchronized phase 
+// orchestrators to safely leverage multi-core systems during ingestion.
+package analyzer
 
 import (
-	"fmt"
 	"sync"
 )
 
 // analyzePhase2Parallel runs the Phase 2 config analysis steps concurrently.
-// These functions read different files and have no dependencies on each other,
-// making them safe to parallelize.
+// These functions read different files and have no dependencies on each other.
 func analyzePhase2Parallel(dirPath string, report *ReportData) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	// Helper to run analysis with mutex protection for the shared report
+	// Helper to run analysis with mutex protection for the shared report map
 	run := func(fn func(string, *ReportData)) {
 		wg.Add(1)
 		go func() {
@@ -27,15 +23,7 @@ func analyzePhase2Parallel(dirPath string, report *ReportData) {
 		}()
 	}
 
-	// These functions all read different files independently:
-	// - analyzePAM reads pam.txt (or config file)
-	// - analyzeNSSwitch reads nsswitch.conf
-	// - analyzeHosts reads hosts file
-	// - analyzeNSCD reads nscd.conf
-	// - analyzePackages reads rpm.txt
-	// - analyzeServices reads systemd.txt
-	// - analyzeMACStatus reads boot.txt / security-*.txt
-	// - analyzeDiskSpace reads fs-diskio.txt / storage.txt
+	// These functions execute independently across localized files
 	run(analyzePAM)
 	run(analyzeNSSwitch)
 	run(analyzeHosts)
@@ -47,7 +35,7 @@ func analyzePhase2Parallel(dirPath string, report *ReportData) {
 
 	wg.Wait()
 
-	// These depend on results from the parallel phase, so run sequentially afterwards
+	// Runs sequentially downstream since they rely on combined multi-file outputs
 	analyzeSSSDVersionAge(report)
 	analyzeSSSDFilePermissions(dirPath, report)
 }
@@ -113,7 +101,3 @@ func analyzePhase1Parallel(dirPath string, report *ReportData) {
 
 	wg.Wait()
 }
-
-// init registers the parallel analysis functions
-// These are used by analyzeData in analyzer_core.go when parallelism is beneficial.
-var _ = fmt.Sprintf // ensure fmt import is used if needed elsewhere

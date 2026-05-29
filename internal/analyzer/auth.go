@@ -1,5 +1,6 @@
-// analyzer_auth.go
-package main
+// Package analyzer provides comprehensive evaluation routines for base operating system 
+// authentication mechanisms, network namespaces, and Kerberos validation.
+package analyzer
 
 import (
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 )
 
+// analyzeDNS checks resolv.conf configuration states and cross-references connectivity logs
 func analyzeDNS(dirPath string, report *ReportData) {
 	dnsStatusMap := make(map[string]string)
 
@@ -56,6 +58,7 @@ func analyzeDNS(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeTime validates system synchronization thresholds required for secure Kerberos handshakes
 func analyzeTime(dirPath string, report *ReportData) {
 	timeFiles := []string{"systemd.txt", "ntp.txt"}
 
@@ -110,6 +113,7 @@ func analyzeTime(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeKerberosAndKeytab inspects security algorithm mappings and verification principles
 func analyzeKerberosAndKeytab(dirPath string, report *ReportData) {
 	krb5Content := extractSection(dirPath, "etc.txt", "# /etc/krb5.conf")
 
@@ -162,6 +166,7 @@ func analyzeKerberosAndKeytab(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzePAM validates Pluggable Authentication Module configurations
 func analyzePAM(dirPath string, report *ReportData) {
 	pam := readFileSafe(dirPath, "pam.txt")
 	if strings.Contains(pam, "FORCE_OPTION_PAM=1") || strings.Contains(pam, "General Data Protection Regulation") {
@@ -176,6 +181,7 @@ func analyzePAM(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeNSSwitch reviews Name Service Switch fallback structures
 func analyzeNSSwitch(dirPath string, report *ReportData) {
 	nssContent := readFileSafe(dirPath, "nsswitch.conf")
 	if nssContent == "" {
@@ -225,6 +231,7 @@ func analyzeNSSwitch(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeHosts validates basic hostname lookup rules
 func analyzeHosts(dirPath string, report *ReportData) {
 	hasLocalhost := false
 	scanFiles(dirPath, []string{"hosts"}, func(line string) {
@@ -238,6 +245,7 @@ func analyzeHosts(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeNSCD catches conflicting system caching configurations
 func analyzeNSCD(dirPath string, report *ReportData) {
 	scanFiles(dirPath, []string{"nscd.conf"}, func(line string) {
 		line = strings.TrimSpace(line)
@@ -251,6 +259,7 @@ func analyzeNSCD(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzePackages monitors package versions installed via RPM
 func analyzePackages(dirPath string, report *ReportData) {
 	inPackageBlock := false
 	scanFiles(dirPath, []string{"rpm.txt"}, func(line string) {
@@ -266,6 +275,7 @@ func analyzePackages(dirPath string, report *ReportData) {
 	report.SSSDPackages = deduplicateProblems(report.SSSDPackages)
 }
 
+// analyzeSSSDVersionAge alerts on deprecated engine releases
 func analyzeSSSDVersionAge(report *ReportData) {
 	major, minor := getSSSDVersion(report.SSSDPackages)
 	if major == 1 {
@@ -275,6 +285,7 @@ func analyzeSSSDVersionAge(report *ReportData) {
 	}
 }
 
+// analyzeSSSDFilePermissions tracks structural state violations across SSSD directories
 func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 	major, minor := getSSSDVersion(report.SSSDPackages)
 	if major == 0 {

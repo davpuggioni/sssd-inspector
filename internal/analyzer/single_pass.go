@@ -1,8 +1,6 @@
-// analyzer_singlepass.go - Single-pass log scanner for SSSD Inspector
-// Performs ONE scan of all log files extracting ALL information simultaneously,
-// instead of scanning the same files ~29 times during analysis.
-
-package main
+// Package analyzer provides comprehensive single-pass file scraping pipelines
+// to match multiple overlapping pattern sequences simultaneously.
+package analyzer
 
 import (
 	"context"
@@ -36,9 +34,8 @@ type patternInfo struct {
 	kbArticle   *TIDArticle // non-nil only for KB patterns
 }
 
-// SinglePassResult holds ALL results extracted from log files in a single scan.
-// These results are passed to individual analyzer functions to avoid re-scanning.
-type SinglePassResult struct {
+// singlePassResult holds ALL results extracted from log files in a single scan.
+type singlePassResult struct {
 	SSSDLogErrors []SSSDLogError
 	Timeline      []TimelineEvent
 
@@ -61,25 +58,22 @@ type SinglePassResult struct {
 // performSinglePassScan does ONE scan of all log files (sssd.txt, messages, messages.txt)
 // and extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
 // account status, KB article evidence, and timeline events.
-// This eliminates the ~29 separate scans that were previously performed.
-func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArticle) *SinglePassResult {
+func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArticle) *singlePassResult {
 	return performSinglePassScanOnFiles(dirPath, []string{"sssd.txt", "messages", "messages.txt"}, macType, kbArticles)
 }
 
 // performSinglePassScanOnFiles does ONE scan of the specified log files
 // and extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
 // account status, KB article evidence, and timeline events.
-// This variant allows specifying custom log files (e.g., *.log from /var/log/sssd/).
-func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType string, kbArticles []TIDArticle) *SinglePassResult {
-	result := &SinglePassResult{
+func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType string, kbArticles []TIDArticle) *singlePassResult {
+	result := &singlePassResult{
 		KBEvidence: make(map[string][]string),
 	}
 
-	// Build error patterns
+	// Build error patterns using the YAML engine in logs.go
 	errorPatterns := buildErrorPatterns(macType)
 
 	// STEP 1: Build combined pattern lookup
-	// Each matched string maps to its category and metadata
 	type combinedPattern struct {
 		pattern string
 		info    patternInfo
@@ -104,16 +98,12 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		category matchCategory
 		desc     string
 	}{
-		// Account expired / revoked credentials
 		{"User account has expired", mcAccountExpired, ""},
 		{"Clients credentials have been revoked", mcAccountExpired, ""},
-		// Watchdog
 		{"terminated by own WATCHDOG", mcWatchdog, ""},
-		// Crypto bug
 		{"service key not available", mcCryptoBug, ""},
 		{"TGT failed verification", mcCryptoBug, ""},
 		{"KDC has no support for encryption type", mcCryptoBug, ""},
-		// Keytab
 		{"KVNO Principal", mcKeytabPrincipal, ""},
 		{"Default principal:", mcKeytabPrincipal, ""},
 		{"Key table file '/etc/krb5.keytab' not found", mcKeytabNotFound, ""},
@@ -143,14 +133,13 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		}
 	}
 
-	// No patterns to match? Return empty results
 	if len(allPatterns) == 0 {
 		return result
 	}
 
 	// STEP 2: Build the mega-regex from all patterns
 	var quotedPatterns []string
-	patternLookup := make(map[string]patternInfo) // lowercased matched text -> info
+	patternLookup := make(map[string]patternInfo)
 
 	for _, cp := range allPatterns {
 		qp := regexp.QuoteMeta(cp.pattern)
@@ -158,24 +147,17 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		patternLookup[strings.ToLower(cp.pattern)] = cp.info
 	}
 
-	// Use the global regex cache (compiled once per process)
 	combinedRegex := globalRegexCache.Get("(?i)(" + strings.Join(quotedPatterns, "|") + ")")
-
-	// Time regex for timeline extraction (also cached)
 	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
 
-	// Per-description error example storage (max 3 per description)
 	errorExamples := make(map[string][]string)
 
-	// Context with timeout for safety
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
 	defer cancel()
 
-	// Pre-allocate timeline with reasonable capacity to reduce reallocations
-	// Most supportconfig files have < 1000 error lines
 	timelineCapacity := 1000
 	if len(errorPatterns) > 0 {
-		timelineCapacity = len(errorPatterns) * 2 // upper bound estimate
+		timelineCapacity = len(errorPatterns) * 2
 		if timelineCapacity > 5000 {
 			timelineCapacity = 5000
 		}
@@ -189,10 +171,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 			return
 		}
 
-		// Quick pre-filter: skip lines that don't contain SSSD-related keywords.
-		// This avoids running the expensive mega-regex on ~90% of syslog lines
-		// that are unrelated (kernel messages, sshd, cron, etc.)
-		// The ToLower call here is a bottleneck but avoids regex on 90% of lines.
 		lowered := strings.ToLower(lineTrimmed)
 		if !strings.Contains(lowered, "sssd") &&
 			!strings.Contains(lowered, "krb5") &&
@@ -215,12 +193,10 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 			return
 		}
 
-		// Ignore winbindd lines to prevent false positives
 		if strings.Contains(lowered, "winbindd") {
 			return
 		}
 
-		// Match against combined regex
 		matches := combinedRegex.FindAllString(lineTrimmed, -1)
 		for _, match := range matches {
 			info, ok := patternLookup[strings.ToLower(match)]
@@ -230,7 +206,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 
 			switch info.category {
 			case mcError:
-				// Collect error examples (max 3 per description)
 				examples := errorExamples[info.description]
 				if len(examples) < 3 {
 					isDupe := false
@@ -244,7 +219,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 						errorExamples[info.description] = append(examples, lineTrimmed)
 					}
 				}
-				// Build timeline event
 				ts := extractTimestamp(lineTrimmed, timeRegex)
 				result.Timeline = append(result.Timeline, TimelineEvent{
 					Timestamp: ts,
@@ -272,7 +246,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 
 			case mcKB:
 				if info.kbArticle != nil {
-					// Only take first 3 lines of evidence per article
 					evidence := result.KBEvidence[info.kbArticle.TIDID]
 					if len(evidence) < 3 {
 						cleanLine := strings.TrimSpace(lineTrimmed)
@@ -300,7 +273,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		})
 	}
 
-	// Sort timeline chronologically
 	sort.SliceStable(result.Timeline, func(i, j int) bool {
 		ti := normalizeTimestamp(result.Timeline[i].Timestamp)
 		tj := normalizeTimestamp(result.Timeline[j].Timestamp)
@@ -316,7 +288,6 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		return ti < tj
 	})
 
-	// Build problem/warning strings from quick pattern results
 	if result.AccountExpired {
 		result.Problems = append(result.Problems, "[AUTHENTICATION] Logs indicate an Active Directory user account is expired, locked, or credentials have been revoked.")
 	}
@@ -340,11 +311,11 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 func extractTimestamp(line string, timeRegex *regexp.Regexp) string {
 	tsMatch := timeRegex.FindStringSubmatch(line)
 	if len(tsMatch) > 1 && tsMatch[1] != "" {
-		return tsMatch[1] // SSSD native format
+		return tsMatch[1]
 	} else if len(tsMatch) > 2 && tsMatch[2] != "" {
-		return tsMatch[2] // Syslog format
+		return tsMatch[2]
 	} else if len(tsMatch) > 3 && tsMatch[3] != "" {
-		return tsMatch[3] // ISO 8601 format
+		return tsMatch[3]
 	}
 	return "Unknown Time"
 }
@@ -360,7 +331,6 @@ func sortedErrorDescriptions(errorMap map[string][]string) []string {
 }
 
 // analyzeKerberosConfig analyzes krb5.conf without scanning log files.
-// This replaces the log-scanning portion of analyzeKerberosAndKeytab.
 func analyzeKerberosConfig(dirPath string, report *ReportData) {
 	krb5Content := extractSection(dirPath, "etc.txt", "# /etc/krb5.conf")
 
@@ -398,7 +368,6 @@ func analyzeKerberosConfig(dirPath string, report *ReportData) {
 }
 
 // matchKBArticlesWithEvidence matches KB articles using pre-collected evidence from single-pass.
-// It only scans for config patterns (not log patterns, which are already done).
 func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles []TIDArticle, evidence map[string][]string) {
 	configFiles := []string{"sssd.conf"}
 	activeSecModule := report.MACType
@@ -414,17 +383,14 @@ func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles 
 			}
 		}
 
-		// Skip SELinux TIDs on AppArmor systems
 		if activeSecModule == "AppArmor" && isSELinuxArticle {
 			continue
 		}
 
 		article.Evidence = evidence[article.TIDID]
 
-		// Check if log pattern matched (evidence exists) or no log patterns required
 		logMatched := len(article.LogPatterns) == 0 || len(article.Evidence) > 0
 
-		// Check config patterns (still need to scan config files)
 		configMatched := len(article.ConfigPatterns) == 0
 		if !configMatched {
 			for _, pattern := range article.ConfigPatterns {
@@ -450,7 +416,6 @@ func loadKBArticles(dirPath string) []TIDArticle {
 	var kbArticles []TIDArticle
 	kbDir := "kb_articles"
 
-	// Try executable-relative path first
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")

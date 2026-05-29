@@ -1,5 +1,5 @@
 // analyzer_auth_test.go
-package main
+package analyzer
 
 import (
 	"os"

@@ -1,5 +1,5 @@
-// types.go
-package main
+// Package analyzer handles the core file processing, data structures, and schemas.
+package analyzer
 
 // SSSDLogError holds the human-readable description and samples of the actual log lines
 type SSSDLogError struct {
@@ -18,7 +18,7 @@ type TIDArticle struct {
 	Evidence       []string `json:"-"` // Log lines that triggered the match
 }
 
-// ReportData holds the results of our analysis
+// ReportData holds the complete structural matrix result of our analysis
 type ReportData struct {
 	AppVersion    string `json:"app_version"`
 	Timestamp     string `json:"timestamp"`

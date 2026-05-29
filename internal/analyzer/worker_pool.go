@@ -1,5 +1,6 @@
-// Package main provides parallel file processing utilities for SSSD Inspector
-package main
+// Package analyzer provides concurrent engine pools and data streaming models
+// for highly performant, I/O-bound SSSD log inspection.
+package analyzer
 
 import (
 	"bufio"

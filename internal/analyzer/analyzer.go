@@ -1,13 +1,155 @@
-// analyzer_core.go
-package main
+// Package analyzer acts as the centralized orchestrator, CLI entry processor,
+// and single-pass execution engine for parsing SSSD diagnostic datasets.
+package analyzer
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
-	"sssd-inspector/constants"
 	"strconv"
 	"strings"
 	"time"
+
+	"sssd-inspector/internal/constants"
 )
+
+// ============================================================================
+// SECTION 1: CLI Entrypoints (From original shared.go / internal/analyzer.go)
+// ============================================================================
+
+// RunCLI executes the application in command-line mode.
+// It handles both directory and archive inputs, performs analysis, and generates reports.
+func RunCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
+	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
+	if anonymize {
+		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
+	}
+
+	// Mock progress func for CLI output so the streaming engine doesn't panic
+	progressFunc := func(msg string, pct int) {
+		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("error accessing path: %w", err)
+	}
+
+	var dirPath string
+	if info.IsDir() {
+		dirPath = path
+	} else {
+		// Uses internal package level helper
+		dirPath, err = ExtractArchiveToTemp(path, progressFunc)
+		if err != nil {
+			return fmt.Errorf("extract error: %w", err)
+		}
+		defer os.RemoveAll(dirPath) // Clean up temp files when done
+	}
+
+	// Uses internal package level helper
+	report := AnalyzeData(dirPath, anonymize, progressFunc)
+
+	report.Timestamp = time.Now().Format(constants.TimestampFormat)
+	report.AppVersion = constants.AppVersion
+
+	reportText := BuildTextReport(report)
+	fmt.Println("\n" + reportText)
+
+	baseName := filepath.Base(path)
+
+	if genTxt {
+		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat
+		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing txt report: %w", err)
+		}
+		fmt.Printf("Text report saved to: %s\n", txtReportFile)
+	}
+
+	if genHtml {
+		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
+		WriteHTMLReportFile(report, htmlReportFile)
+		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+	}
+
+	return nil
+}
+
+// RunLogDirAnalyze analyzes raw SSSD log files directly from a directory (e.g., /var/log/sssd/).
+// Unlike RunCLI, it does not expect a supportconfig archive or directory layout.
+func RunLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool) error {
+	fmt.Printf("Analyzing raw SSSD log directory: %s\n", dirPath)
+	if anonymize {
+		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
+	}
+
+	// Verify the directory exists
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return fmt.Errorf("error accessing log directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dirPath)
+	}
+
+	// Progress func for CLI output
+	progressFunc := func(msg string, pct int) {
+		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
+	}
+
+	// Find all .log files in the directory
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return fmt.Errorf("error reading log directory: %w", err)
+	}
+
+	var logFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".log") {
+			logFiles = append(logFiles, entry.Name())
+		}
+	}
+
+	if len(logFiles) == 0 {
+		return fmt.Errorf("no .log files found in directory: %s", dirPath)
+	}
+
+	fmt.Printf("Found %d SSSD log files\n", len(logFiles))
+
+	// Uses internal package level helper
+	report := AnalyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+
+	report.Timestamp = time.Now().Format(constants.TimestampFormat)
+	report.AppVersion = constants.AppVersion
+
+	reportText := BuildTextReport(report)
+	fmt.Println("\n" + reportText)
+
+	baseName := filepath.Base(dirPath)
+
+	if genTxt {
+		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat
+		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing txt report: %w", err)
+		}
+		fmt.Printf("Text report saved to: %s\n", txtReportFile)
+	}
+
+	if genHtml {
+		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
+		WriteHTMLReportFile(report, htmlReportFile)
+		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// SECTION 2: Core Processing Engines & Helpers (From original analyzer_core.go)
+// ============================================================================
 
 // deduplicateProblems removes duplicate strings from a slice efficiently
 func deduplicateProblems(problems []string) []string {
@@ -45,9 +187,10 @@ func getSSSDVersion(packages []string) (int, int) {
 	return 0, 0
 }
 
-// analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
+// AnalyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
 // Now uses Single-Pass scanning for log files to eliminate ~29 redundant scans.
-func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
+// Exported (Capitalized) so the root-level bridge can see it.
+func AnalyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
 	// Clear file cache from previous analysis to ensure fresh data
 	globalFileCache.Clear()
 
@@ -260,11 +403,12 @@ func anonymizeReport(r *ReportData) {
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
 }
 
-// analyzeLogsOnly performs a lightweight analysis on raw SSSD log files only.
+// AnalyzeLogsOnly performs a lightweight analysis on raw SSSD log files only.
 // This is used by -logdir mode where no supportconfig metadata is available.
 // It skips all system/config analysis and only scans the provided log files
 // for SSSD error patterns, building a timeline and collecting problems/warnings.
-func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
+// Exported (Capitalized) so the external wrappers can call it.
+func AnalyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
 	globalFileCache.Clear()
 
 	var report ReportData

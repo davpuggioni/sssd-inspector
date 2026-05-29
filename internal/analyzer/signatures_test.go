@@ -1,5 +1,5 @@
 // analyzer_logs_test.go
-package main
+package analyzer
 
 import (
 	"encoding/json"

@@ -1,8 +1,10 @@
-// Package config provides configuration management for SSSD Inspector
+// Package config provides configuration management and automated environment loading 
+// for the SSSD Inspector parsing engine.
 package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -10,9 +12,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the complete application configuration
+// Global configuration instance exposed for application-wide parameter lookups
+var Global *Config
+
+// init automatically executes on application startup to load and validate configurations
+func init() {
+	var err error
+	Global, err = LoadConfig("")
+	if err != nil {
+		log.Printf("Warning: %v, using defaults", err)
+		Global = DefaultConfig()
+	}
+
+	// Validate configuration integrity
+	if err := Global.Validate(); err != nil {
+		log.Printf("Configuration validation error: %v", err)
+	}
+}
+
+// Config represents the complete application configuration matrix
 type Config struct {
-	App           AppConfig           `yaml:"app"`
+	App           AppMetadata         `yaml:"app"`
 	Analysis      AnalysisConfig      `yaml:"analysis"`
 	Files         FilesConfig         `yaml:"files"`
 	GUI           GUIConfig           `yaml:"gui"`
@@ -24,8 +44,8 @@ type Config struct {
 	CLI           CLIConfig           `yaml:"cli"`
 }
 
-// AppConfig contains application metadata
-type AppConfig struct {
+// AppMetadata contains application identity metadata
+type AppMetadata struct {
 	Name    string `yaml:"name"`
 	Version string `yaml:"version"`
 	Author  string `yaml:"author"`
@@ -127,7 +147,7 @@ type CLIConfig struct {
 const (
 	DefaultAppName           = "SSSD Inspector"
 	DefaultAppVersion        = "0.2.0"
-	DefaultMaxFileSize       = "100MB"
+	DefaultMaxFileSize        = "100MB"
 	DefaultMaxLineLength     = "1MB"
 	DefaultBufferSize        = "64KB"
 	DefaultTimeout           = "30m"
@@ -145,10 +165,10 @@ const (
 	DefaultMaxBackups        = 5
 )
 
-// DefaultConfig returns a default configuration
+// DefaultConfig returns a default configuration fallback block
 func DefaultConfig() *Config {
 	return &Config{
-		App: AppConfig{
+		App: AppMetadata{
 			Name:    DefaultAppName,
 			Version: DefaultAppVersion,
 		},
@@ -236,7 +256,6 @@ func DefaultConfig() *Config {
 
 // LoadConfig loads configuration from file or returns default
 func LoadConfig(configPath string) (*Config, error) {
-	// Try to load from specified path
 	if configPath != "" {
 		config := DefaultConfig()
 		if err := loadFromFile(configPath, config); err != nil {
@@ -245,7 +264,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		return config, nil
 	}
 
-	// Try default locations
 	locations := []string{
 		"config.yaml",
 		filepath.Join(os.Getenv("HOME"), ".sssd-inspector", "config.yaml"),
@@ -262,7 +280,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		}
 	}
 
-	// Return default config if no file found
 	return DefaultConfig(), nil
 }
 
@@ -272,13 +289,11 @@ func loadFromFile(path string, config *Config) error {
 	if err != nil {
 		return err
 	}
-
 	return yaml.Unmarshal(data, config)
 }
 
 // SaveConfig saves configuration to file
 func SaveConfig(config *Config, path string) error {
-	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
@@ -292,13 +307,11 @@ func SaveConfig(config *Config, path string) error {
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-
 	return nil
 }
 
-// Validate validates the configuration
+// Validate validates the configuration parameters
 func (c *Config) Validate() error {
-	// Validate app config
 	if c.App.Name == "" {
 		return fmt.Errorf("app name cannot be empty")
 	}
@@ -306,21 +319,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("app version cannot be empty")
 	}
 
-	// Validate analysis config
 	if _, err := time.ParseDuration(c.Analysis.Timeout); err != nil {
 		return fmt.Errorf("invalid timeout format: %s", c.Analysis.Timeout)
 	}
 
-	// Validate GUI config
 	if c.GUI.Window.Width <= 0 || c.GUI.Window.Height <= 0 {
 		return fmt.Errorf("window dimensions must be positive")
 	}
 
-	// Validate performance config
 	if c.Performance.MaxWorkers <= 0 {
 		return fmt.Errorf("max_workers must be positive")
 	}
-
 	return nil
 }
 
@@ -346,7 +355,6 @@ func (c *Config) GetTimeoutDuration() (time.Duration, error) {
 
 // parseSize parses size string (e.g., "100MB") to bytes
 func parseSize(size string) (int64, error) {
-	// Simple implementation - could be enhanced with a proper size parser
 	var multiplier int64
 	var numStr string
 

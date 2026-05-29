@@ -1,5 +1,6 @@
-// analyzer_system.go
-package main
+// Package analyzer handles operating system environmental states, hardware metrics,
+// initialization health, and platform virtualization parameters.
+package analyzer
 
 import (
 	"fmt"
@@ -11,6 +12,7 @@ import (
 // Global regex for parsing systemd exit codes
 var reStatus = regexp.MustCompile(`status=(\d+)`)
 
+// analyzeBasicHealth checks environment logs to pull high-level context tokens
 func analyzeBasicHealth(dirPath string, report *ReportData) {
 	scanFiles(dirPath, []string{"basic-health-check.txt", "basic-environment.txt"}, func(line string) {
 		if strings.HasPrefix(line, "SR#:") {
@@ -19,6 +21,7 @@ func analyzeBasicHealth(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzeOSAndHardware inspects OS platform naming definitions and kernel strings
 func analyzeOSAndHardware(dirPath string, report *ReportData) {
 	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
@@ -43,6 +46,7 @@ func analyzeOSAndHardware(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzeHostnameAndFQDN monitors system labels to catch short-name infrastructure risks
 func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
 	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
@@ -55,6 +59,7 @@ func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzeSCC extracts subscription registration statuses from standard log output
 func analyzeSCC(dirPath string, report *ReportData) {
 	sccFound := false
 	scanFiles(dirPath, []string{"updates.txt"}, func(line string) {
@@ -68,6 +73,7 @@ func analyzeSCC(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzePerformance tracks critical kernel metrics and high IO-wait indicators
 func analyzePerformance(dirPath string, report *ReportData) {
 	if anyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
 		report.Problems = append(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
@@ -87,6 +93,7 @@ func analyzePerformance(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzeServices scans initialization logs to map daemon execution states and structural crashes
 func analyzeServices(dirPath string, report *ReportData) {
 	var sssdStatusBlock []string
 	inSssdStatus := false
@@ -144,6 +151,7 @@ func analyzeServices(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeDiskSpace reads volume allocation states to flag partition exhaustions
 func analyzeDiskSpace(dirPath string, report *ReportData) {
 	scanFiles(dirPath, []string{"fs-diskio.txt", "storage.txt"}, func(line string) {
 		fields := strings.Fields(line)
@@ -158,6 +166,7 @@ func analyzeDiskSpace(dirPath string, report *ReportData) {
 	})
 }
 
+// analyzeMACDenials captures mandatory access control rules violations
 func analyzeMACDenials(dirPath string, report *ReportData) {
 	var macDenials []string
 	scanFiles(dirPath, []string{"security-apparmor.txt", "security-selinux.txt"}, func(line string) {
@@ -175,6 +184,7 @@ func analyzeMACDenials(dirPath string, report *ReportData) {
 	}
 }
 
+// analyzeMACStatus maps active security restriction frameworks on the host environment
 func analyzeMACStatus(dirPath string, report *ReportData) {
 	report.MACType = "Unknown/None"
 

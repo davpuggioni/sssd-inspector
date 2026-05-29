@@ -1,5 +1,5 @@
-// report.go
-package main
+// Package analyzer handles the core file processing, data streaming, and report generation.
+package analyzer
 
 import (
 	"fmt"
@@ -9,11 +9,12 @@ import (
 	"strings"
 )
 
-func buildTextReport(report ReportData) string {
+// BuildTextReport transforms raw structured analysis maps into a clean CLI layout string.
+func BuildTextReport(report ReportData) string {
 	var sb strings.Builder
 
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("             SUPPORTCONFIG SSSD ANALYSIS REPORT\n")
+	sb.WriteString("              SUPPORTCONFIG SSSD ANALYSIS REPORT\n")
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 	sb.WriteString(fmt.Sprintf(" Generated: %s\n", report.Timestamp))
 	if report.SupportCaseID != "" {
@@ -40,7 +41,7 @@ func buildTextReport(report ReportData) string {
 	}
 
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
-	sb.WriteString("               AD / KERBEROS INTEGRATION CHECKS\n")
+	sb.WriteString("             AD / KERBEROS INTEGRATION CHECKS\n")
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
 
 	sb.WriteString(fmt.Sprintf("[+] DNS Nameservers:   %s\n", strings.Join(report.Nameservers, ", ")))
@@ -73,7 +74,7 @@ func buildTextReport(report ReportData) string {
 	}
 
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                 SSSD LOG ERRORS (sssd.txt)\n")
+	sb.WriteString("                  SSSD LOG ERRORS (sssd.txt)\n")
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 	if len(report.SSSDLogErrors) == 0 {
 		sb.WriteString(" [+] No critical AD/Kerberos errors found in SSSD logs.\n")
@@ -87,7 +88,7 @@ func buildTextReport(report ReportData) string {
 	}
 
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                     ACTIONABLE PROBLEMS\n")
+	sb.WriteString("                       ACTIONABLE PROBLEMS\n")
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 
 	if len(report.Problems) == 0 {
@@ -100,7 +101,7 @@ func buildTextReport(report ReportData) string {
 
 	if len(report.MACDenialExamples) > 0 {
 		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("              APPARMOR / SELINUX DENIALS FOUND\n")
+		sb.WriteString("               APPARMOR / SELINUX DENIALS FOUND\n")
 		sb.WriteString(strings.Repeat("-", 60) + "\n")
 		for _, line := range report.MACDenialExamples {
 			sb.WriteString(fmt.Sprintf(" [!] %s\n", line))
@@ -109,7 +110,7 @@ func buildTextReport(report ReportData) string {
 
 	if len(report.Warnings) > 0 {
 		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("                 TUNING & DIAGNOSTIC HINTS\n")
+		sb.WriteString("                  TUNING & DIAGNOSTIC HINTS\n")
 		sb.WriteString(strings.Repeat("-", 60) + "\n")
 		for _, warn := range report.Warnings {
 			sb.WriteString(fmt.Sprintf(" [i] %s\n", warn))
@@ -135,13 +136,14 @@ func buildTextReport(report ReportData) string {
 	}
 
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
+	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support - Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 
 	return sb.String()
 }
 
-func writeHTMLReportFile(report ReportData, filename string) {
+// writeHTMLReportFile compiles template values into a clean, standalone diagnostic document on disk.
+func WriteHTMLReportFile(report ReportData, filename string) {
 	const tpl = `
 <!DOCTYPE html>
 <html>
@@ -303,7 +305,7 @@ func writeHTMLReportFile(report ReportData, filename string) {
 {{end}}
 
 	<div class="footer">
-		sssd-inspector v{{.AppVersion}} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
+		sssd-inspector v{{.AppVersion}} - SUSE Technical Support - Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
 	</div>
 </body>
 </html>

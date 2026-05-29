@@ -1,5 +1,5 @@
 // Package main tests for parallel file processing utilities
-package main
+package analyzer
 
 import (
 	"fmt"

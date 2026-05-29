@@ -1,5 +1,5 @@
-// Package main provides caching utilities for the scanning engine
-package main
+// Package analyzer provides caching utilities and memory allocation pools for the scanning engine.
+package analyzer
 
 import (
 	"bufio"
@@ -39,7 +39,7 @@ func (rc *RegexCache) Get(pattern string) *regexp.Regexp {
 	defer rc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if re, ok := rc.patterns[pattern]; ok {
+	if re, ok = rc.patterns[pattern]; ok {
 		return re
 	}
 
@@ -105,7 +105,7 @@ func (fc *FileCache) GetLines(dirPath, fileName string) []string {
 	defer fc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if lines, ok := fc.buffers[cacheKey]; ok {
+	if lines, ok = fc.buffers[cacheKey]; ok {
 		return lines
 	}
 

@@ -1,21 +1,18 @@
-//go:build cli
-
-// Package main is the entry point for SSSD Inspector CLI mode
-// This file contains the main function for the static CLI binary
-package main
+package analyzer
 
 import (
 	"flag"
 	"fmt"
 	"os"
 
-	"sssd-inspector/constants"
+	"sssd-inspector/internal/config"
+	"sssd-inspector/internal/constants"
 )
 
-// main is the application entry point for CLI mode
-// It handles command-line argument parsing and executes CLI-only operations
-func main() {
-	// Setup CLI Flags using configuration constants
+// HandleCommandLineArgs is the single source of truth for parsing CLI flags.
+// It returns 'true' if a CLI command was executed, or 'false' if it should fallback to GUI.
+func HandleCommandLineArgs(exitOnNoArgs bool) bool {
+	// 1. Define all application flags in one central place
 	versionShort := flag.Bool(constants.FlagVersion, false, constants.DescVersion)
 	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
 	logDir := flag.String(constants.FlagLogDir, "", constants.DescLogDir)
@@ -24,63 +21,62 @@ func main() {
 	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
 	flag.Parse()
 
+	// 2. Action: Version check
 	if *versionShort {
 		fmt.Printf("%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
 		os.Exit(0)
 	}
 
-	// LogDir mode: analyze raw SSSD log files directly (e.g., /var/log/sssd/)
+	// 3. Action: Log directory processing
 	if *logDir != "" {
-		if err := runLogDirAnalyze(*logDir, *txtReport, *htmlReport, *anonymize); err != nil {
+		if err := RunLogDirAnalyze(*logDir, *txtReport, *htmlReport, *anonymize); err != nil {
 			fmt.Fprintf(os.Stderr, "LogDir analysis failed: %v\n", err)
 			os.Exit(1)
 		}
-		os.Exit(0)
+		return true
 	}
 
-	// Traffic Cop Logic (If they used the strict -analyze flag)
+	// 4. Action: Archive package processing
 	if *cliPath != "" {
-		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize); err != nil {
+		if err := RunCLI(*cliPath, *txtReport, *htmlReport, *anonymize); err != nil {
 			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
 			os.Exit(1)
 		}
-		os.Exit(0)
+		return true
 	}
 
-	// Fallback logic for positional arguments
+	// 5. Action: Positional argument fallbacks (e.g., dragging a file onto the binary)
 	if flag.NArg() > 0 {
 		path := flag.Arg(0)
 		genTxt := *txtReport
 		genHtml := *htmlReport
 		genAnonymize := *anonymize
 
-		// Manual flag scanning for format flags
-		for _, arg := range os.Args[1:] {
-			if arg == "-txt" || arg == "--txt" {
-				genTxt = true
-			}
-			if arg == "-html" || arg == "--html" {
-				genHtml = true
-			}
-			if arg == "-anonymize" || arg == "--anonymize" {
-				genAnonymize = true
-			}
-		}
-
-		// Apply defaults from configuration if no format specified
-		if !genTxt && !genHtml && appConfig != nil && appConfig.CLI.DefaultGenerateBothFormats {
+		if !genTxt && !genHtml && config.Global != nil && config.Global.CLI.DefaultGenerateBothFormats {
 			genTxt = true
 			genHtml = true
 		}
 
-		if err := runCLI(path, genTxt, genHtml, genAnonymize); err != nil {
+		if err := RunCLI(path, genTxt, genHtml, genAnonymize); err != nil {
 			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
 			os.Exit(1)
 		}
+		return true
+	}
+
+	// 6. Handling the difference between the Standalone CLI and Hybrid GUI apps
+	if exitOnNoArgs {
+		// The standalone server binary HAS to have arguments to run
+		PrintCLIUsage()
 		os.Exit(0)
 	}
 
-	// No arguments provided - show usage
+	// No flags detected, telling the root main.go it's safe to open the GUI window
+	return false
+}
+
+// PrintCLIUsage houses your central terminal help documentation
+func PrintCLIUsage() {
 	fmt.Printf("SSSD Inspector version %s (CLI)\n", constants.AppVersion)
 	fmt.Println("Usage: sssd-inspector [options] <path>")
 	fmt.Println("\nOptions:")
@@ -90,10 +86,4 @@ func main() {
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagTXT, "txt", constants.DescTXT)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagHTML, "html", constants.DescHTML)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagAnonymize, "anonymize", constants.DescAnonymize)
-	fmt.Println("\nExamples:")
-	fmt.Println("  sssd-inspector -analyze /path/to/supportconfig.txz")
-	fmt.Println("  sssd-inspector /path/to/supportconfig.txz -txt -html")
-	fmt.Println("  sssd-inspector /path/to/supportconfig.txz -anonymize")
-	fmt.Println("  sssd-inspector -logdir /var/log/sssd")
-	os.Exit(0)
 }

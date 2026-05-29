@@ -1,5 +1,5 @@
-// kb.go
-package main
+// Package analyzer handles knowledge base pattern matching, data correlations, and reporting.
+package analyzer
 
 import (
 	"encoding/json"
@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming
+// matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming.
+// Since it resides inside package analyzer, it can directly read globalRegexCache and scanFiles.
 func matchKBArticles(dirPath string, report *ReportData) {
 	exePath, err := os.Executable()
 	kbDir := "kb_articles"
