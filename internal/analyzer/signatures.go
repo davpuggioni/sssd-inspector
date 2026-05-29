@@ -4,9 +4,9 @@ package analyzer
 
 import (
 	"bufio"
+	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -14,6 +14,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// 💡 Tell the Go compiler to bake the file straight into the executable binary
+//go:embed sssd_error_patterns.yaml
+var embeddedAssets embed.FS
 
 // logFileNames lists the files to scan for SSSD log messages
 var logFileNames = []string{"sssd.txt", "messages", "messages.txt"}
@@ -53,7 +57,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	}
 }
 
-// buildErrorPatterns loads the diagnostic signature maps directly from the external yaml file,
+// buildErrorPatterns embeds the diagnostic signature maps directly from the external yaml file,
 // performing contextual filtering for SELinux and AppArmor environments dynamically.
 func buildErrorPatterns(macType string) map[string]string {
 	errorPatterns := make(map[string]string)
@@ -66,36 +70,10 @@ func buildErrorPatterns(macType string) map[string]string {
 		} `yaml:"SSSD_ERROR_PATTERNS"`
 	}
 
-	// Discover standard running runtime execution context
-	exePath, err := os.Executable()
-	exeDir := ""
-	if err == nil {
-		exeDir = filepath.Dir(exePath)
-	}
-
-	// Dynamic fallback mapping discovery hierarchy looking for sssd_error_patterns.yaml
-	locations := []string{
-		"sssd_error_patterns.yaml",                                                      // local dev path root
-		"../../sssd_error_patterns.yaml",                                                // 💡 Unit test fallback: climbs out of internal/analyzer to the project root
-		filepath.Join(exeDir, "sssd_error_patterns.yaml"),                               // distributed binary sidecar
-		filepath.Join(os.Getenv("HOME"), ".sssd-inspector", "sssd_error_patterns.yaml"),      // user configuration tree
-		"/etc/sssd-inspector/sssd_error_patterns.yaml",                                  // system global deployment
-	}
-
-	var data []byte
-	for _, loc := range locations {
-		if loc == "" {
-			continue
-		}
-		if b, readErr := os.ReadFile(loc); readErr == nil {
-			data = b
-			break
-		}
-	}
-
-	// Graceful fallback loop if the YAML payload fails to register on disk
-	if len(data) == 0 {
-		fmt.Fprintln(os.Stderr, "Warning: sssd_error_patterns.yaml asset could not be located. Log analysis rules skipped.")
+	// 💡 Read the configuration straight out of the binary's memory!
+	data, err := embeddedAssets.ReadFile("sssd_error_patterns.yaml")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Fatal structural error: Embedded sssd_error_patterns.yaml could not be read from binary memory.")
 		return errorPatterns
 	}
 
