@@ -3,6 +3,7 @@ package main
 
 import (
 	"regexp"
+	"sort"
 	"sssd-inspector/constants"
 	"strconv"
 	"strings"
@@ -202,10 +203,75 @@ func anonymizeReport(r *ReportData) {
 
 	// Capture domain and realm before any mutation, since r.SearchDomain and
 	// r.KerberosRealm get overwritten to their replacement values later in this
-	// function (lines 230-231), and subsequent maskString calls would lose the
+	// function (lines 320-321), and subsequent maskString calls would lose the
 	// original values needed for redaction.
 	origDomain := r.SearchDomain
 	origRealm := r.KerberosRealm
+
+	// Build a list of all known domain values to redact, including:
+	//   - SearchDomain (e.g., "corp.company.com")
+	//   - KerberosRealm (e.g., "CORP.COMPANY.COM")
+	//   - Domains found in sssd.conf snippet via a generic FQDN pattern
+	//     that catches all occurrences, including section headers like
+	//     [domain/sub.corp.company.com] and all key=value pairs.
+	//
+	// Instead of trying to parse specific config keys, we use a generic
+	// domain/FQDN regex that matches any string like "sub.example.com"
+	// or "SUB.EXAMPLE.COM" anywhere in the report text.
+	var domainValues []string
+	if origDomain != "" && origDomain != "None" {
+		domainValues = append(domainValues, origDomain)
+	}
+	if origRealm != "" && origRealm != "Not configured" {
+		domainValues = append(domainValues, origRealm)
+	}
+
+	// Generic FQDN regex: matches domain names like "sub.corp.company.com",
+	// "COMPANY.COM", or even "sub.corp.company" (NetBIOS or short AD name).
+	// It matches any string with at least one dot, avoiding matches inside
+	// IP addresses or email addresses (those have their own dedicated regex).
+	// Pattern breakdown:
+	//   (?i)              - case-insensitive
+	//   [a-z0-9]+         - label starting with alphanumeric
+	//   (?:[-][a-z0-9]+)* - optional hyphenated part in middle
+	//   (?:[.][a-z0-9]+(?:[-][a-z0-9]+)*)+ - one or more dot-separated labels
+	//   \b                - word boundary at end
+	fqdnRegex := regexp.MustCompile(`(?i)\b[a-z0-9]+(?:[-][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-][a-z0-9]+)*)+\b`)
+
+	// Extract all domain strings from the sssd.conf snippet using the FQDN regex.
+	// This catches domains in any context: section headers, key values, comments, etc.
+	if r.SSSDConfigSnippet != "" {
+		matches := fqdnRegex.FindAllString(r.SSSDConfigSnippet, -1)
+		for _, m := range matches {
+			domainValues = append(domainValues, m)
+		}
+	}
+
+	// Deduplicate domain values. If both a lowercase variant (e.g., "company.com")
+	// and its uppercase equivalent (e.g., "COMPANY.COM") exist, keep only the
+	// uppercase one since its case-insensitive regex already matches both forms
+	// and produces the correct uppercase replacement ("EXAMPLE.COM").
+	seenDomains := make(map[string]struct{})
+	var uniqueDomains []string
+	hasUpperVariant := make(map[string]bool)
+	for _, d := range domainValues {
+		if d == strings.ToUpper(d) {
+			hasUpperVariant[strings.ToLower(d)] = true
+		}
+	}
+	for _, d := range domainValues {
+		if _, ok := seenDomains[d]; !ok {
+			seenDomains[d] = struct{}{}
+			if d != strings.ToUpper(d) && hasUpperVariant[strings.ToLower(d)] {
+				continue
+			}
+			uniqueDomains = append(uniqueDomains, d)
+		}
+	}
+	// Sort by length descending so longer/more specific domains are matched first.
+	sort.Slice(uniqueDomains, func(i, j int) bool {
+		return len(uniqueDomains[i]) > len(uniqueDomains[j])
+	})
 
 	maskString := func(s string) string {
 		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
@@ -213,15 +279,13 @@ func anonymizeReport(r *ReportData) {
 		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
 		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
-		if origDomain != "" && origDomain != "None" {
-			// Case-insensitive domain redaction using (?i) flag and regexp.QuoteMeta
-			// to protect against mixed-case variants like "Corp.Example.Com"
-			domainRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(origDomain))
-			s = domainRegex.ReplaceAllString(s, "example.com")
-		}
-		if origRealm != "" && origRealm != "Not configured" {
-			realmRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(origRealm))
-			s = realmRegex.ReplaceAllString(s, "EXAMPLE.COM")
+		for _, d := range uniqueDomains {
+			dRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(d))
+			replacement := "example.com"
+			if d == strings.ToUpper(d) {
+				replacement = "EXAMPLE.COM"
+			}
+			s = dRegex.ReplaceAllString(s, replacement)
 		}
 		return s
 	}
