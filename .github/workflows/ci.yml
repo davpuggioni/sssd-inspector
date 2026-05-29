@@ -1,0 +1,32 @@
+name: CI Multi-Platform Build
+
+on:
+  push:
+    branches:
+      - project-restructure
+  pull_request:
+    branches:
+      - project-restructure
+  workflow_dispatch:
+
+jobs:
+  build-all-platforms:
+    name: Cross-Compile All Executables
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Mise & Project Go Compiler
+        uses: jdx/mise-action@v2
+        with:
+          cache: true
+
+      - name: Execute Multi-Platform Build Task
+        run: mise run build:all
+
+      - name: Archive Compiled Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: sssd-inspector-cli-releases
+          path: build/bin/
