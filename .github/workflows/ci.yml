@@ -23,7 +23,7 @@ jobs:
           cache: true
 
       - name: Execute Multi-Platform Build Task
-        run: mise run build:all
+        run: mise run build:cli-all
 
       - name: Archive Compiled Binaries
         uses: actions/upload-artifact@v4
