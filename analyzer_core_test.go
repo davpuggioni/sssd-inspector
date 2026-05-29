@@ -75,6 +75,57 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 	}
 }
 
+// Test: Verify sssd.conf config snippet gets domain redacted as well,
+// including domains from "domains =", "ad_domain =", and "ldap_search_base ="
+// that may differ from SearchDomain and KerberosRealm.
+func TestAnonymizeReport_ConfigSnippetDomain(t *testing.T) {
+	report := ReportData{
+		SearchDomain:  "company.com",
+		KerberosRealm: "COMPANY.COM",
+		SSSDConfigSnippet: `[sssd]
+domains = sub.corp.company.com
+services = nss, pam
+
+[domain/sub.corp.company.com]
+ad_domain = sub.corp.company.com
+ldap_search_base = dc=sub,dc=corp,dc=company,dc=com
+krb5_realm = CORP.COMPANY.COM
+`,
+		Problems: []string{
+			"Using ldap_search_base dc=sub,dc=corp,dc=company,dc=com",
+			"Domain sub.corp.company.com",
+		},
+	}
+
+	anonymizeReport(&report)
+
+	// The domains "sub.corp.company.com" and "CORP.COMPANY.COM" from sssd.conf
+	// should be redacted in the config snippet. The raw "dc=..." characters
+	// inside ldap_search_base are not a domain match (they lack dots).
+	if strings.Contains(report.SSSDConfigSnippet, "sub.corp.company.com") {
+		t.Errorf("SSSDConfigSnippet still contains unredacted 'sub.corp.company.com': %q", report.SSSDConfigSnippet)
+	}
+	if strings.Contains(report.SSSDConfigSnippet, "CORP.COMPANY") {
+		t.Errorf("SSSDConfigSnippet still contains unredacted 'CORP.COMPANY': %q", report.SSSDConfigSnippet)
+	}
+	// Verify all domains were redacted — check no original domain values remain
+	if strings.Contains(report.SSSDConfigSnippet, "company.com") || strings.Contains(report.SSSDConfigSnippet, "COMPANY") {
+		t.Errorf("SSSDConfigSnippet still contains unredacted domain: %q", report.SSSDConfigSnippet)
+	}
+	// Verify the values were replaced with example.com/EXAMPLE.COM
+	if !strings.Contains(report.SSSDConfigSnippet, "example.com") {
+		t.Errorf("SSSDConfigSnippet should contain redacted domain 'example.com', got: %q", report.SSSDConfigSnippet)
+	}
+	if !strings.Contains(report.SSSDConfigSnippet, "EXAMPLE.COM") {
+		t.Errorf("SSSDConfigSnippet should have 'CORP.COMPANY.COM' redacted to 'EXAMPLE.COM', got: %q", report.SSSDConfigSnippet)
+	}
+	for _, p := range report.Problems {
+		if strings.Contains(p, "sub.corp.company.com") {
+			t.Errorf("Problem still contains unredacted domain: %q", p)
+		}
+	}
+}
+
 // Test: Verify mixed-case domain redaction (e.g., "Corp.Example.Com")
 // This tests the case-insensitive regex replacement for domains
 func TestAnonymizeReport_MixedCaseDomain(t *testing.T) {
