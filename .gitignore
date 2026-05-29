@@ -11,8 +11,8 @@ yarn-error.log*
 # --- GO / BINARIES ---
 # Build folder and compiled bynary
 build/bin/
-sssd-inspector
-sssd-inspector-cli
+/sssd-inspector
+/sssd-inspector-cli
 
 # --- SECURITY ---
 .env
