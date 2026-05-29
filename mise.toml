@@ -20,23 +20,25 @@ run = "wails dev"
 description = "Install frontend dependencies for production build"
 run = "npm install --prefix frontend"
 
-[tasks."build:cli"]
+[tasks."build:cli-linux"]
 description = "Build highly optimized, minimal headless CLI binary"
-run = "go build -ldflags='-s -w' -trimpath -o sssd-inspector-cli cmd/sssd-inspector-cli/main.go"
+run = "GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -trimpath -o build/bin/sssd-inspector-cli-linux-amd64 cmd/sssd-inspector-cli/main.go"
 
-[tasks."build:gui"]
-description = "Build the standard GUI binary"
-depends = ["build:deps"]
-run = "wails build -platform linux/amd64 -ldflags '-w -s' -clean"
+[tasks."build:cli-windows"]
+description = "Compile standalone CLI for Windows (amd64)"
+run = "GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' -trimpath -o build/bin/sssd-inspector-cli-windows-amd64.exe cmd/sssd-inspector-cli/main.go"
 
-[tasks."build:gui-webkit"]
-description = "Build the GUI binary using the legacy webkit2_41"
-depends = ["build:deps"]
-run = "wails build -platform linux/amd64 -tags webkit2_41 -ldflags '-w -s' -clean"
+[tasks."build:cli-mac-intel"]
+description = "Compile standalone CLI for older Intel Macs (amd64)"
+run = "GOOS=darwin GOARCH=amd64 go build -ldflags='-s -w' -trimpath -o build/bin/sssd-inspector-cli-darwin-amd64 cmd/sssd-inspector-cli/main.go"
 
-[tasks.build]
-description = "Build both standard GUI and CLI binaries sequentially"
-depends = ["build:cli", "build:gui"]
+[tasks."build:cli-mac-silicon"]
+description = "Compile standalone CLI for Apple Silicon Macs (arm64)"
+run = "GOOS=darwin GOARCH=arm64 go build -ldflags='-s -w' -trimpath -o build/bin/sssd-inspector-cli-darwin-arm64 cmd/sssd-inspector-cli/main.go"
+
+[tasks."build:cli-all"]
+description = "Compile standalone CLI for ALL target platforms simultaneously"
+depends = ["build:cli-linux", "build:cli-windows", "build:cli-mac-intel", "build:cli-mac-silicon"]
 
 [tasks.run]
 description = "Run the application"
