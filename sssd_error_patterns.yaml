@@ -1,0 +1,828 @@
+SSSD_ERROR_PATTERNS:
+- pattern: '[13][Permission denied]'
+  description: >-
+    Permission Denied: SSSD cannot access a required file or log directory.
+- pattern: '[28][No space left on device]'
+  description: >-
+    Disk Full: No space left on device. SSSD cannot write cache or logs.
+- pattern: Access denied for uid
+  description: >-
+    Permission Denied: A local process was blocked from querying SSSD because its
+    UID is not in the 'allowed_uids' list.
+- pattern: Accessing a corrupted shared library
+  description: >-
+    Library Error: SSSD is trying to access a corrupted shared library.
+- pattern: Activated socket is not a UNIX listening socket
+  description: >-
+    Socket Error: systemd passed an invalid socket type to SSSD during socket activation.
+- pattern: AD domain can not be set as case-sensitive
+  description: >-
+    Configuration Error: 'case_sensitive = true' is set, but Active Directory domains
+    are strictly case-insensitive.
+- pattern: Added external source host
+  description: >-
+    [DIAGNOSTIC HINT] HBAC External Host: SSSD is successfully applying an HBAC rule
+    to an unmanaged, external host.
+- pattern: Attribute .* not allowed for user
+  description: >-
+    IFP Attribute Filter: An application requested an LDAP/AD attribute that is not
+    whitelisted. Add it to 'user_attributes' in the [ifp] section.
+- pattern: >-
+    Authentication failed and offline login is not allowed
+  description: >-
+    Offline Blocked: The authentication server is unreachable, and 'cache_credentials
+    = False' prevents the user from logging in with a cached password.
+- pattern: Both ldap_min_id and ldap_max_id either must be 0
+  description: >-
+    Configuration Error: 'ldap_min_id' and 'ldap_max_id' must both be positive integers,
+    or both left unset (0). You cannot set one without the other.
+- pattern: Broken IPA anchor
+  description: >-
+    ID View Corruption: SSSD encountered a malformed ID Override anchor. The cache
+    for overridden Active Directory users might be corrupted.
+- pattern: 'BUG: The DP request was completed'
+  description: >-
+    Internal DP Bug: The Data Provider finished an operation but failed to send a
+    reply back to the responder. This is an internal SSSD bug.
+- pattern: Cannot bypass cache and dp at the same time!
+  description: >-
+    Internal Request Error: SSSD attempted to bypass both the local cache and the
+    network provider simultaneously. The request was dropped.
+- pattern: Cannot connect to database for
+  description: >-
+    Cache Corrupt: Cannot connect to sysdb database due to 'File exists' lock.
+- pattern: Cannot determine the host name
+  description: >-
+    Missing Hostname for SELinux: SSSD cannot determine the machine's hostname, which
+    is strictly required to evaluate host-specific SELinux user maps in FreeIPA.
+- pattern: Cannot determine the Kerberos realm, aborting
+  description: >-
+    Missing Kerberos Realm: SSSD requires a Kerberos realm for GSSAPI auth, but none
+    was defined in sssd.conf or /etc/krb5.conf.
+- pattern: Cannot find KDC for requested realm
+  description: >-
+    KDC Unreachable: SSSD cannot locate the Kerberos server for the realm. Check DNS
+    SRV records (_kerberos._tcp) or the 'krb5_server' configuration.
+- pattern: Cannot load module
+  description: >-
+    Missing Provider Module: SSSD is trying to load a provider module (e.g., libsss_ad.so),
+    but the file is missing from the system. Check your installed packages.
+- pattern: cannot open shared object file
+  description: >-
+    Library Error: A required shared library (like libwbclient or libldb) is missing.
+- pattern: Cannot parse certificate
+  description: >-
+    Smartcard Driver Error: SSSD received a certificate payload from the PAM responder,
+    but it was corrupted or malformed. Check your pcscd or PAM PKCS#11 configuration.
+- pattern: Cannot resolve network address for KDC
+  description: >-
+    DNS Resolution Failed: SSSD found the KDC hostname but cannot resolve its IP address.
+    Check your DNS resolver (/etc/resolv.conf).
+- pattern: Client not found in Kerberos database
+  description: >-
+    Principal Missing: The user's Kerberos Principal (UPN) does not exist in the AD/IPA
+    database, or the realm is incorrect.
+- pattern: Clock skew too great
+  description: >-
+    Kerberos: Clock skew too great (Time synchronization failure with DC)
+- pattern: ConfDB initialization failed
+  description: >-
+    Fatal Config Error: SSSD failed to build its internal configuration database.
+    Check for sssd.conf syntax errors or disk space issues.
+- pattern: ConfDB initialization has failed [22]
+  description: >-
+    Config Error: SSSD couldn't load the configuration database. Check sssd.conf for
+    syntax errors or typos.
+- pattern: >-
+    ConfDB initialization has failed [Operation not permitted]
+  description: >-
+    Permission Denied: SSSD cannot access its configuration or state files.
+- pattern: Conflicting values for options
+  description: >-
+    Configuration Conflict: Your sssd.conf has conflicting cache expiration settings
+    (e.g., keeping offline credentials forever while strictly expiring the account
+    cache).
+- pattern: >-
+    Consider enabling sssd-ldap option ldap_ignore_unreadable_references
+  description: >-
+    Unreadable Group Member: A group contains an object SSSD cannot read (lack of
+    permissions or unknown type). This aborted the group lookup. Set 'ldap_ignore_unreadable_references
+    = True' to bypass.
+- pattern: Constraint violation
+  description: 'LDAP: Constraint violation (AD Policy restriction)'
+- pattern: Could not initialize backend
+  description: >-
+    Backend Crash: The Data Provider process completely failed to initialize. Check
+    the logs immediately preceding this error for missing keytabs, unreachable DNS,
+    or bad configuration.
+- pattern: Could not initialize InfoPipe responder
+  description: >-
+    InfoPipe Error: The SSSD D-Bus interface (ifp) failed to initialize. D-Bus based
+    identity queries will fail.
+- pattern: Could not initialize the ID map
+  description: >-
+    IPA ID Mapping Error: SSSD failed to initialize the ID map for FreeIPA/AD trusts,
+    likely due to bad range configurations or cache corruption. You may need to clear
+    the SSSD cache.
+- pattern: Could not open ldb at
+  description: >-
+    Database Access Error: SSSD cannot open its local cache file. Check file permissions
+    on /var/lib/sss/db/ or check for disk space/corruption.
+- pattern: Could not open the sysdb cache [17]
+  description: >-
+    Cache Corrupt: Could not open the sysdb cache due to 'File exists' lock (Recommend
+    running: rm -f /var/lib/sss/db/*).
+- pattern: Could not reinitialize subdomains
+  description: >-
+    Trust Topology Error: SSSD failed to refresh the list of trusted Active Directory
+    domains from the FreeIPA server. Check the IPA-to-AD trust status.
+- pattern: Could not restart critical service [nss]
+  description: >-
+    Service Crash: SSSD could not restart the NSS service (Often caused if the 'sssd'
+    system user is missing).
+- pattern: Could not start TLS encryption
+  description: >-
+    LDAP: Could not start TLS encryption (Certificate or protocol issue)
+- pattern: data 775,
+  description: >-
+    AD Account Locked: Active Directory returned 'data 775' during bind, which specifically
+    indicates the user account is locked out.
+- pattern: 'Data Provider Error:'
+  description: >-
+    Backend Unreachable: The SSSD frontend responder requested data, but the backend
+    Data Provider returned a fatal error or timed out.
+- pattern: 'Data Provider Error: 1'
+  description: >-
+    Data Provider Offline (DP_ERR_OFFLINE): SSSD cannot reach the backend authentication
+    server (AD/LDAP).
+- pattern: 'Data Provider Error: 2'
+  description: >-
+    Data Provider Timeout (DP_ERR_TIMEOUT): The backend server is too slow or network
+    latency is too high.
+- pattern: 'Data Provider Error: 3'
+  description: >-
+    Data Provider Fatal (DP_ERR_FATAL): The backend process crashed or encountered
+    an unrecoverable state.
+- pattern: Data provider is not available
+  description: >-
+    Backend Disconnected: The PAM responder cannot reach the Data Provider process.
+    This usually means the backend (AD/IPA/LDAP) has crashed or is hung.
+- pattern: Data provider is not available for
+  description: >-
+    Sudo Backend Error: The Sudo responder cannot reach the Data Provider for this
+    domain. Rule refreshes will fail.
+- pattern: database disk image is malformed
+  description: >-
+    SSSD Cache Corrupt: LDB database image is malformed (Recommend running: rm -f
+    /var/lib/sss/db/* && systemctl restart sssd)
+- pattern: 'dlopen failed:'
+  description: >-
+    Shared Library Error: SSSD failed to dynamically load a required library. This
+    usually indicates a broken installation or corrupted package.
+- pattern: DNS updates requested but nsupdate not available
+  description: >-
+    Missing Dependency: Dynamic DNS updates are enabled, but the 'nsupdate' utility
+    (bind-utils) is not installed.
+- pattern: does not belong to any known domain
+  description: >-
+    SID Resolution Failure: SSSD was asked to resolve a Windows SID, but the SID prefix
+    does not match the local domain or any known trusted Active Directory domains.
+- pattern: does not contain the root user
+  description: >-
+    Security Block: SSSD prevented a remote domain from returning a user with UID
+    0 (root). The root user is strictly restricted to the local files domain to prevent
+    privilege escalation.
+- pattern: does not exist. Possible typo in simple_
+  description: >-
+    Simple Access Typo: A user or group listed in your simple_allow or simple_deny
+    configuration does not exist in the directory.
+- pattern: >-
+    does not map to either a user or group. Maybe it is an object which is currently
+    not in the cache
+  description: >-
+    HBAC Dangling Reference: A FreeIPA HBAC rule references a user or group that SSSD
+    cannot find in its cache or LDAP. The rule might not apply correctly.
+- pattern: doesn't have subid range
+  description: >-
+    Sub-ID Missing: SSSD was asked to find a subordinate UID/GID range for a user
+    (often required for rootless containers like Podman), but none exists in LDAP.
+- pattern: Dynamic DNS update failed
+  description: >-
+    IPA DNS Error: SSSD failed to update the machine's IP address in the FreeIPA DNS
+    zone. Check the machine's host Kerberos ticket and IPA DNS zone permissions.
+- pattern: Enumeration requested but not enabled
+  description: >-
+    Enumeration Blocked: A bulk data request (like 'getent passwd') was attempted,
+    but 'enumerate = True' is not configured for this domain.
+- pattern: error while loading shared libraries
+  description: >-
+    Library Error: SSSD failed to start due to missing shared libraries.
+- pattern: Failed to commit transaction!
+  description: >-
+    Database Write Error: SSSD could not finalize a data save. This is a common symptom
+    of a full disk or failing hardware.
+- pattern: Failed to convert SID to UID/GID
+  description: >-
+    ID Mapping Error: SSSD could not translate a Windows SID to a Linux ID. This will
+    cause file permission issues on CIFS/Samba shares.
+- pattern: Failed to create PAC responder context
+  description: >-
+    PAC Initialization Error: The PAC responder (used for AD forest trusts) failed
+    to start. Group memberships for trusted domain users may be missing.
+- pattern: Failed to create SSH request
+  description: >-
+    Internal SSH Error: SSSD failed to initialize the SSH request context. This may
+    indicate memory pressure or an internal protocol error.
+- pattern: Failed to create sudo query
+  description: >-
+    Sudo Query Error: SSSD failed to construct the LDAP search query for sudo rules.
+    Check for malformed filters in sssd.conf.
+- pattern: Failed to evaluate ordered SELinux users array
+  description: >-
+    SELinux Map Evaluation Failed: SSSD could not map the logging-in user to a valid
+    SELinux user context based on the FreeIPA rules and priority order.
+- pattern: Failed to format string SID from binary SID
+  description: >-
+    SID Corruption: SSSD encountered a binary SID in AD/LDAP that it cannot translate
+    into a string. The directory object may be malformed or corrupted.
+- pattern: Failed to get user info for SSH user
+  description: >-
+    User Resolution Failure: SSSD could not resolve the user identity prior to fetching
+    SSH keys. Key lookups will fail.
+- pattern: Failed to get user info for sudo user
+  description: >-
+    User Resolution Failure: SSSD could not resolve the identity of the user requesting
+    sudo. The permission check cannot proceed.
+- pattern: Failed to initialize FAST
+  description: >-
+    FAST Tunnel Failure: Kerberos FAST (secure tunneling) was requested, but SSSD
+    failed to initialize it. This usually means the machine's own AD/IPA account is
+    expired or broken.
+- pattern: Failed to initialize IFP domains
+  description: >-
+    IFP Initialization Failure: InfoPipe failed to load the domain list. This usually
+    points to an overall configuration error in sssd.conf.
+- pattern: Failed to initialize IFP ncache
+  description: >-
+    IFP Cache Error: The InfoPipe negative cache failed to start. Performance for
+    failed lookups will be significantly degraded.
+- pattern: Failed to initialize NSS ncache
+  description: >-
+    NSS Init Error: The NSS negative cache failed to start. User and group resolution
+    might be completely disabled or severely degraded.
+- pattern: Failed to initialize SSH ncache
+  description: >-
+    SSH Cache Error: The SSH negative cache failed to initialize. SSSD-managed SSH
+    key lookups will be disabled.
+- pattern: Failed to initialize SUDO ncache
+  description: >-
+    Sudo Cache Error: The Sudo negative cache failed to initialize. This may degrade
+    performance or cause repeated failed lookups.
+- pattern: Failed to locate KDC via SSSD
+  description: >-
+    Kerberos Locator Error: The Kerberos plugin tried to ask SSSD for a Domain Controller
+    location, but SSSD was unreachable or had no KDC data.
+- pattern: Failed to parse certificate
+  description: >-
+    SSH Certificate Error: SSSD could not parse the X.509 certificate from the directory
+    into a valid SSH key. The certificate may be malformed.
+- pattern: Failed to read keytab
+  description: >-
+    Keytab I/O Error: SSSD cannot read the Kerberos keytab file off the disk. This
+    is usually caused by incorrect file permissions on /etc/krb5.keytab.
+- pattern: Failed to refresh filter lists, denying all access
+  description: >-
+    Fail Closed: SSSD failed to read its internal filter lists and defaulted to a
+    hard deny for all users to protect the system.
+- pattern: Failed to setup IFP D-Bus interface
+  description: >-
+    D-Bus Connection Error: InfoPipe could not register its D-Bus service. Check if
+    dbus-daemon is running and if the org.freedesktop.sssd.infopipe policy file is
+    correct.
+- pattern: Failed to store ID mapping
+  description: >-
+    ID Map Persistence Error: SSSD could not save a generated UID/GID. This will break
+    identity consistency for Active Directory users.
+- pattern: Failed to store ID override
+  description: >-
+    Override Error: SSSD failed to save an ID View override from FreeIPA. Users may
+    log in with original, un-overridden attributes.
+- pattern: Failed to store ID range
+  description: >-
+    ID Range Conflict: SSSD could not save an ID range for a domain. This is likely
+    due to overlapping ranges in sssd.conf or a conflict with a trusted domain.
+- pattern: Failed to store JSON
+  description: >-
+    IdP Data Error: SSSD failed to parse or store the JSON payload returned by the
+    external Identity Provider.
+- pattern: Failed to store permanent uid filter for root
+  description: >-
+    Negative Cache Error: SSSD failed to add 'root' to the negative cache. SSSD might
+    cause high network load by querying the network for local system accounts.
+- pattern: Failed to upgrade the database
+  description: >-
+    Upgrade Failure: SSSD tried to update the internal database schema to a new version
+    and failed. The cache may be corrupted.
+- pattern: File must be owned by gid [0]
+  description: >-
+    System Error: The primary group of the root user has been modified, or SSSD pipe
+    permissions are broken.
+- pattern: File ownership and permissions check failed
+  description: >-
+    Config Error: /etc/sssd/sssd.conf has incorrect ownership or permissions.
+- pattern: filtered out! (groupname override)
+  description: >-
+    Group Name Override: SSSD ignored a group lookup because the group's name has
+    been locally overridden (e.g., via FreeIPA ID Views or local overrides). The original
+    name is no longer valid for lookups.
+- pattern: filtered out! (primary gid out of range)
+  description: >-
+    ID Out of Range: The user's primary GID is outside the 'min_id' or 'max_id' configured
+    for this domain. SSSD is intentionally ignoring them.
+- pattern: filtered out! (uid out of range)
+  description: >-
+    ID Out of Range: The user's UID is outside the 'min_id' or 'max_id' configured
+    for this domain. SSSD is intentionally ignoring them.
+- pattern: found in deny list, access denied
+  description: >-
+    Access Denied: The user or their group was explicitly blocked by a 'simple_deny_users'
+    or 'simple_deny_groups' configuration.
+- pattern: Found more than one netgroup with the name
+  description: >-
+    Netgroup Conflict: Multiple nisNetgroup objects share the same name in LDAP. SSSD
+    requires unique names. This usually breaks sudo rules or NFS mounts relying on
+    this netgroup.
+- pattern: Group Policy Container with DN
+  description: >-
+    GPO Permission Denied: The Linux machine account cannot read the GPO in Active
+    Directory. Check AD security filtering permissions.
+- pattern: has no name attribute!?!
+  description: >-
+    Cache Consistency Error: SSSD found a directory object without a mandatory name
+    attribute. This usually indicates cache corruption or interrupted database writes.
+- pattern: has no UUID attribute
+  description: >-
+    IdP Security Block: The user authenticated successfully, but SSSD rejected the
+    login because the cached user lacks a UUID attribute to securely bind the token.
+- pattern: ID mapping out of range
+  description: >-
+    Range Conflict: An AD user's calculated ID falls outside the 'min_id' or 'max_id'
+    limits. The user will be unable to log in or own files.
+- pattern: Illegal deref option
+  description: >-
+    Configuration Error: The 'ldap_deref' option in sssd.conf is invalid. It must
+    be set to 'never', 'searching', 'finding', or 'always'.
+- pattern: Illegal ID .* for search
+  description: >-
+    Invalid ID Request: The OS or an application requested a negative or overflowed
+    UID/GID. SSSD rejected the request as invalid.
+- pattern: Internal search error
+  description: >-
+    LDB Corruption: SSSD encountered a fatal error querying its own database. This
+    is a strong indicator of file corruption or a broken LDB index.
+- pattern: Invalid base DN
+  description: >-
+    Config Error: Invalid LDAP base DN syntax in sssd.conf. Run 'sssctl config-check'.
+- pattern: Invalid credentials
+  description: >-
+    LDAP: Invalid credentials (Bad bind DN or password)
+- pattern: Invalid SID format
+  description: >-
+    Directory Data Error: SSSD encountered a malformed Windows SID in the directory.
+    The object cannot be mapped to a Unix identity.
+- pattern: is above process hard limit
+  description: >-
+    File Descriptor Limit: Requested fd_limit in sssd.conf exceeds the system's hard
+    limit (ulimit). SSSD may drop connections.
+- pattern: is allowed but does not exist. Using fallback
+  description: >-
+    Shell Missing: The user's LDAP shell does not exist on this Linux machine (not
+    in /etc/shells). SSSD is assigning a fallback shell to prevent a login crash.
+- pattern: is already used by SSSD, please choose a different
+  description: >-
+    Attribute Mapping Collision: You are trying to map a custom LDAP attribute in
+    'ldap_user_extra_attrs' to an internal name that SSSD already uses.
+- pattern: is defined in policy, cannot be deleted
+  description: >-
+    SELinux Policy Conflict: SSSD tried to apply a FreeIPA SELinux mapping, but a
+    local admin manually defined a conflicting rule using the 'semanage' command on
+    this host.
+- pattern: is detected as IP address, this can cause GSSAPI
+  description: >-
+    Kerberos SPN Risk: 'ad_server' is configured as an IP address instead of a hostname.
+    Kerberos (GSSAPI) requires hostnames to request tickets.
+- pattern: is not a valid DN
+  description: >-
+    [DIAGNOSTIC HINT] Corrupt Directory Object: SSSD encountered a malformed Distinguished
+    Name (DN) while parsing directory objects, causing it to skip the entry.
+- pattern: is not configured
+  description: >-
+    Unconfigured Feature: A subsystem (like sudo or autofs) requested data, but its
+    specific provider (e.g., 'sudo_provider') is not defined in sssd.conf.
+- pattern: is not responding to heartbeat
+  description: >-
+    Service Deadlock: A child process stopped responding to SSSD's internal health
+    checks. SSSD is killing and restarting the hung process to restore service.
+- pattern: is outside nesting limit
+  description: >-
+    Nesting Limit Reached: A user is missing group memberships because the AD/LDAP
+    group hierarchy is deeper than the configured 'ldap_group_nesting_level' (default
+    2).
+- pattern: is outside of ID range
+  description: >-
+    ID Out of Range (Frontend): A requested UID or GID falls outside the 'min_id'
+    or 'max_id' configured for the domain. The SSSD frontend rejected the lookup before
+    even querying the backend.
+- pattern: is vetoed. Using fallback
+  description: >-
+    Shell Override: The user's LDAP shell is explicitly vetoed in sssd.conf. SSSD
+    is overriding it with a safe fallback shell.
+- pattern: journald logging might not work as expected
+  description: >-
+    [DIAGNOSTIC HINT] Journald Tagging Failed: SSSD could not set the domain environment
+    variable. Logs will still write, but journalctl domain filtering may be degraded.
+- pattern: KDC has no support for encryption type
+  description: >-
+    Kerberos: KDC has no support for encryption type (Crypto policy mismatch)
+- pattern: krb5_child_timeout
+  description: >-
+    Kerberos Timeout: krb5_child_timeout reached (KDC slow, distant, or firewalled)
+- pattern: KRB5_KDC_ERR_C_PRINCIPAL_UNKNOWN
+  description: >-
+    Kerberos: Client principal unknown (Machine account missing or deleted in AD)
+- pattern: >-
+    LDAP server claims to support deref, but deref search failed
+  description: >-
+    Performance Degradation: The LDAP server advertised Dereference support but failed
+    to execute it. SSSD is falling back to slower, individual user lookups.
+- pattern: >-
+    LDAP sizelimit was exceeded, returning incomplete data
+  description: >-
+    LDAP Size Limit Hit: The LDAP server refused to send all requested data because
+    the query exceeded the server's hard size limit. Check LDAP paging settings.
+- pattern: ldap_extended_operation failed
+  description: >-
+    LDAP/IPA Error: Extended operation failed (Directory server busy or unreachable)
+- pattern: ldap_install_tls failed
+  description: >-
+    TLS Handshake Failed: ldap_install_tls failed (Certificate mismatch or bad CA)
+- pattern: ldap_sasl_interactive_bind_s failed
+  description: >-
+    LDAP SASL Bind Failed: Could not negotiate SASL bind (Crypto mismatch or unreachable
+    KDC)
+- pattern: lookups of subdomain users will likely fail
+  description: >-
+    Cross-Forest Trust Warning: 'full_name_format' was altered in sssd.conf. SSSD
+    strictly relies on the default format to route Active Directory trust users. AD
+    logins will likely break.
+- pattern: Machine account password expired
+  description: >-
+    Kerberos: Machine account password expired (AD dropped trust, needs rejoin)
+- pattern: Malformed PAM prompting configuration
+  description: >-
+    Prompting Config Error: The [pam] section of sssd.conf has invalid prompting rules.
+    Check the syntax of your custom MFA messages.
+- pattern: Mapping ID
+  description: >-
+    ID Mapping Failure: SSSD failed to algorithmically map a Windows SID to a Linux
+    UID/GID. The SID might be from an untrusted domain or out of range.
+- pattern: >-
+    Member [.*] was not found in cache. Is it out of scope?
+  description: >-
+    Ghost Member Issue: A group contains a member (often from a trusted AD domain)
+    that falls outside SSSD's configured search bases. The member will be tracked
+    as an unresolved 'ghost'.
+- pattern: Message stream modified
+  description: >-
+    Kerberos/LDAP: Message stream modified (Often indicates an expired machine password
+    or bad keytab)
+- pattern: Mismatch between input domain name
+  description: >-
+    Domain Parsing Mismatch: The requested domain name does not match the internally
+    parsed domain. Check your 'full_name_format' setting.
+- pattern: Missing authorized services. Access denied
+  description: >-
+    Service Access Denied: 'ldap_access_order = service' is configured, but the user
+    lacks the 'authorizedService' attribute in LDAP.
+- pattern: Missing required option 'idp_auth_scope'
+  description: >-
+    IdP Configuration Error: The 'idp_auth_scope' option is missing in sssd.conf.
+    SSSD needs to know what OAuth2 scopes to request.
+- pattern: Missing required option 'idp_device_code_endpoint'
+  description: >-
+    IdP Configuration Error: The 'idp_device_auth_endpoint' option is missing in sssd.conf.
+    SSSD requires the URL for the OAuth2 Device Authorization flow.
+- pattern: Missing required option 'idp_userinfo_endpoint'
+  description: >-
+    IdP Configuration Error: The 'idp_userinfo_endpoint' option is missing in sssd.conf.
+    SSSD needs the URL to fetch user attributes.
+- pattern: Monitor reached maximum number of restarts
+  description: >-
+    Service Flapping: SSSD tried to restart a crashing service (like nss or pam) too
+    many times. SSSD has stopped trying. Check for segfaults or configuration errors
+    in that specific service.
+- pattern: Multiple domains with the same name
+  description: >-
+    Configuration Error: You have defined the same domain name multiple times in sssd.conf.
+    SSSD cannot start with ambiguous domain definitions.
+- pattern: Multiple users matched the certificate
+  description: >-
+    Smartcard Auth Collision: SSSD searched the directory for the provided Smartcard/X.509
+    certificate and found multiple users mapped to it. Authentication is blocked for
+    security.
+- pattern: No domains configured, exiting
+  description: >-
+    Configuration Error: You have not defined any [domain/NAME] sections in sssd.conf.
+    SSSD has nothing to do and is exiting.
+- pattern: No encryption detected on LDAP connection
+  description: >-
+    Insecure Auth Blocked: SSSD aborted the login because it refuses to send passwords
+    over an unencrypted LDAP connection. Enable TLS/SSL or use GSSAPI.
+- pattern: no netlogon information available
+  description: >-
+    CLDAP Ping Failed: SSSD could not reach the Domain Controller over UDP port 389
+    to get Site information. Check firewalls.
+- pattern: >-
+    No requested domains found, please check configuration options
+  description: >-
+    Domain Resolution Error: A requested domain was not found. Please check 'domain_resolution_order'
+    or 'domains' in sssd.conf for typos.
+- pattern: No rules apply to this host
+  description: >-
+    [DIAGNOSTIC HINT] Desktop Profile/HBAC: Rules were fetched successfully from FreeIPA,
+    but none of them target this specific machine's hostname or hostgroups.
+- pattern: No rules supplied for simple access provider
+  description: >-
+    [DIAGNOSTIC HINT] Open Access: The simple access provider is enabled, but no rules
+    are defined. All users are being allowed access.
+- pattern: No SSH host keys found for
+  description: >-
+    [DIAGNOSTIC HINT] SSH Key Missing: SSSD found the requested host object in the
+    directory, but it lacks the required 'sshPublicKey' attribute.
+- pattern: Not an SSH certificate
+  description: >-
+    SSH Certificate Error: The certificate provided in LDAP/AD is not a valid SSH
+    certificate and cannot be used for authentication.
+- pattern: Not enough space in the .* mmap cache
+  description: >-
+    Performance Warning: The fast-path memory cache is full. SSSD is falling back
+    to slower disk-based lookups. Consider increasing the 'memcache_size' for this
+    domain.
+- pattern: not found in keytab
+  description: >-
+    Keytab Principal Missing: The ldap_child process could not find the required Kerberos
+    Principal in the system keytab. Check /etc/krb5.keytab.
+- pattern: PAC check failed
+  description: >-
+    Kerberos PAC Error: SSSD could not validate the Privilege Attribute Certificate
+    (PAC) in the user's ticket. Group memberships might not be updated.
+- pattern: PAM service
+  description: >-
+    GPO Configuration Error: A PAM service is mapped to multiple GPO rules. Check
+    'ad_gpo_map_*' settings in sssd.conf.
+- pattern: pam_authenticate failed
+  description: >-
+    Proxy PAM Failure: The underlying PAM module rejected the authentication request.
+    Check the host's PAM logs (e.g., /var/log/secure) for the target PAM service.
+- pattern: PAM_AUTHINFO_UNAVAIL
+  description: >-
+    PAM Offline Trigger: The provider is offline; the PAM responder was instructed
+    to fall back to cached authentication.
+- pattern: Passkey data for user .* not found
+  description: >-
+    Passkey Provisioning Error: The user attempted to log in with a Passkey, but their
+    LDAP/AD object is missing the required Passkey registration data.
+- pattern: Password expired, grace logins exhausted
+  description: >-
+    Grace Logins Exhausted: The user's password expired and they have used up all
+    of their allowed grace logins.
+- pattern: Periodical smart refresh will be disabled
+  description: >-
+    Sudo Configuration Error: 'ldap_sudo_smart_refresh_interval' is set higher than
+    the full refresh interval. Smart refreshes have been disabled, which may degrade
+    performance.
+- pattern: Permission denied for UID
+  description: >-
+    IFP UID Blocked: The process attempting to query SSSD via D-Bus is not authorized.
+    Add the process's UID to 'allowed_uids' in the [ifp] section of sssd.conf.
+- pattern: POSIX group without GID
+  description: >-
+    Corrupt Group Data: SSSD found a POSIX group in the cache, but it lacks a GID
+    number. This breaks access control lookups.
+- pattern: Preauthentication failed
+  description: >-
+    Kerberos: Preauthentication failed (Bad keytab or password mismatch)
+- pattern: Proxy lib
+  description: >-
+    Proxy Library Missing: SSSD tried to dynamically load the requested NSS proxy
+    library, but it was not found on the system. Check your proxy_lib_name.
+- pattern: proxy_lib_name is not set
+  description: >-
+    Proxy Configuration Error: 'proxy_lib_name' is missing in sssd.conf. The proxy
+    ID provider must know which NSS library (e.g., 'files', 'nis') to load.
+- pattern: proxy_pam_target is not set
+  description: >-
+    Proxy Configuration Error: 'proxy_pam_target' is missing in sssd.conf. The proxy
+    auth provider requires a PAM service name to forward requests to.
+- pattern: Range size does not divide evenly
+  description: >-
+    ID Mapping Warning: Your 'ldap_min_id', 'ldap_max_id', and 'ldap_idmap_rangesize'
+    do not divide evenly. SSSD will ignore the uppermost IDs, which wastes ID space.
+- pattern: Reached maximum number of shells
+  description: >-
+    Shells Limit Exceeded: /etc/shells is too large or corrupted. Users may be denied
+    access.
+- pattern: Refusing to read overlarge packet
+  description: >-
+    Packet Overload: A client sent a request exceeding SSSD's maximum allowed packet
+    size (often caused by massive Active Directory groups).
+- pattern: Requested type 'Boolean' for option
+  description: >-
+    Configuration Typo: A setting in sssd.conf requires a boolean (true/false), but
+    a different type was provided.
+- pattern: Requested type 'Number' for option
+  description: >-
+    Configuration Typo: A setting in sssd.conf requires a number, but text was provided.
+    Please check your configuration file for type mismatches.
+- pattern: sdap_async_sys_connect request failed
+  description: >-
+    LDAP Network Error: Connection to AD/LDAP timed out
+- pattern: Search for root user in domain .* is not allowed
+  description: >-
+    Security Block: SSSD blocked a request to find 'root' in a remote domain. This
+    is a safety feature to prevent remote directories from hijacking UID 0.
+- pattern: Section [domain/] is not allowed
+  description: >-
+    Config Error: Empty or invalid domain section in sssd.conf. Check for typos.
+- pattern: seems slow, took more than 80%% of timeout
+  description: >-
+    [DIAGNOSTIC HINT] LDAP Latency: An LDAP operation nearly timed out. The Domain
+    Controller is overloaded, network latency is high, or an unindexed search was
+    performed.
+- pattern: SELinux maps referenced an HBAC rule
+  description: >-
+    [DIAGNOSTIC HINT] SELinux/HBAC Linkage: A FreeIPA SELinux user map is linked to
+    an HBAC rule. SSSD is fetching the HBAC rule to evaluate the SELinux context.
+- pattern: >-
+    SELinux maps were recently updated -> force offline
+  description: >-
+    [DIAGNOSTIC HINT] Cached SELinux Evaluation: SELinux maps were refreshed recently.
+    SSSD is evaluating the SELinux context using the local cache to save network traffic.
+- pattern: SELINUX_getpeercon failed
+  description: >-
+    SELinux Warning: SSSD attempted to read SELinux socket contexts but failed (usually
+    means SELinux is disabled on the host).
+- pattern: Server doesn't support Desktop Profile
+  description: >-
+    Legacy Server Warning: The client requested Desktop Profile (FleetCommander) data,
+    but the FreeIPA server is too old to support this feature.
+- pattern: Server not found in Kerberos database
+  description: >-
+    Kerberos: Server not found in database (SPN missing)
+- pattern: Server reinitialization detected. Cleaning cache
+  description: >-
+    USN Rollback Detected: The LDAP server's Update Sequence Number (USN) is lower
+    than SSSD's cached value. This usually means the Domain Controller was restored
+    from an old snapshot. SSSD is wiping its cache to prevent corruption.
+- pattern: service key not available
+  description: >-
+    Kerberos: Service key not available (KDC forced RC4 due to AD OS version bug)
+- pattern: setresuid() failed
+  description: >-
+    Privilege Escalation Failed: The selinux_child helper process failed to change
+    its UID/GID. Check if AppArmor, SELinux, or container capabilities are blocking
+    CAP_SETUID.
+- pattern: >-
+    Shadow password policy is selected but ldap_chpass_update_last_change is not set
+  description: >-
+    Password Reset Loop: Shadow policy is enforcing expiration, but SSSD is not configured
+    to update the 'shadowLastChange' attribute. Users will be stuck resetting their
+    passwords forever.
+- pattern: Skipping malformed entry
+  description: >-
+    HBAC Corruption: An HBAC rule contains a malformed LDAP DN. SSSD expects a specific
+    hierarchy for services and hosts. The rule will be partially skipped.
+- pattern: >-
+    Skipping smart refresh because there is ongoing full refresh
+  description: >-
+    [DIAGNOSTIC HINT] Sudo Refresh Collision: SSSD skipped a quick 'smart' sudo update
+    because a heavy 'full' download of the sudoers tree was currently running.
+- pattern: socket path defined in systemd unit
+  description: >-
+    Socket Mismatch: The socket path in the systemd unit and sssd.conf do not match.
+    Check systemd configs.
+- pattern: SSSD is already running
+  description: >-
+    Instance Conflict: SSSD detected another instance is already running (or an old
+    PID file exists). SSSD refused to start to prevent data corruption.
+- pattern: SSSD is offline
+  description: >-
+    SSSD Offline: Provider forced offline (Network loss, DNS failure, or firewall)
+- pattern: Subdomain is not set, UPN
+  description: >-
+    UPN Routing Failure: SSSD received an initgroups request using a User Principal
+    Name (UPN), but it could not determine the correct active subdomain to route the
+    request to. Check AD trust status.
+- pattern: Sudo rules refresh failed
+  description: >-
+    Sudo Refresh Failure: SSSD encountered an error while trying to update sudo rules
+    from the backend network provider.
+- pattern: sysdb_transaction_start failed
+  description: >-
+    Database Locking Error: SSSD could not start a write transaction. This often indicates
+    the disk is full or the database file is read-only.
+- pattern: tdb_rec_read bad magic
+  description: >-
+    Cache Corrupt: Local SSSD cache files (LDB/TDB) have bad magic numbers (Recommend
+    running: rm -f /var/lib/sss/db/*).
+- pattern: terminated by own WATCHDOG
+  description: >-
+    SSSD Watchdog: Process blocked for too long (Slow DNS, slow AD, or heavy load)
+- pattern: TGT failed verification using key
+  description: >-
+    Kerberos: TGT validation failed (Crypto mismatch between AD and keytab)
+- pattern: TGT is not renewable
+  description: >-
+    Non-Renewable Ticket: SSSD attempted to renew a Kerberos ticket in the background,
+    but the KDC issued the ticket without the 'renewable' flag. Check KDC/AD ticket
+    policies.
+- pattern: TGT renewal failed
+  description: >-
+    Ticket Renewal Failed: The background task to extend the user's Kerberos ticket
+    (TGT) failed. The user may lose Single Sign-On (SSO) access to network resources.
+- pattern: The database was created by a newer version
+  description: >-
+    Version Mismatch: You are trying to run an older version of SSSD with a database
+    created by a newer version. You may need to clear the cache.
+- pattern: The entry is outside the allowed ID range
+  description: >-
+    ID Out of Bounds: SSSD successfully retrieved the entry, but its UID/GID falls
+    outside the 'min_id' or 'max_id' boundaries defined for this domain. The entry
+    has been dropped.
+- pattern: The last password change time is in the future
+  description: >-
+    Time Skew Bug: The LDAP server's clock and the local client's clock are out of
+    sync, causing the password age calculation to break.
+- pattern: The LDAP scheme is ldapi:#, cannot proceed
+  description: >-
+    DynDNS Configuration Error: Dynamic DNS updates cannot be performed when the LDAP
+    URI is set to a local socket (ldapi:#).
+- pattern: >-
+    The proxy provider is unable to return multiple entries
+  description: >-
+    Proxy Limitation: The proxy provider was asked to enumerate or perform a wildcard
+    search, which is fundamentally unsupported by the proxy architecture.
+- pattern: The user account is disabled on the AD server
+  description: >-
+    AD Account Disabled: Active Directory's 'userAccountControl' attribute indicates
+    this account is explicitly disabled.
+- pattern: The user account is expired on the AD server
+  description: >-
+    AD Account Expired: Active Directory's 'accountExpires' timestamp is in the past.
+    The user must be renewed in AD.
+- pattern: too many communication failures, giving up
+  description: >-
+    Failover Exhausted: SSSD experienced repeated network/communication errors and
+    has exhausted all retry attempts across all failover servers. The domain is now
+    offline.
+- pattern: trying Kerberos authentication again
+  description: >-
+    [DIAGNOSTIC HINT] IPA Auth Fallback: SSSD is retrying authentication via Kerberos.
+    This is frequently seen during transparent Password Migrations.
+- pattern: tsig verify failure
+  description: >-
+    DNS Update Failed: TSIG verify failure (Dynamic DNS update rejected)
+- pattern: Unable to choose sudo schema
+  description: >-
+    Sudo Initialization Error: SSSD could not determine whether to use the native
+    IPA sudo schema or the legacy LDAP sudo schema. Check your configuration.
+- pattern: Unable to initialize ConfDB
+  description: >-
+    Config Database Error: SSSD could not initialize its internal configuration database.
+    This usually means sssd.conf has a syntax error or the disk is full.
+- pattern: Unable to load target
+  description: >-
+    Target Load Failure: SSSD failed to initialize a specific target (like sudo, autofs,
+    or hostid). This usually means a missing library or memory allocation failure.
+- pattern: Unable to parse name
+  description: >-
+    Input Parsing Error: SSSD could not parse the requested name into a valid shortname
+    and domain. This usually indicates a malformed request or an issue with 'full_name_format'
+    regex settings.
+- pattern: Unable to retrieve host information, host filter
+  description: >-
+    Sudo Host Filter Disabled: SSSD could not resolve the local machine's hostname
+    or IP. Sudo rules restricted by host might not work correctly.
+- pattern: Unable to set up sudo search base
+  description: >-
+    Sudo Config Error: SSSD could not initialize the sudo search base. Sudo rules
+    in LDAP/AD will not be accessible.
+- pattern: Unable to subscribe to netlink monitor
+  description: >-
+    Network Monitor Failure: SSSD could not subscribe to kernel netlink events. It
+    will not be able to automatically detect when the network goes offline or comes
+    back online.
+- pattern: would have been denied GPO-based logon
+  description: >-
+    [DIAGNOSTIC HINT] GPO Permissive Mode: A user logged in, but would have been blocked
+    if 'ad_gpo_access_control' was set to enforcing.
