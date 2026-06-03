@@ -446,7 +446,7 @@ func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles 
 }
 
 // loadKBArticles loads all KB article JSON files for single-pass scanning
-func loadKBArticles(dirPath string) []TIDArticle {
+func loadKBArticles(_ string) []TIDArticle {
 	var kbArticles []TIDArticle
 	kbDir := "kb_articles"
 

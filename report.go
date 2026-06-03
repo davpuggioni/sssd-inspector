@@ -12,10 +12,10 @@ import (
 func buildTextReport(report ReportData) string {
 	var sb strings.Builder
 
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("             SUPPORTCONFIG SSSD ANALYSIS REPORT\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" Generated: %s\n", report.Timestamp))
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, "%s\n", "             SUPPORTCONFIG SSSD ANALYSIS REPORT")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, " Generated: %s\n", report.Timestamp)
 	if report.SupportCaseID != "" {
 		sb.WriteString(fmt.Sprintf(" Support Case (SR#): %s\n", report.SupportCaseID))
 	}

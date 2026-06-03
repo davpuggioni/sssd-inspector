@@ -229,7 +229,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			}
 
 			// Copy with buffered I/O for better performance on large files
-			written, err := copyWithBuffer(outFile, io.LimitReader(tr, hdr.Size), bufPool)
+			written, err := copyWithBuffer(outFile, io.LimitReader(tr, hdr.Size), &bufPool)
 			if err != nil {
 				outFile.Close()
 				log.Printf("Warning: failed to write file %s: %v", fileName, err)
@@ -271,7 +271,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 // copyWithBuffer copies from src to dst using a reusable buffer from the pool,
 // returning the number of bytes written. This is more efficient than io.CopyN
 // for large files because it reuses buffers and reduces GC pressure.
-func copyWithBuffer(dst io.Writer, src io.Reader, pool sync.Pool) (int64, error) {
+func copyWithBuffer(dst io.Writer, src io.Reader, pool *sync.Pool) (int64, error) {
 	bufPtr := pool.Get().(*[]byte)
 	defer pool.Put(bufPtr)
 	buf := *bufPtr

@@ -87,9 +87,8 @@ func TestBackendFrontendIntegration(t *testing.T) {
 	// Test 5: Verify report generation structure
 	t.Run("ReportStructure", func(t *testing.T) {
 		report := ReportData{
-			AppVersion:    constants.AppVersion,
-			Timestamp:     time.Now().Format(constants.TimestampFormat),
-			SupportCaseID: "TEST-123",
+			AppVersion: constants.AppVersion,
+			Timestamp:  time.Now().Format(constants.TimestampFormat),
 		}
 
 		if report.AppVersion != constants.AppVersion {
@@ -186,11 +185,11 @@ func TestFrontendCompatibility(t *testing.T) {
 	// Test 2: Verify data structures match frontend expectations
 	t.Run("DataStructures", func(t *testing.T) {
 		report := ReportData{
-			AppVersion:    "2.0.0",
-			Timestamp:     "2023-01-01T00:00:00Z",
-			SupportCaseID: "TEST-123",
-			SLESRlease:    "SLES 15 SP4",
-			KernelVersion: "5.14.21-150400.24.44-default",
+			AppVersion: "2.0.0",
+			Timestamp:  "2023-01-01T00:00:00Z",
+			//	SupportCaseID: "TEST-123",
+			SLESRlease: "SLES 15 SP4",
+			//	KernelVersion: "5.14.21-150400.24.44-default",
 		}
 
 		// Verify JSON tags match frontend expectations

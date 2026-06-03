@@ -145,7 +145,8 @@ func (se *SectionExtractor) ExtractSection(dirPath string, fileName string, head
 			if strings.HasPrefix(line, "#==[") {
 				break
 			}
-			sb.WriteString(line + "\n")
+			sb.WriteString(line)
+			sb.WriteString("\n")
 		}
 	}
 	return sb.String()
