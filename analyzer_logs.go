@@ -314,7 +314,7 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 			idMappingFalse = true
 		}
 		if strings.HasPrefix(lowerLine, "krb5_validate") && strings.Contains(lowerLine, "false") {
-			report.Problems = append(report.Problems, "[SECURITY RISK] 'krb5_validate = false' is set. This disables KDC spoofing protection. If used to bypass the AD RC4 bug, remove this and fix the AD operatingSystemVersion attribute or update local crypto policies instead.")
+			report.Problems = append(report.Problems, "[SECURITY RISK] 'krb5_validate = false' is set. When 'id_provider = ad', the default is 'true'. Disabling this bypasses KDC spoofing protection and should only be used temporarily to work around the AD RC4 encryption bug. Fix: update the 'operatingSystemVersion' attribute in AD or update local crypto-policies instead.")
 		}
 	}
 
