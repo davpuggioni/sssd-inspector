@@ -26,6 +26,9 @@ jobs:
           go mod tidy
           cd frontend && npm install
 
+      - name: Build frontend assets
+        run: npm run build --prefix frontend
+
       - name: Run Go tests
         run: go test -count=1 ./...
 

@@ -17,126 +17,126 @@ func buildTextReport(report ReportData) string {
 	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 	fmt.Fprintf(&sb, " Generated: %s\n", report.Timestamp)
 	if report.SupportCaseID != "" {
-		sb.WriteString(fmt.Sprintf(" Support Case (SR#): %s\n", report.SupportCaseID))
+		fmt.Fprintf(&sb, " Support Case (SR#): %s\n", report.SupportCaseID)
 	}
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
 
-	sb.WriteString(fmt.Sprintf("[+] OS Release:        %s\n", report.SLESRlease))
-	sb.WriteString(fmt.Sprintf("[+] Kernel:            %s\n", report.KernelVersion))
-	sb.WriteString(fmt.Sprintf("[+] SCC Status:        %s\n", report.SCCStatus))
-	sb.WriteString(fmt.Sprintf("[+] Hardware:          %s %s\n", report.HardwareManufacturer, report.HardwareModel))
-	sb.WriteString(fmt.Sprintf("[+] Virtualization:    %s (Identity: %s)\n", report.Hypervisor, report.VirtualIdentity))
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	fmt.Fprintf(&sb, "[+] OS Release:        %s\n", report.SLESRlease)
+	fmt.Fprintf(&sb, "[+] Kernel:            %s\n", report.KernelVersion)
+	fmt.Fprintf(&sb, "[+] SCC Status:        %s\n", report.SCCStatus)
+	fmt.Fprintf(&sb, "[+] Hardware:          %s %s\n", report.HardwareManufacturer, report.HardwareModel)
+	fmt.Fprintf(&sb, "[+] Virtualization:    %s (Identity: %s)\n", report.Hypervisor, report.VirtualIdentity)
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
 
-	sb.WriteString(fmt.Sprintf("[+] SSSD Installed:    %v\n", report.SssdInstalled))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Config:       %v\n", report.SssdConfigFound))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Service:      %s\n", report.SssdService))
-	sb.WriteString(fmt.Sprintf("[+] Winbind Status:    %s\n", report.WinbindService))
-	sb.WriteString(fmt.Sprintf("[+] NSCD Service:      %s\n", report.NscdStatus))
+	fmt.Fprintf(&sb, "[+] SSSD Installed:    %v\n", report.SssdInstalled)
+	fmt.Fprintf(&sb, "[+] SSSD Config:       %v\n", report.SssdConfigFound)
+	fmt.Fprintf(&sb, "[+] SSSD Service:      %s\n", report.SssdService)
+	fmt.Fprintf(&sb, "[+] Winbind Status:    %s\n", report.WinbindService)
+	fmt.Fprintf(&sb, "[+] NSCD Service:      %s\n", report.NscdStatus)
 	if len(report.NscdCaching) > 0 {
-		sb.WriteString(fmt.Sprintf("[!] NSCD Caching:      YES (%s)\n", strings.Join(report.NscdCaching, ", ")))
+		fmt.Fprintf(&sb, "[!] NSCD Caching:      YES (%s)\n", strings.Join(report.NscdCaching, ", "))
 	} else {
-		sb.WriteString("[+] NSCD Caching:      Safely Disabled for SSSD modules\n")
+		fmt.Fprintf(&sb, "%s\n", "[+] NSCD Caching:      Safely Disabled for SSSD modules")
 	}
 
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-	sb.WriteString("               AD / KERBEROS INTEGRATION CHECKS\n")
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
+	fmt.Fprintf(&sb, "%s\n", "               AD / KERBEROS INTEGRATION CHECKS")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
 
-	sb.WriteString(fmt.Sprintf("[+] DNS Nameservers:   %s\n", strings.Join(report.Nameservers, ", ")))
-	sb.WriteString(fmt.Sprintf("[+] DNS Search Domain: %s\n", report.SearchDomain))
-	sb.WriteString(fmt.Sprintf("[+] Time Service:      %s\n", report.TimeService))
-	sb.WriteString(fmt.Sprintf("[+] Kerberos Realm:    %s\n", report.KerberosRealm))
-	sb.WriteString(fmt.Sprintf("[+] Machine Keytab:    %v\n", report.KeytabFound))
+	fmt.Fprintf(&sb, "[+] DNS Nameservers:   %s\n", strings.Join(report.Nameservers, ", "))
+	fmt.Fprintf(&sb, "[+] DNS Search Domain: %s\n", report.SearchDomain)
+	fmt.Fprintf(&sb, "[+] Time Service:      %s\n", report.TimeService)
+	fmt.Fprintf(&sb, "[+] Kerberos Realm:    %s\n", report.KerberosRealm)
+	fmt.Fprintf(&sb, "[+] Machine Keytab:    %v\n", report.KeytabFound)
 
 	if report.PamGDPRRestricted {
-		sb.WriteString("[!] PAM pam_sss.so:    Restricted (GDPR)\n")
+		fmt.Fprintf(&sb, "%s\n", "[!] PAM pam_sss.so:    Restricted (GDPR)")
 	} else {
-		sb.WriteString(fmt.Sprintf("[+] PAM pam_sss.so:    %v\n", report.PamSssInstalled))
+		fmt.Fprintf(&sb, "[+] PAM pam_sss.so:    %v\n", report.PamSssInstalled)
 	}
-	sb.WriteString(fmt.Sprintf("[+] NSSwitch valid:    %v\n", report.NsswitchValid))
+	fmt.Fprintf(&sb, "[+] NSSwitch valid:    %v\n", report.NsswitchValid)
 
-	sb.WriteString(strings.Repeat("-", 60) + "\n")
-	sb.WriteString(fmt.Sprintf("[+] SSSD AD Provider:  %v\n", report.ADProviderMode))
-	sb.WriteString(fmt.Sprintf("[+] SSSD Use FQDN:     %v\n", report.UseFQDNSet))
-	sb.WriteString(fmt.Sprintf("[!] SSSD Enumerate:    %v\n", report.EnumerateIssue))
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
+	fmt.Fprintf(&sb, "[+] SSSD AD Provider:  %v\n", report.ADProviderMode)
+	fmt.Fprintf(&sb, "[+] SSSD Use FQDN:     %v\n", report.UseFQDNSet)
+	fmt.Fprintf(&sb, "[!] SSSD Enumerate:    %v\n", report.EnumerateIssue)
 
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                  INSTALLED SSSD PACKAGES\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, "%s\n", "                  INSTALLED SSSD PACKAGES")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 	if len(report.SSSDPackages) > 0 {
 		for _, pkg := range report.SSSDPackages {
-			sb.WriteString(fmt.Sprintf(" [+] %s\n", pkg))
+			fmt.Fprintf(&sb, " [+] %s\n", pkg)
 		}
 	} else {
-		sb.WriteString(" [-] No SSSD packages found.\n")
+		fmt.Fprintf(&sb, "%s\n", " [-] No SSSD packages found.")
 	}
 
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                 SSSD LOG ERRORS (sssd.txt)\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, "%s\n", "                 SSSD LOG ERRORS (sssd.txt)")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 	if len(report.SSSDLogErrors) == 0 {
-		sb.WriteString(" [+] No critical AD/Kerberos errors found in SSSD logs.\n")
+		fmt.Fprintf(&sb, "%s\n", " [+] No critical AD/Kerberos errors found in SSSD logs.")
 	} else {
 		for _, errData := range report.SSSDLogErrors {
-			sb.WriteString(fmt.Sprintf(" [!] %s\n", errData.Description))
+			fmt.Fprintf(&sb, " [!] %s\n", errData.Description)
 			for _, line := range errData.Examples {
-				sb.WriteString(fmt.Sprintf("     - %s\n", line))
+				fmt.Fprintf(&sb, "     - %s\n", line)
 			}
 		}
 	}
 
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString("                     ACTIONABLE PROBLEMS\n")
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, "%s\n", "                     ACTIONABLE PROBLEMS")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 
 	if len(report.Problems) == 0 {
-		sb.WriteString(" No major SSSD/Auth issues detected based on the checks.\n")
+		fmt.Fprintf(&sb, "%s\n", " No major SSSD/Auth issues detected based on the checks.")
 	} else {
 		for _, prob := range report.Problems {
-			sb.WriteString(fmt.Sprintf(" [X] %s\n", prob))
+			fmt.Fprintf(&sb, " [X] %s\n", prob)
 		}
 	}
 
 	if len(report.MACDenialExamples) > 0 {
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("              APPARMOR / SELINUX DENIALS FOUND\n")
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
+		fmt.Fprintf(&sb, "%s\n", "              APPARMOR / SELINUX DENIALS FOUND")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
 		for _, line := range report.MACDenialExamples {
-			sb.WriteString(fmt.Sprintf(" [!] %s\n", line))
+			fmt.Fprintf(&sb, " [!] %s\n", line)
 		}
 	}
 
 	if len(report.Warnings) > 0 {
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
-		sb.WriteString("                 TUNING & DIAGNOSTIC HINTS\n")
-		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
+		fmt.Fprintf(&sb, "%s\n", "                 TUNING & DIAGNOSTIC HINTS")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("-", 60))
 		for _, warn := range report.Warnings {
-			sb.WriteString(fmt.Sprintf(" [i] %s\n", warn))
+			fmt.Fprintf(&sb, " [i] %s\n", warn)
 		}
 	}
 
 	if len(report.MatchedTIDs) > 0 {
-		sb.WriteString(strings.Repeat("=", 60) + "\n")
-		sb.WriteString("               KNOWLEDGE BASE ARTICLES (TIDs)\n")
-		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+		fmt.Fprintf(&sb, "%s\n", "               KNOWLEDGE BASE ARTICLES (TIDs)")
+		fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 		for _, tid := range report.MatchedTIDs {
-			sb.WriteString(fmt.Sprintf(" [KB] %s: %s\n", tid.TIDID, tid.Title))
-			sb.WriteString(fmt.Sprintf("      Link: %s\n", tid.URL))
-			sb.WriteString(fmt.Sprintf("      Desc: %s\n", tid.Description))
+			fmt.Fprintf(&sb, " [KB] %s: %s\n", tid.TIDID, tid.Title)
+			fmt.Fprintf(&sb, "      Link: %s\n", tid.URL)
+			fmt.Fprintf(&sb, "      Desc: %s\n", tid.Description)
 			if len(tid.Evidence) > 0 {
-				sb.WriteString("      Log Evidence:\n")
+				fmt.Fprintf(&sb, "%s\n", "      Log Evidence:")
 				for _, ev := range tid.Evidence {
-					sb.WriteString(fmt.Sprintf("       - %s\n", ev))
+					fmt.Fprintf(&sb, "       - %s\n", ev)
 				}
 			}
-			sb.WriteString("\n")
+			fmt.Fprintf(&sb, "\n")
 		}
 	}
 
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
-	sb.WriteString(strings.Repeat("=", 60) + "\n")
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
+	fmt.Fprintf(&sb, " sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion)
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 60))
 
 	return sb.String()
 }

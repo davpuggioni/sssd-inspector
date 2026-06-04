@@ -242,9 +242,7 @@ func anonymizeReport(r *ReportData) {
 	// This catches domains in any context: section headers, key values, comments, etc.
 	if r.SSSDConfigSnippet != "" {
 		matches := fqdnRegex.FindAllString(r.SSSDConfigSnippet, -1)
-		for _, m := range matches {
-			domainValues = append(domainValues, m)
-		}
+		domainValues = append(domainValues, matches...)
 	}
 
 	// Deduplicate domain values. If both a lowercase variant (e.g., "company.com")
