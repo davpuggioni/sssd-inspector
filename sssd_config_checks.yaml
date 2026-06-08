@@ -40,3 +40,10 @@ SSSD_CONFIG_CHECKS:
     pattern: "krb5_validate"
     value: "false"
     message: "[SECURITY RISK] 'krb5_validate = false' is set. When 'id_provider = ad', the default is 'true'. Disabling this bypasses KDC spoofing protection and should only be used temporarily to work around the AD RC4 encryption bug. Fix: update the 'operatingSystemVersion' attribute in AD or update local crypto-policies instead."
+
+  # Warning checks that emit a warning message (supports dedup)
+  - type: warning
+    pattern: "debug_level"
+    value: ""
+    dedup: true
+    message: "[DIAGNOSTIC HINT] 'debug_level' key found in sssd.conf but no specific value is set. Consider setting 'debug_level = 9' during troubleshooting to capture detailed logs."

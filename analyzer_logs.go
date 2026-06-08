@@ -366,6 +366,16 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 					}
 				}
 				report.Problems = append(report.Problems, check.Message)
+
+			case "warning":
+				if check.Dedup {
+					msgKey := check.Message
+					if problemReported[msgKey] {
+						continue
+					}
+					problemReported[msgKey] = true
+				}
+				report.Warnings = append(report.Warnings, check.Message)
 			}
 		}
 	}
