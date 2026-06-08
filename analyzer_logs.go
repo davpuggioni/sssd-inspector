@@ -19,12 +19,16 @@ var embeddedPatternsYAML []byte
 //go:embed sssd_config_checks.yaml
 var embeddedConfigChecksYAML []byte
 
+// errorPatternEntry represents a single entry in the error patterns YAML
+type errorPatternEntry struct {
+	Pattern     string `yaml:"pattern"`
+	Description string `yaml:"description"`
+	Category    string `yaml:"category,omitempty"`
+}
+
 // errorPatternConfig matches the YAML structure for error patterns
 type errorPatternConfig struct {
-	SSSDErrorPatterns []struct {
-		Pattern     string `yaml:"pattern"`
-		Description string `yaml:"description"`
-	} `yaml:"SSSD_ERROR_PATTERNS"`
+	SSSDErrorPatterns []errorPatternEntry `yaml:"SSSD_ERROR_PATTERNS"`
 }
 
 // configCheck defines a single SSSD configuration check loaded from YAML
@@ -87,24 +91,34 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 // sssd_error_patterns.yaml file, filtering out SELinux-specific noise unless
 // the system uses SELinux.
 func buildErrorPatterns(macType string) map[string]string {
+	entries := loadErrorPatternEntries(macType)
+	errorPatterns := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		errorPatterns[entry.Pattern] = entry.Description
+	}
+	return errorPatterns
+}
+
+// loadErrorPatternEntries loads all error pattern entries (with categories) from
+// the embedded YAML, filtering out SELinux-specific patterns unless the system
+// uses SELinux. This is used by the single-pass scanner to drive quick-match
+// pattern categories (account_expired, watchdog, crypto_bug, etc.) that were
+// previously hardcoded in Go.
+func loadErrorPatternEntries(macType string) []errorPatternEntry {
 	var config errorPatternConfig
 	if err := yaml.Unmarshal(embeddedPatternsYAML, &config); err != nil {
-		// Fallback: if YAML parsing fails, return an empty map (no patterns matched)
-		return make(map[string]string)
+		return nil
 	}
 
-	errorPatterns := make(map[string]string, len(config.SSSDErrorPatterns))
+	var entries []errorPatternEntry
 	for _, entry := range config.SSSDErrorPatterns {
-		pattern := entry.Pattern
-		desc := entry.Description
 		// Filter out SELinux-specific patterns unless the system uses SELinux
-		if macType != "SELinux" && strings.Contains(desc, "SELinux") && !strings.Contains(desc, "AppArmor") {
+		if macType != "SELinux" && strings.Contains(entry.Description, "SELinux") && !strings.Contains(entry.Description, "AppArmor") {
 			continue
 		}
-		errorPatterns[pattern] = desc
+		entries = append(entries, entry)
 	}
-
-	return errorPatterns
+	return entries
 }
 
 // normalizeTimestamp converts a timestamp string from any supported format

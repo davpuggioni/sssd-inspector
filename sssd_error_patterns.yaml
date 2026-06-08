@@ -1,4 +1,7 @@
 SSSD_ERROR_PATTERNS:
+# ──────────────────────────────────────────────
+# Account & credential status patterns
+# ──────────────────────────────────────────────
 - pattern: '[13][Permission denied]'
   description: >-
     Permission Denied: SSSD cannot access a required file or log directory.
@@ -78,6 +81,11 @@ SSSD_ERROR_PATTERNS:
   description: >-
     DNS Resolution Failed: SSSD found the KDC hostname but cannot resolve its IP address.
     Check your DNS resolver (/etc/resolv.conf).
+- pattern: Clients credentials have been revoked
+  description: >-
+    [AUTHENTICATION] Logs indicate an Active Directory user account is expired,
+    locked, or credentials have been revoked.
+  category: account_expired
 - pattern: Client not found in Kerberos database
   description: >-
     Principal Missing: The user's Kerberos Principal (UPN) does not exist in the AD/IPA
@@ -175,6 +183,10 @@ SSSD_ERROR_PATTERNS:
   description: >-
     SSSD Cache Corrupt: LDB database image is malformed (Recommend running: rm -f
     /var/lib/sss/db/* && systemctl restart sssd)
+- pattern: 'Default principal:'
+  description: >-
+    Keytab Principal Found: Kerberos keytab principal detected.
+  category: keytab_principal
 - pattern: 'dlopen failed:'
   description: >-
     Shared Library Error: SSSD failed to dynamically load a required library. This
@@ -444,6 +456,16 @@ SSSD_ERROR_PATTERNS:
 - pattern: KDC has no support for encryption type
   description: >-
     Kerberos: KDC has no support for encryption type (Crypto policy mismatch)
+  category: crypto_bug
+- pattern: Key table file '/etc/krb5.keytab' not found
+  description: >-
+    Keytab Not Found: The machine keytab file is missing, preventing SSSD from
+    authenticating with Active Directory.
+  category: keytab_not_found
+- pattern: KVNO Principal
+  description: >-
+    Keytab Principal Found: Kerberos keytab principal detected.
+  category: keytab_principal
 - pattern: krb5_child_timeout
   description: >-
     Kerberos Timeout: krb5_child_timeout reached (KDC slow, distant, or firewalled)
@@ -559,6 +581,11 @@ SSSD_ERROR_PATTERNS:
   description: >-
     [DIAGNOSTIC HINT] SSH Key Missing: SSSD found the requested host object in the
     directory, but it lacks the required 'sshPublicKey' attribute.
+- pattern: No suitable principal found in keytab
+  description: >-
+    Keytab Principal Missing: No suitable principal found in keytab. The machine
+    password may have been changed externally.
+  category: no_keytab_principal
 - pattern: Not an SSH certificate
   description: >-
     SSH Certificate Error: The certificate provided in LDAP/AD is not a valid SSH
@@ -687,6 +714,7 @@ SSSD_ERROR_PATTERNS:
 - pattern: service key not available
   description: >-
     Kerberos: Service key not available (KDC forced RC4 due to AD OS version bug)
+  category: crypto_bug
 - pattern: setresuid() failed
   description: >-
     Privilege Escalation Failed: The selinux_child helper process failed to change
@@ -738,9 +766,11 @@ SSSD_ERROR_PATTERNS:
 - pattern: terminated by own WATCHDOG
   description: >-
     SSSD Watchdog: Process blocked for too long (Slow DNS, slow AD, or heavy load)
+  category: watchdog
 - pattern: TGT failed verification using key
   description: >-
     Kerberos: TGT validation failed (Crypto mismatch between AD and keytab)
+  category: crypto_bug
 - pattern: TGT is not renewable
   description: >-
     Non-Renewable Ticket: SSSD attempted to renew a Kerberos ticket in the background,
@@ -822,6 +852,11 @@ SSSD_ERROR_PATTERNS:
     Network Monitor Failure: SSSD could not subscribe to kernel netlink events. It
     will not be able to automatically detect when the network goes offline or comes
     back online.
+- pattern: User account has expired
+  description: >-
+    [AUTHENTICATION] Logs indicate an Active Directory user account is expired,
+    locked, or credentials have been revoked.
+  category: account_expired
 - pattern: would have been denied GPO-based logon
   description: >-
     [DIAGNOSTIC HINT] GPO Permissive Mode: A user logged in, but would have been blocked

@@ -75,10 +75,10 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		KBEvidence: make(map[string][]string),
 	}
 
-	// Build error patterns
-	errorPatterns := buildErrorPatterns(macType)
+	// Load ALL error pattern entries from YAML (including categories)
+	allEntries := loadErrorPatternEntries(macType)
 
-	// STEP 1: Build combined pattern lookup
+	// STEP 1: Build combined pattern lookup with categories
 	// Each matched string maps to its category and metadata
 	type combinedPattern struct {
 		pattern string
@@ -87,44 +87,27 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 
 	var allPatterns []combinedPattern
 
-	// Error patterns
-	for pattern, desc := range errorPatterns {
-		allPatterns = append(allPatterns, combinedPattern{
-			pattern: pattern,
-			info: patternInfo{
-				category:    mcError,
-				description: desc,
-			},
-		})
+	// Categorize patterns: standard error descriptions and quick-match categories
+	categoryMap := map[string]matchCategory{
+		"account_expired":     mcAccountExpired,
+		"watchdog":            mcWatchdog,
+		"crypto_bug":          mcCryptoBug,
+		"keytab_principal":    mcKeytabPrincipal,
+		"keytab_not_found":    mcKeytabNotFound,
+		"no_keytab_principal": mcNoPrincipal,
 	}
 
-	// Quick patterns from analyzeSSSDConfigAndLogs
-	quickPatterns := []struct {
-		pattern  string
-		category matchCategory
-		desc     string
-	}{
-		// Account expired / revoked credentials
-		{"User account has expired", mcAccountExpired, ""},
-		{"Clients credentials have been revoked", mcAccountExpired, ""},
-		// Watchdog
-		{"terminated by own WATCHDOG", mcWatchdog, ""},
-		// Crypto bug
-		{"service key not available", mcCryptoBug, ""},
-		{"TGT failed verification", mcCryptoBug, ""},
-		{"KDC has no support for encryption type", mcCryptoBug, ""},
-		// Keytab
-		{"KVNO Principal", mcKeytabPrincipal, ""},
-		{"Default principal:", mcKeytabPrincipal, ""},
-		{"Key table file '/etc/krb5.keytab' not found", mcKeytabNotFound, ""},
-		{"No suitable principal found in keytab", mcNoPrincipal, ""},
-	}
-
-	for _, qp := range quickPatterns {
+	for _, entry := range allEntries {
+		cat, ok := categoryMap[entry.Category]
+		if !ok {
+			// Standard error pattern (no special category or unknown category)
+			cat = mcError
+		}
 		allPatterns = append(allPatterns, combinedPattern{
-			pattern: qp.pattern,
+			pattern: entry.Pattern,
 			info: patternInfo{
-				category: qp.category,
+				category:    cat,
+				description: entry.Description,
 			},
 		})
 	}
@@ -174,8 +157,8 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 	// Pre-allocate timeline with reasonable capacity to reduce reallocations
 	// Most supportconfig files have < 1000 error lines
 	timelineCapacity := 1000
-	if len(errorPatterns) > 0 {
-		timelineCapacity = len(errorPatterns) * 2 // upper bound estimate
+	if len(allEntries) > 0 {
+		timelineCapacity = len(allEntries) * 2 // upper bound estimate
 		if timelineCapacity > 5000 {
 			timelineCapacity = 5000
 		}
