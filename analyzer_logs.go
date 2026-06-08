@@ -16,12 +16,31 @@ import (
 //go:embed sssd_error_patterns.yaml
 var embeddedPatternsYAML []byte
 
+//go:embed sssd_config_checks.yaml
+var embeddedConfigChecksYAML []byte
+
 // errorPatternConfig matches the YAML structure for error patterns
 type errorPatternConfig struct {
 	SSSDErrorPatterns []struct {
 		Pattern     string `yaml:"pattern"`
 		Description string `yaml:"description"`
 	} `yaml:"SSSD_ERROR_PATTERNS"`
+}
+
+// configCheck defines a single SSSD configuration check loaded from YAML
+type configCheck struct {
+	Type      string `yaml:"type"`                 // "flag" or "problem"
+	Pattern   string `yaml:"pattern"`              // key name to look for
+	Value     string `yaml:"value,omitempty"`      // optional expected value
+	Flag      string `yaml:"flag,omitempty"`       // report field flag for "flag" type
+	ExtraFlag string `yaml:"extra_flag,omitempty"` // additional flag for "flag" type
+	Dedup     bool   `yaml:"dedup,omitempty"`      // only report once for "problem" type
+	Message   string `yaml:"message,omitempty"`    // message for "problem" type
+}
+
+// configChecksYAML matches the YAML structure
+type configChecksYAML struct {
+	SSSDConfigChecks []configCheck `yaml:"SSSD_CONFIG_CHECKS"`
 }
 
 // logFileNames lists the files to scan for SSSD log messages
@@ -244,6 +263,15 @@ func buildSortedLogErrors(detectedLogErrors map[string][]string) []SSSDLogError 
 	return errors
 }
 
+// loadConfigChecks loads the SSSD configuration check rules from the embedded YAML.
+func loadConfigChecks() []configCheck {
+	var cfg configChecksYAML
+	if err := yaml.Unmarshal(embeddedConfigChecksYAML, &cfg); err != nil {
+		return nil
+	}
+	return cfg.SSSDConfigChecks
+}
+
 // analyzeSSSDConfig parses the sssd.conf content and detects common configuration issues,
 // such as missing options, duplicate parameters, and deprecated settings.
 func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
@@ -260,6 +288,10 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 	if !strings.Contains(confLowerStr, "timeout =") {
 		report.Warnings = append(report.Warnings, "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections.")
 	}
+
+	// Load configuration checks from embedded YAML
+	configChecks := loadConfigChecks()
+	problemReported := make(map[string]bool) // for dedup
 
 	currentSection := ""
 	seenKeys := make(map[string]map[string]bool)
@@ -290,31 +322,51 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 		}
 
 		lowerLine := strings.ToLower(line)
-		if strings.Contains(lowerLine, "id_provider") && strings.Contains(lowerLine, "ad") {
-			report.ADProviderMode = true
-		}
-		if strings.Contains(lowerLine, "enumerate") && strings.Contains(lowerLine, "true") {
-			if !report.EnumerateIssue {
-				report.EnumerateIssue = true
-				report.Problems = append(report.Problems, "[DEPRECATION] 'enumerate = true' is set in sssd.conf. This causes severe performance issues, is deprecated for AD/IPA, and is unsupported in SSSD 2.10+.")
+
+		// Apply YAML-defined config checks
+		for _, check := range configChecks {
+			keyMatches := strings.Contains(lowerLine, check.Pattern)
+			if !keyMatches {
+				continue
 			}
-		}
-		if strings.Contains(lowerLine, "use_fully_qualified_names") && strings.Contains(lowerLine, "true") {
-			report.UseFQDNSet = true
-		}
-		if strings.HasPrefix(lowerLine, "simple_allow_groups") {
-			hasSimpleAllowGroups, hasSimpleAllow = true, true
-		} else if strings.HasPrefix(lowerLine, "simple_allow_users") {
-			hasSimpleAllow = true
-		}
-		if strings.HasPrefix(lowerLine, "access_provider") && strings.Contains(lowerLine, "simple") {
-			accessProviderSimple = true
-		}
-		if strings.HasPrefix(lowerLine, "ldap_id_mapping") && strings.Contains(lowerLine, "false") {
-			idMappingFalse = true
-		}
-		if strings.HasPrefix(lowerLine, "krb5_validate") && strings.Contains(lowerLine, "false") {
-			report.Problems = append(report.Problems, "[SECURITY RISK] 'krb5_validate = false' is set. When 'id_provider = ad', the default is 'true'. Disabling this bypasses KDC spoofing protection and should only be used temporarily to work around the AD RC4 encryption bug. Fix: update the 'operatingSystemVersion' attribute in AD or update local crypto-policies instead.")
+			valueMatches := check.Value == "" || strings.Contains(lowerLine, check.Value)
+
+			if !valueMatches {
+				continue
+			}
+
+			switch check.Type {
+			case "flag":
+				switch check.Flag {
+				case "ad_provider":
+					report.ADProviderMode = true
+				case "use_fqdn":
+					report.UseFQDNSet = true
+				case "simple_allow_groups":
+					hasSimpleAllowGroups = true
+					hasSimpleAllow = true
+				case "simple_allow":
+					hasSimpleAllow = true
+				case "access_provider_simple":
+					accessProviderSimple = true
+				case "id_mapping_false":
+					idMappingFalse = true
+				}
+
+			case "problem":
+				msgKey := check.Message
+				if check.Dedup {
+					if problemReported[msgKey] {
+						continue
+					}
+					problemReported[msgKey] = true
+					// Special handling for enumerate to also set the flag
+					if check.Pattern == "enumerate" {
+						report.EnumerateIssue = true
+					}
+				}
+				report.Problems = append(report.Problems, check.Message)
+			}
 		}
 	}
 

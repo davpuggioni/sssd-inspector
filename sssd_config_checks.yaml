@@ -1,0 +1,42 @@
+SSSD_CONFIG_CHECKS:
+  # Key=value checks that set a boolean flag on the report
+  - type: flag
+    pattern: "id_provider"
+    value: "ad"
+    flag: "ad_provider"
+
+  - type: flag
+    pattern: "use_fully_qualified_names"
+    value: "true"
+    flag: "use_fqdn"
+
+  - type: flag
+    pattern: "simple_allow_groups"
+    flag: "simple_allow_groups"
+    extra_flag: "simple_allow"
+
+  - type: flag
+    pattern: "simple_allow_users"
+    flag: "simple_allow"
+
+  - type: flag
+    pattern: "access_provider"
+    value: "simple"
+    flag: "access_provider_simple"
+
+  - type: flag
+    pattern: "ldap_id_mapping"
+    value: "false"
+    flag: "id_mapping_false"
+
+  # Key=value checks that emit a problem/warning directly
+  - type: problem
+    pattern: "enumerate"
+    value: "true"
+    dedup: true
+    message: "[DEPRECATION] 'enumerate = true' is set in sssd.conf. This causes severe performance issues, is deprecated for AD/IPA, and is unsupported in SSSD 2.10+."
+
+  - type: problem
+    pattern: "krb5_validate"
+    value: "false"
+    message: "[SECURITY RISK] 'krb5_validate = false' is set. When 'id_provider = ad', the default is 'true'. Disabling this bypasses KDC spoofing protection and should only be used temporarily to work around the AD RC4 encryption bug. Fix: update the 'operatingSystemVersion' attribute in AD or update local crypto-policies instead."
