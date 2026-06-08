@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"sssd-inspector/constants"
 )
 
 //go:embed sssd_error_patterns.yaml
@@ -47,9 +49,6 @@ type configChecksYAML struct {
 	SSSDConfigChecks []configCheck `yaml:"SSSD_CONFIG_CHECKS"`
 }
 
-// logFileNames lists the files to scan for SSSD log messages
-var logFileNames = []string{"sssd.txt", "messages", "messages.txt"}
-
 // analyzeSSSDConfigAndLogs orchestrates the full analysis of SSSD configuration and logs.
 // It loads sssd.conf, scans log files for known error patterns, builds a timeline,
 // and checks for common configuration misconfigurations.
@@ -60,13 +59,14 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	}
 
 	// Quick checks for known issues that map to report.Problems/Warnings directly
-	if anyFileContains(dirPath, logFileNames, "User account has expired") || anyFileContains(dirPath, logFileNames, "Clients credentials have been revoked") {
+	logFiles := constants.LogFileNames()
+	if anyFileContains(dirPath, logFiles, "User account has expired") || anyFileContains(dirPath, logFiles, "Clients credentials have been revoked") {
 		report.Problems = append(report.Problems, "[AUTHENTICATION] Logs indicate an Active Directory user account is expired, locked, or credentials have been revoked.")
 	}
-	if anyFileContains(dirPath, logFileNames, "terminated by own WATCHDOG") {
+	if anyFileContains(dirPath, logFiles, "terminated by own WATCHDOG") {
 		report.Warnings = append(report.Warnings, "[TUNING] Since a WATCHDOG termination was found, consider setting 'ignore_group_members = true' in sssd.conf to speed up ssh/sudo initial lookups.")
 	}
-	if anyFileContains(dirPath, logFileNames, "service key not available") || anyFileContains(dirPath, logFileNames, "TGT failed verification") || anyFileContains(dirPath, logFileNames, "KDC has no support for encryption type") {
+	if anyFileContains(dirPath, logFiles, "service key not available") || anyFileContains(dirPath, logFiles, "TGT failed verification") || anyFileContains(dirPath, logFiles, "KDC has no support for encryption type") {
 		report.Warnings = append(report.Warnings, "[AD CRYPTO BUG] Crypto mismatch or 'service key not available' detected. Microsoft AD forces deprecated RC4 encryption if the 'operatingSystemVersion' attribute in AD starts with a number less than 6 (e.g., '5.14.21'). If your Linux crypto-policy disables RC4, authentication will fail. Fix: Prepend the AD attribute with 'Linux ' (e.g., 'Linux 5.14'), OR re-enable RC4 on this host using 'update-crypto-policies --set DEFAULT:AD-SUPPORT' and reboot.")
 	}
 
@@ -197,7 +197,7 @@ func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[
 	// Regex to match standard SSSD log timestamps, standard syslog timestamps, and ISO 8601 timestamps
 	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
 
-	scanFiles(dirPath, logFileNames, func(line string) {
+	scanFiles(dirPath, constants.LogFileNames(), func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 
 		// Ignore logs from winbindd to prevent false positives in /var/log/messages

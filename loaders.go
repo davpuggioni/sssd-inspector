@@ -14,13 +14,9 @@ import (
 	"time"
 
 	"github.com/ulikunitz/xz"
+
+	"sssd-inspector/constants"
 )
-
-// DefaultExtractionTimeout is the maximum time allowed for extracting an archive.
-const DefaultExtractionTimeout = 30 * time.Minute
-
-// extractionBufferSize is the chunk size used when copying extracted file data.
-const extractionBufferSize = 64 * 1024 // 64KB
 
 // extractArchiveToTemp safely extracts relevant files to a temporary directory.
 // It uses a context with timeout to prevent hanging on corrupted archives,
@@ -48,8 +44,8 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	totalArchiveSize := fileInfo.Size()
 
 	// --- Create context with timeout ---
-	// Use the configured extraction timeout from config.yaml; fallback to 30 min default.
-	extractionTimeout := DefaultExtractionTimeout
+	// Use the configured extraction timeout from config.yaml; fallback to default.
+	extractionTimeout := constants.DefaultExtractionTimeout
 	if appConfig != nil && appConfig.Analysis.ExtractionTimeout != "" {
 		if d, err := time.ParseDuration(appConfig.Analysis.ExtractionTimeout); err == nil && d > 0 {
 			extractionTimeout = d
@@ -90,7 +86,6 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	}
 
 	tr := tar.NewReader(r)
-	const maxFileSize = 2 * 1024 * 1024 * 1024 // 2GB max per file safety limit
 
 	// --- First pass: count relevant files for progress calculation ---
 	// We need to do this by estimating from archive size vs file count
@@ -180,7 +175,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	// Pool for extraction write buffers to reduce allocations
 	bufPool := sync.Pool{
 		New: func() interface{} {
-			b := make([]byte, extractionBufferSize)
+			b := make([]byte, constants.ExtractionBufferSize)
 			return &b
 		},
 	}
@@ -217,7 +212,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			}
 
 			// Prevent Zip/Tar Bombs
-			if hdr.Size > maxFileSize {
+			if hdr.Size > constants.MaxArchiveFileSize {
 				log.Printf("Warning: skipping oversized file %s (%d bytes)", fileName, hdr.Size)
 				continue
 			}

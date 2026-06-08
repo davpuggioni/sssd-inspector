@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"sssd-inspector/constants"
 )
 
 // matchCategory identifies what type of pattern was matched
@@ -151,7 +153,7 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 	errorExamples := make(map[string][]string)
 
 	// Context with timeout for safety
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultFileScanTimeout)
 	defer cancel()
 
 	// Pre-allocate timeline with reasonable capacity to reduce reallocations

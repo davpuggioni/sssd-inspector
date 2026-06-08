@@ -221,6 +221,18 @@ const (
 	ProgressComplete   = 100
 )
 
+// Timeout constants
+const (
+	// File scan timeout per file
+	DefaultFileScanTimeout = 30 * time.Second
+	// Archive extraction timeout
+	DefaultExtractionTimeout = 30 * time.Minute
+	// Buffer size for extraction copies
+	ExtractionBufferSize = 64 * 1024 // 64KB
+	// Maximum allowed size for a single extracted file (tar bomb protection)
+	MaxArchiveFileSize = 2 * 1024 * 1024 * 1024 // 2GB
+)
+
 // Time format constants
 const (
 	// Timestamp formats
@@ -229,6 +241,11 @@ const (
 	// Default timeout duration
 	DefaultTimeoutDuration = 30 * time.Minute
 )
+
+// LogFileNames returns the list of log files scanned for SSSD error patterns
+func LogFileNames() []string {
+	return []string{SSSDTXT, MessagesFile, MessagesTXT}
+}
 
 // Error messages
 const (

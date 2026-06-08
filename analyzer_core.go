@@ -53,17 +53,17 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	globalFileCache.Clear()
 
 	var report ReportData
-	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.2.0" // Major bump for Streaming Engine & PII Redaction
-	report.SssdService = "Not Running / Unknown"
-	report.WinbindService = "Not Running / Unknown"
-	report.NscdStatus = "Not Running / Unknown"
-	report.TimeService = "Not Running / Unknown"
-	report.KerberosRealm = "Not configured"
-	report.HardwareManufacturer = "Unknown"
-	report.HardwareModel = "Unknown"
-	report.Hypervisor = "Unknown"
-	report.VirtualIdentity = "Unknown"
+	report.Timestamp = time.Now().Format(constants.TimestampFormat)
+	report.AppVersion = constants.AppVersion
+	report.SssdService = constants.StatusNotRunning
+	report.WinbindService = constants.StatusNotRunning
+	report.NscdStatus = constants.StatusNotRunning
+	report.TimeService = constants.StatusNotRunning
+	report.KerberosRealm = constants.StatusNotConfigured
+	report.HardwareManufacturer = constants.StatusUnknown
+	report.HardwareModel = constants.StatusUnknown
+	report.Hypervisor = constants.StatusUnknown
+	report.VirtualIdentity = constants.StatusUnknown
 
 	// ---- Phase 1: System analysis (no log scanning) ----
 	if progressFunc != nil {

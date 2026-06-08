@@ -8,13 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"sssd-inspector/constants"
 )
-
-// DefaultFileScanTimeout is the maximum time to spend scanning a single file
-const DefaultFileScanTimeout = 30 * time.Second
 
 // FileProcessor provides streaming file processing capabilities
 type FileProcessor struct {
