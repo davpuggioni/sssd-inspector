@@ -123,8 +123,20 @@ func (fc *FileCache) GetLines(dirPath, fileName string) []string {
 	return lines
 }
 
-// readFileLines reads a file and returns its lines
+// readFileLines reads a file and returns its lines.
+// To prevent OOM, files larger than MaxCacheFileSize (10MB) are NOT cached;
+// they should only be accessed via streaming. This function returns nil
+// for such files, forcing callers to use the streaming scanner instead.
 func (fc *FileCache) readFileLines(filePath string) []string {
+	// Check file size before reading to prevent caching large files in RAM
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		return nil
+	}
+	if fi.Size() > 10*1024*1024 { // 10MB - large files must be streamed
+		return nil
+	}
+
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil

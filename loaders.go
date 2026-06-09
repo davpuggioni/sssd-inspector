@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,13 @@ import (
 // It uses a context with timeout to prevent hanging on corrupted archives,
 // provides real-time progress updates per extracted file,
 // and handles OS interrupt signals (Ctrl+C) for graceful cleanup.
+//
+// Memory optimizations:
+//   - Single-pass extraction: no pre-scan phase (eliminates double decompression)
+//   - Size-based progress: uses compressed file size × estimated ratio instead
+//     of a full tar header pre-scan, avoiding a second decompression pass
+//   - Large archives (>50MB compressed) get extra GC and buffer adjustments
+//   - Buffer pooling reduces allocation pressure during file writes
 func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
 	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
 	if err != nil {
@@ -43,8 +51,10 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	}
 	totalArchiveSize := fileInfo.Size()
 
+	// For very large archives, adjust GC to handle the memory spike better
+	isLargeArchive := totalArchiveSize > constants.LargeArchiveThreshold
+
 	// --- Create context with timeout ---
-	// Use the configured extraction timeout from config.yaml; fallback to default.
 	extractionTimeout := constants.DefaultExtractionTimeout
 	if appConfig != nil && appConfig.Analysis.ExtractionTimeout != "" {
 		if d, err := time.ParseDuration(appConfig.Analysis.ExtractionTimeout); err == nil && d > 0 {
@@ -55,7 +65,6 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	defer cancel()
 
 	// --- Set up OS signal handling for graceful interruption ---
-	// Signal goroutine: listen for Ctrl+C and cancel the context
 	signalCtx, signalStop := signal.NotifyContext(ctx, os.Interrupt)
 	defer signalStop()
 
@@ -87,86 +96,15 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 
 	tr := tar.NewReader(r)
 
-	// --- First pass: count relevant files for progress calculation ---
-	// We need to do this by estimating from archive size vs file count
-	relevantCount := 0
-	totalFilesInArchive := 0
-	if progressFunc != nil {
-		// Estimate: scan tar headers to count total files (non-recursive, just headers)
-		type scanResult struct {
-			relevant int
-			total    int
-		}
-		scanCh := make(chan scanResult, 1)
-		go func() {
-			rel := 0
-			tot := 0
-			// Reset the tar reader by creating a new one from a fresh XZ reader
-			f2, err2 := os.Open(archivePath)
-			if err2 != nil {
-				scanCh <- scanResult{0, 0}
-				return
-			}
-			defer f2.Close()
-			r2, err2 := xz.NewReader(f2)
-			if err2 != nil {
-				scanCh <- scanResult{0, 0}
-				return
-			}
-			tr2 := tar.NewReader(r2)
-			for {
-				hdr, err3 := tr2.Next()
-				if err3 == io.EOF {
-					break
-				}
-				if err3 != nil {
-					break
-				}
-				tot++
-				if hdr.Typeflag == tar.TypeReg && isRelevantFile(filepath.Base(hdr.Name)) {
-					rel++
-				}
-			}
-			scanCh <- scanResult{rel, tot}
-		}()
-
-		select {
-		case sr := <-scanCh:
-			relevantCount = sr.relevant
-			totalFilesInArchive = sr.total
-		case <-signalCtx.Done():
-			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("decompression cancelled during pre-scan: %v", signalCtx.Err())
-		case <-time.After(10 * time.Second):
-			// Pre-scan timed out; fall back to size-based estimation
-			relevantCount = 0
-			totalFilesInArchive = 0
-		}
-	}
-
-	// --- Second pass: actual extraction ---
-	// Re-open the archive file for the actual extraction pass
-	f.Close()
-	f, err = os.Open(archivePath)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return "", err
-	}
-	defer f.Close()
-
-	r2, err := xz.NewReader(f)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return "", fmt.Errorf("xz decompression init failed: %v", err)
-	}
-	tr = tar.NewReader(r2)
-
-	extractedCount := 0
-	totalExtractedBytes := int64(0)
+	// --- Single-pass extraction (no pre-scan) ---
+	// Instead of doing a pre-scan to count files, we use size-based progress.
+	// The estimated decompressed size = compressed_size × compression_ratio.
+	// This eliminates the expensive second decompression pass.
+	estimatedDecompressedSize := totalArchiveSize * constants.XZEstimatedCompressionRatio
 
 	if progressFunc != nil {
-		if totalFilesInArchive > 0 {
-			progressFunc(fmt.Sprintf("Pre-scan complete: %d relevant files out of %d total", relevantCount, totalFilesInArchive), 3)
+		if isLargeArchive {
+			progressFunc(fmt.Sprintf("Decompressing large archive (%.0f MB compressed)...", float64(totalArchiveSize)/(1024*1024)), 3)
 		} else {
 			progressFunc("Decompressing archive...", 3)
 		}
@@ -179,6 +117,9 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			return &b
 		},
 	}
+
+	extractedCount := 0
+	totalExtractedBytes := int64(0)
 
 	for {
 		// Check for cancellation between each tar entry
@@ -194,7 +135,6 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			break
 		}
 		if err != nil {
-			// Log the error but try to continue with remaining files instead of aborting
 			log.Printf("Warning: tar entry error (continuing): %v", err)
 			continue
 		}
@@ -237,17 +177,16 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 
 			// Update progress after each relevant file
 			if progressFunc != nil {
+				// Size-based progress: use bytes decompressed vs estimated total
 				// Progress range: 5% to 95% spanning the extraction phase
 				var pct int
-				if relevantCount > 0 {
-					// File-count based progress (when pre-scan succeeded)
-					pct = 5 + (extractedCount * 90 / relevantCount)
+				if estimatedDecompressedSize > 0 {
+					pct = 5 + int(85*totalExtractedBytes/estimatedDecompressedSize)
 					if pct > 95 {
 						pct = 95
 					}
-					progressFunc(fmt.Sprintf("Extracting: %s (%d/%d relevant files)", fileName, extractedCount, relevantCount), pct)
+					progressFunc(fmt.Sprintf("Extracting: %s (%.0f KB decompressed, %d files)", fileName, float64(totalExtractedBytes)/1024, extractedCount), pct)
 				} else if totalArchiveSize > 0 {
-					// Size-based fallback progress
 					pct = 5 + int(50*totalExtractedBytes/totalArchiveSize)
 					if pct > 55 {
 						pct = 55
@@ -258,6 +197,12 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 				}
 			}
 		}
+	}
+
+	// For large archives, help the GC reclaim XZ decoder buffers and temp allocations
+	// that may still be referenced after the extraction loop completes.
+	if isLargeArchive {
+		runtime.GC()
 	}
 
 	return tempDir, nil

@@ -238,6 +238,26 @@ const (
 	MaxArchiveFileSize = 2 * 1024 * 1024 * 1024 // 2GB
 )
 
+// Cache constants
+const (
+	// MaxCacheFileSize is the maximum file size (in bytes) that the FileCache
+	// will store in memory. Files larger than this are streamed directly
+	// and never cached in RAM, preventing OOM on massive log files.
+	MaxCacheFileSize = 10 * 1024 * 1024 // 10MB
+
+	// MaxCachedFiles is the maximum number of files the FileCache will hold.
+	MaxCachedFiles = 20
+
+	// XZEstimatedCompressionRatio is used to estimate the decompressed size
+	// of XZ archives for progress reporting. XZ typically achieves 10x-15x
+	// compression on text/log files. We use a conservative 12x estimate.
+	XZEstimatedCompressionRatio = 12
+
+	// LargeArchiveThreshold is the compressed file size (in bytes) above which
+	// we consider an archive "large" and apply extra memory-safety measures.
+	LargeArchiveThreshold = 50 * 1024 * 1024 // 50MB
+)
+
 // Time format constants
 const (
 	// Timestamp formats
