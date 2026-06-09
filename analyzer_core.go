@@ -319,6 +319,10 @@ func anonymizeReport(r *ReportData) {
 			r.MatchedTIDs[i].Evidence[j] = maskString(ev)
 		}
 	}
+	for i := range r.Timeline {
+		r.Timeline[i].Message = maskString(r.Timeline[i].Message)
+		r.Timeline[i].RawLog = maskString(r.Timeline[i].RawLog)
+	}
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
 }
 
