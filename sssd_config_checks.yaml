@@ -47,3 +47,14 @@ SSSD_CONFIG_CHECKS:
     value: ""
     dedup: true
     message: "[DIAGNOSTIC HINT] 'debug_level' key found in sssd.conf but no specific value is set. Consider setting 'debug_level = 9' during troubleshooting to capture detailed logs."
+
+  # Missing checks that emit a warning when a pattern is NOT found in sssd.conf
+  - type: missing
+    pattern: "ldap_use_tokengroups = false"
+    dedup: true
+    message: "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'."
+
+  - type: missing
+    pattern: "timeout ="
+    dedup: true
+    message: "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections."

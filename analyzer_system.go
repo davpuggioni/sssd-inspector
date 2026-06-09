@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"sssd-inspector/constants"
 )
 
 // Global regex for parsing systemd exit codes
@@ -102,17 +104,17 @@ func analyzeServices(dirPath string, report *ReportData) {
 		}
 
 		if strings.Contains(line, "winbind.service") && strings.Contains(line, "Active: active") {
-			report.WinbindService = "Running"
+			report.WinbindService = constants.StatusRunning
 			report.Problems = append(report.Problems, "Winbind is running. This can cause ID mapping conflicts with SSSD.")
 		}
 		if strings.Contains(line, "nscd.service") && strings.Contains(line, "Active: active") {
-			report.NscdStatus = "Running"
+			report.NscdStatus = constants.StatusRunning
 		}
 	})
 
 	for _, line := range sssdStatusBlock {
 		if strings.Contains(line, "Active: active (running)") {
-			report.SssdService = "Running"
+			report.SssdService = constants.StatusRunning
 		}
 
 		matches := reStatus.FindStringSubmatch(line)
@@ -136,11 +138,11 @@ func analyzeServices(dirPath string, report *ReportData) {
 		}
 	}
 
-	if report.WinbindService == "Not Running / Unknown" {
-		report.WinbindService = "Not Running / Disabled"
+	if report.WinbindService == constants.StatusNotRunning {
+		report.WinbindService = constants.StatusNotRunningDisabled
 	}
-	if report.NscdStatus == "Not Running / Unknown" {
-		report.NscdStatus = "Disabled / Stopped"
+	if report.NscdStatus == constants.StatusNotRunning {
+		report.NscdStatus = constants.StatusDisabled
 	}
 }
 
@@ -176,7 +178,7 @@ func analyzeMACDenials(dirPath string, report *ReportData) {
 }
 
 func analyzeMACStatus(dirPath string, report *ReportData) {
-	report.MACType = "Unknown/None"
+	report.MACType = constants.StatusUnknownNone
 
 	scanFiles(dirPath, []string{"boot.txt"}, func(line string) {
 		if strings.Contains(line, "security=apparmor") {
@@ -186,7 +188,7 @@ func analyzeMACStatus(dirPath string, report *ReportData) {
 		}
 	})
 
-	if report.MACType == "Unknown/None" {
+	if report.MACType == constants.StatusUnknownNone {
 		if anyFileContains(dirPath, []string{"security-apparmor.txt"}, "apparmor module is loaded") || anyFileContains(dirPath, []string{"security-apparmor.txt"}, "Active: active") {
 			report.MACType = "AppArmor"
 		} else if anyFileContains(dirPath, []string{"security-selinux.txt"}, "SELinux status:                 enabled") {

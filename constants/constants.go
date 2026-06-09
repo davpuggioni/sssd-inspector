@@ -7,7 +7,7 @@ import "time"
 const (
 	// App metadata
 	AppName    = "SSSD Inspector"
-	AppVersion = "0.2.0"
+	AppVersion = "0.2.1"
 
 	// Window dimensions
 	DefaultWindowWidth  = 1024
@@ -34,7 +34,7 @@ const (
 	TarGZFormat = "tar.gz"
 
 	// Analysis timeout
-	DefaultTimeout = "30m"
+	DefaultTimeout = "10m"
 
 	// Progress steps
 	DefaultProgressSteps = 10
@@ -135,10 +135,15 @@ const (
 
 // Service status constants
 const (
-	StatusNotRunning    = "Not Running / Unknown"
-	StatusNotConfigured = "Not configured"
-	StatusUnknown       = "Unknown"
-	StatusRedacted      = "[REDACTED]"
+	StatusNotRunning         = "Not Running / Unknown"
+	StatusNotRunningDisabled = "Not Running / Disabled"
+	StatusDisabled           = "Disabled / Stopped"
+	StatusNotConfigured      = "Not configured"
+	StatusUnknown            = "Unknown"
+	StatusUnknownNone        = "Unknown/None"
+	StatusRunning            = "Running"
+	StatusNARawLogMode       = "N/A (raw log mode)"
+	StatusRedacted           = "[REDACTED]"
 )
 
 // Knowledge base constants

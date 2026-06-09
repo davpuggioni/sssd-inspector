@@ -144,7 +144,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}
 
-	if report.SssdService != "Running" {
+	if report.SssdService != constants.StatusRunning {
 		report.Problems = append(report.Problems, "sssd.service is not actively running.")
 	}
 
@@ -334,16 +334,16 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	report.AppVersion = constants.AppVersion
 
 	// Mark all system-level info as N/A since we have no supportconfig
-	report.SssdService = "N/A (raw log mode)"
-	report.WinbindService = "N/A (raw log mode)"
-	report.NscdStatus = "N/A (raw log mode)"
-	report.TimeService = "N/A (raw log mode)"
-	report.KerberosRealm = "N/A (raw log mode)"
-	report.HardwareManufacturer = "N/A (raw log mode)"
-	report.HardwareModel = "N/A (raw log mode)"
-	report.Hypervisor = "N/A (raw log mode)"
-	report.VirtualIdentity = "N/A (raw log mode)"
-	report.MACType = "Unknown"
+	report.SssdService = constants.StatusNARawLogMode
+	report.WinbindService = constants.StatusNARawLogMode
+	report.NscdStatus = constants.StatusNARawLogMode
+	report.TimeService = constants.StatusNARawLogMode
+	report.KerberosRealm = constants.StatusNARawLogMode
+	report.HardwareManufacturer = constants.StatusNARawLogMode
+	report.HardwareModel = constants.StatusNARawLogMode
+	report.Hypervisor = constants.StatusNARawLogMode
+	report.VirtualIdentity = constants.StatusNARawLogMode
+	report.MACType = constants.StatusUnknown
 	report.SssdInstalled = true
 
 	if progressFunc != nil {

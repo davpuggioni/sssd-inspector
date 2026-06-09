@@ -82,7 +82,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}
 
-	if report.SssdService != "Running" {
+	if report.SssdService != constants.StatusRunning {
 		report.Problems = append(report.Problems, "sssd.service is not actively running.")
 	}
 }
@@ -295,17 +295,10 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 	scanner := bufio.NewScanner(strings.NewReader(sssdConfContent))
 	hasSimpleAllowGroups, hasSimpleAllow, accessProviderSimple, idMappingFalse := false, false, false, false
 
-	confLowerStr := strings.ToLower(sssdConfContent)
-	if !strings.Contains(confLowerStr, "ldap_use_tokengroups = false") {
-		report.Warnings = append(report.Warnings, "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'.")
-	}
-	if !strings.Contains(confLowerStr, "timeout =") {
-		report.Warnings = append(report.Warnings, "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections.")
-	}
-
 	// Load configuration checks from embedded YAML
 	configChecks := loadConfigChecks()
 	problemReported := make(map[string]bool) // for dedup
+	foundPatterns := make(map[string]bool)   // for "missing" type checks
 
 	currentSection := ""
 	seenKeys := make(map[string]map[string]bool)
@@ -336,6 +329,13 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 		}
 
 		lowerLine := strings.ToLower(line)
+
+		// Track found patterns for "missing" type checks
+		for _, check := range configChecks {
+			if strings.Contains(lowerLine, check.Pattern) {
+				foundPatterns[check.Pattern] = true
+			}
+		}
 
 		// Apply YAML-defined config checks
 		for _, check := range configChecks {
@@ -384,6 +384,22 @@ func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
 			case "warning":
 				if check.Dedup {
 					msgKey := check.Message
+					if problemReported[msgKey] {
+						continue
+					}
+					problemReported[msgKey] = true
+				}
+				report.Warnings = append(report.Warnings, check.Message)
+			}
+		}
+	}
+
+	// Check for "missing" type checks: emit warnings when a pattern was NOT found
+	for _, check := range configChecks {
+		if check.Type == "missing" {
+			if !foundPatterns[check.Pattern] {
+				msgKey := check.Message
+				if check.Dedup {
 					if problemReported[msgKey] {
 						continue
 					}
