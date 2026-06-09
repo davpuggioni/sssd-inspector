@@ -110,58 +110,6 @@ func analyzeTime(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeKerberosAndKeytab(dirPath string, report *ReportData) {
-	krb5Content := extractSection(dirPath, "etc.txt", "# /etc/krb5.conf")
-
-	if krb5Content != "" {
-		inDomainRealm := false
-		for _, line := range strings.Split(krb5Content, "\n") {
-			line = strings.TrimSpace(line)
-			if strings.Contains(line, "rc4-hmac") {
-				report.Warnings = append(report.Warnings, "[SECURITY] Legacy 'rc4-hmac' encryption found in /etc/krb5.conf. Modern Active Directory domains will reject this, causing silent authentication failures.")
-			}
-			if strings.HasPrefix(line, "default_realm") {
-				parts := strings.Split(line, "=")
-				if len(parts) >= 2 {
-					report.KerberosRealm = strings.TrimSpace(parts[1])
-				}
-			}
-			if strings.HasPrefix(line, "[domain_realm]") {
-				inDomainRealm = true
-				continue
-			} else if strings.HasPrefix(line, "[") {
-				inDomainRealm = false
-			}
-
-			if inDomainRealm && strings.Contains(line, "=") && !strings.HasPrefix(line, "#") {
-				parts := strings.SplitN(line, "=", 2)
-				if len(parts) >= 2 {
-					domainPart := strings.TrimSpace(parts[0])
-					if !strings.HasPrefix(domainPart, ".") && !strings.HasPrefix(domainPart, "*") {
-						report.Warnings = append(report.Warnings, fmt.Sprintf("[KERBEROS] The [domain_realm] mapping '%s' lacks a leading dot. Consider changing it to '.%s' to properly map subdomains.", domainPart, domainPart))
-					}
-				}
-			}
-		}
-	}
-
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
-
-	if anyFileContains(dirPath, logFiles, "KVNO Principal") || anyFileContains(dirPath, logFiles, "Default principal:") {
-		report.KeytabFound = true
-	}
-	if !report.KeytabFound {
-		report.Problems = append(report.Problems, "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.")
-	}
-
-	if anyFileContains(dirPath, logFiles, "Key table file '/etc/krb5.keytab' not found") {
-		report.Problems = append(report.Problems, "[KERBEROS] /etc/krb5.keytab file is missing, preventing SSSD from authenticating.")
-	} else if anyFileContains(dirPath, logFiles, "No suitable principal found in keytab") {
-		report.Problems = append(report.Problems, "[KERBEROS] No suitable principal found in keytab. The machine password may have been changed externally.")
-		report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] Run 'kvno HOSTNAME$' and compare the output to 'klist -k'. If kvno is higher, the keytab is outdated and needs to be refreshed.")
-	}
-}
-
 func analyzePAM(dirPath string, report *ReportData) {
 	pam := readFileSafe(dirPath, "pam.txt")
 	if strings.Contains(pam, "FORCE_OPTION_PAM=1") || strings.Contains(pam, "General Data Protection Regulation") {
