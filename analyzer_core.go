@@ -4,10 +4,8 @@ package main
 import (
 	"regexp"
 	"sort"
-	"sssd-inspector/constants"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // deduplicateProblems removes duplicate strings from a slice efficiently
@@ -46,153 +44,9 @@ func getSSSDVersion(packages []string) (int, int) {
 	return 0, 0
 }
 
-// analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
-// Now uses Single-Pass scanning for log files to eliminate ~29 redundant scans.
-func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
-	// Clear file cache from previous analysis to ensure fresh data
-	globalFileCache.Clear()
-
-	var report ReportData
-	report.Timestamp = time.Now().Format(constants.TimestampFormat)
-	report.AppVersion = constants.AppVersion
-	report.SssdService = constants.StatusNotRunning
-	report.WinbindService = constants.StatusNotRunning
-	report.NscdStatus = constants.StatusNotRunning
-	report.TimeService = constants.StatusNotRunning
-	report.KerberosRealm = constants.StatusNotConfigured
-	report.HardwareManufacturer = constants.StatusUnknown
-	report.HardwareModel = constants.StatusUnknown
-	report.Hypervisor = constants.StatusUnknown
-	report.VirtualIdentity = constants.StatusUnknown
-
-	// ---- Phase 1: System analysis (no log scanning) ----
-	if progressFunc != nil {
-		progressFunc("Scanning Hardware & OS Data...", 5)
-	}
-	analyzeBasicHealth(dirPath, &report)
-	analyzeOSAndHardware(dirPath, &report)
-	analyzeHostnameAndFQDN(dirPath, &report)
-	analyzeSCC(dirPath, &report)
-
-	if progressFunc != nil {
-		progressFunc("Analyzing Network & Kerberos state...", 15)
-	}
-	analyzeDNS(dirPath, &report)
-	analyzeTime(dirPath, &report)
-	analyzePerformance(dirPath, &report)
-
-	// ---- Phase 2: Config analysis (also no log scanning) ----
-	if progressFunc != nil {
-		progressFunc("Evaluating SSSD Configurations...", 25)
-	}
-	analyzePAM(dirPath, &report)
-	analyzeNSSwitch(dirPath, &report)
-	analyzeHosts(dirPath, &report)
-	analyzeNSCD(dirPath, &report)
-	analyzePackages(dirPath, &report)
-	analyzeSSSDVersionAge(&report)
-	analyzeServices(dirPath, &report)
-	analyzeMACStatus(dirPath, &report)
-	analyzeSSSDFilePermissions(dirPath, &report)
-	analyzeDiskSpace(dirPath, &report)
-
-	// ---- Phase 3: Single-Pass Log Scanning ----
-	// ONE scan of all log files extracts ALL information simultaneously,
-	// replacing ~29 separate scans that were previously performed.
-	if progressFunc != nil {
-		progressFunc("Single-pass scanning and parsing SSSD Logs...", 40)
-	}
-
-	// Load KB articles for combined pattern matching
-	kbArticles := loadKBArticles(dirPath)
-	singlePassResult := performSinglePassScan(dirPath, report.MACType, kbArticles)
-
-	// Apply single-pass results to report
-	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
-	report.Timeline = singlePassResult.Timeline
-	report.Problems = append(report.Problems, singlePassResult.Problems...)
-	report.Warnings = append(report.Warnings, singlePassResult.Warnings...)
-
-	// Keytab results from single-pass
-	if singlePassResult.KeytabFound {
-		report.KeytabFound = true
-	}
-
-	// ---- Phase 4: Kerberos config analysis (krb5.conf only, no log scanning) ----
-	if progressFunc != nil {
-		progressFunc("Analyzing Kerberos configuration...", 55)
-	}
-	// Analyze krb5.conf without scanning logs (already done in single-pass)
-	analyzeKerberosConfig(dirPath, &report)
-
-	if !singlePassResult.KeytabFound && !singlePassResult.KeytabNotFound && !singlePassResult.NoKeytabPrincipal {
-		report.Problems = append(report.Problems, "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.")
-	}
-
-	// ---- Phase 5: SSSD Config & remaining log-based analysis ----
-	if progressFunc != nil {
-		progressFunc("Evaluating SSSD Configurations...", 65)
-	}
-	// Read sssd.conf (uses file cache)
-	sssdConfContent := readFileSafe(dirPath, "sssd.conf")
-	if sssdConfContent == "" {
-		sssdConfContent = extractSection(dirPath, "sssd.txt", "# /etc/sssd/sssd.conf")
-	}
-	if sssdConfContent != "" {
-		analyzeSSSDConfig(sssdConfContent, &report)
-	} else {
-		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
-	}
-
-	if report.SssdService != constants.StatusRunning {
-		report.Problems = append(report.Problems, "sssd.service is not actively running.")
-	}
-
-	// MAC denials (from security-*.txt files, not from log scanning)
-	analyzeMACDenials(dirPath, &report)
-
-	// ---- Phase 6: KB Article matching (using single-pass evidence) ----
-	if progressFunc != nil {
-		progressFunc("Matching Knowledge Base Articles...", 80)
-	}
-	// Match KB using single-pass evidence and config-only patterns
-	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence)
-
-	// ---- Phase 7: Final checks ----
-	// Clean up duplicate entries mapped during distributed analysis
-	report.Problems = deduplicateProblems(report.Problems)
-	report.Warnings = deduplicateProblems(report.Warnings)
-
-	// Final check: Validate if debug_level=9 was set during problems
-	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
-		hasDebug9 := false
-		checkDebug := func(line string) {
-			if hasDebug9 {
-				return
-			}
-			if strings.Contains(line, "debug_level") && strings.Contains(line, "9") {
-				trimmed := strings.ReplaceAll(line, " ", "")
-				if strings.Contains(trimmed, "debug_level=9") {
-					hasDebug9 = true
-				}
-			}
-		}
-		scanFiles(dirPath, []string{"sssd.conf", "sssd.txt"}, checkDebug)
-
-		if report.SssdConfigFound && !hasDebug9 {
-			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig.")
-		}
-	}
-
-	if anonymize {
-		if progressFunc != nil {
-			progressFunc("Sanitizing PII data...", 95)
-		}
-		anonymizeReport(&report)
-	}
-
-	return report
-}
+// analyzeData is now delegated to utils.go which calls analysis.NewAnalyzerContext().AnalyzeData
+// This file is retained only for its deduplicateProblems function (used by tests)
+// and getSSSDVersion function.
 
 // anonymizeReport heavily scrubs PII from the report to ensure safe sharing
 func anonymizeReport(r *ReportData) {
@@ -320,67 +174,4 @@ func anonymizeReport(r *ReportData) {
 		}
 	}
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
-}
-
-// analyzeLogsOnly performs a lightweight analysis on raw SSSD log files only.
-// This is used by -logdir mode where no supportconfig metadata is available.
-// It skips all system/config analysis and only scans the provided log files
-// for SSSD error patterns, building a timeline and collecting problems/warnings.
-func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
-	globalFileCache.Clear()
-
-	var report ReportData
-	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = constants.AppVersion
-
-	// Mark all system-level info as N/A since we have no supportconfig
-	report.SssdService = constants.StatusNARawLogMode
-	report.WinbindService = constants.StatusNARawLogMode
-	report.NscdStatus = constants.StatusNARawLogMode
-	report.TimeService = constants.StatusNARawLogMode
-	report.KerberosRealm = constants.StatusNARawLogMode
-	report.HardwareManufacturer = constants.StatusNARawLogMode
-	report.HardwareModel = constants.StatusNARawLogMode
-	report.Hypervisor = constants.StatusNARawLogMode
-	report.VirtualIdentity = constants.StatusNARawLogMode
-	report.MACType = constants.StatusUnknown
-	report.SssdInstalled = true
-
-	if progressFunc != nil {
-		progressFunc("Scanning raw SSSD log files...", 10)
-	}
-
-	// Use an empty KB article list since we can't match KB without config files
-	var kbArticles []TIDArticle
-
-	// Perform single-pass scan on the provided log files
-	singlePassResult := performSinglePassScanOnFiles(dirPath, logFiles, report.MACType, kbArticles)
-
-	// Apply single-pass results to report
-	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
-	report.Timeline = singlePassResult.Timeline
-	report.Problems = append(report.Problems, singlePassResult.Problems...)
-	report.Warnings = append(report.Warnings, singlePassResult.Warnings...)
-
-	// Keytab results from single-pass
-	if singlePassResult.KeytabFound {
-		report.KeytabFound = true
-	}
-
-	if progressFunc != nil {
-		progressFunc("Compiling log analysis results...", 80)
-	}
-
-	// Deduplicate
-	report.Problems = deduplicateProblems(report.Problems)
-	report.Warnings = deduplicateProblems(report.Warnings)
-
-	if anonymize {
-		if progressFunc != nil {
-			progressFunc("Sanitizing PII data...", 95)
-		}
-		anonymizeReport(&report)
-	}
-
-	return report
 }

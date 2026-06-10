@@ -1,0 +1,60 @@
+SSSD_CONFIG_CHECKS:
+  # Key=value checks that set a boolean flag on the report
+  - type: flag
+    pattern: "id_provider"
+    value: "ad"
+    flag: "ad_provider"
+
+  - type: flag
+    pattern: "use_fully_qualified_names"
+    value: "true"
+    flag: "use_fqdn"
+
+  - type: flag
+    pattern: "simple_allow_groups"
+    flag: "simple_allow_groups"
+    extra_flag: "simple_allow"
+
+  - type: flag
+    pattern: "simple_allow_users"
+    flag: "simple_allow"
+
+  - type: flag
+    pattern: "access_provider"
+    value: "simple"
+    flag: "access_provider_simple"
+
+  - type: flag
+    pattern: "ldap_id_mapping"
+    value: "false"
+    flag: "id_mapping_false"
+
+  # Key=value checks that emit a problem/warning directly
+  - type: problem
+    pattern: "enumerate"
+    value: "true"
+    dedup: true
+    message: "[DEPRECATION] 'enumerate = true' is set in sssd.conf. This causes severe performance issues, is deprecated for AD/IPA, and is unsupported in SSSD 2.10+."
+
+  - type: problem
+    pattern: "krb5_validate"
+    value: "false"
+    message: "[SECURITY RISK] 'krb5_validate = false' is set. When 'id_provider = ad', the default is 'true'. Disabling this bypasses KDC spoofing protection and should only be used temporarily to work around the AD RC4 encryption bug. Fix: update the 'operatingSystemVersion' attribute in AD or update local crypto-policies instead."
+
+  # Warning checks that emit a warning message (supports dedup)
+  - type: warning
+    pattern: "debug_level"
+    value: ""
+    dedup: true
+    message: "[DIAGNOSTIC HINT] 'debug_level' key found in sssd.conf but no specific value is set. Consider setting 'debug_level = 9' during troubleshooting to capture detailed logs."
+
+  # Missing checks that emit a warning when a pattern is NOT found in sssd.conf
+  - type: missing
+    pattern: "ldap_use_tokengroups = false"
+    dedup: true
+    message: "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'."
+
+  - type: missing
+    pattern: "timeout ="
+    dedup: true
+    message: "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections."
