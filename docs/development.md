@@ -32,34 +32,59 @@ wails version
 
 ```
 sssd-inspector/
-├── main.go              # Application entry point
-├── app.go               # Wails app structure and API methods
-├── types.go             # Data structures and type definitions
-├── config/              # Configuration management
-│   └── config.go        # Configuration structures and loading
-├── constants/           # Application constants
-│   └── constants.go     # All constant definitions
-├── utils/               # Utility functions
-│   └── utils.go         # File processing utilities
-├── analyzer/            # Analysis modules
-│   ├── core.go          # Core analysis orchestration
-│   ├── auth.go          # Authentication analysis
-│   ├── logs.go          # Log parsing and analysis
-│   └── system.go        # System diagnostics
-├── report/              # Report generation
-│   └── report.go        # Report building functions
-├── kb.go                # Knowledge base management
-├── loaders.go           # Archive extraction utilities
-├── frontend/            # Web interface
-│   ├── src/             # Source files
-│   ├── dist/            # Built files
-│   └── package.json     # Frontend dependencies
-├── docs/                # Documentation
-├── kb_articles/         # Knowledge base articles
-├── config.yaml          # Default configuration file
-├── go.mod               # Go module definition
-└── wails.json           # Wails configuration
+├── main_cli.go             # CLI entry point (build tag: cli)
+├── main_gui.go             # GUI entry point (build tag: !cli)
+├── app.go                  # Wails app structure and API methods (GUI mode)
+├── shared.go               # Shared CLI/GUI logic (runCLI, runLogDirAnalyze)
+├── types.go                # Root-level type definitions (ReportData, etc.)
+├── utils.go                # Legacy wrapper functions (backward compatibility)
+├── legacy_test_helpers.go  # Bridge functions for existing tests
+├── config/                 # Configuration management
+│   └── config.go           # Configuration structures and loading
+├── constants/              # Application constants
+│   └── constants.go        # All constant definitions
+├── errors/                 # Custom error types and helpers
+│   └── errors.go           # Error wrapping, context, helpers
+├── logger/                 # Logging infrastructure
+│   └── logger.go           # Structured logger with levels
+├── pkg/
+│   ├── analysis/           # Core analysis engine
+│   │   ├── core.go         # Core analysis orchestration, AnonymizeReport
+│   │   ├── context.go      # AnalyzerContext (file I/O, cache, scanning)
+│   │   ├── auth.go         # Authentication analysis
+│   │   ├── logs.go         # Log parsing and analysis
+│   │   ├── kb.go           # Knowledge base article matching
+│   │   ├── singlepass.go   # Single-pass log scanning engine
+│   │   └── system.go       # System diagnostics
+│   ├── extract/            # Archive extraction
+│   │   └── extract.go      # XZ/tar extraction with path traversal protection
+│   ├── fileutil/           # File I/O utilities
+│   │   ├── cache.go        # Regex cache, file cache, scanner pool
+│   │   ├── filter.go       # File relevance filtering
+│   │   └── scanner.go      # File scanning utilities
+│   ├── report/             # Report generation
+│   │   └── report.go       # Text and HTML report building functions
+│   └── types/              # Shared data structures
+│       └── types.go        # ReportData, TIDArticle, TimelineEvent, SSSDLogError
+├── frontend/               # Wails frontend (JavaScript/CSS)
+│   ├── src/                # Source files
+│   ├── wailsjs/            # Wails generated bindings
+│   └── package.json        # Frontend dependencies
+├── docs/                   # Documentation
+├── kb_articles/            # Knowledge base articles (JSON)
+├── config.yaml             # Default configuration file
+├── go.mod                  # Go module definition
+├── go.sum                  # Go module checksums
+└── wails.json              # Wails configuration
 ```
+
+### Build Tags
+
+The project uses Go build tags to separate CLI and GUI entry points:
+
+- **CLI build**: `go build -tags cli` — uses `main_cli.go`, excludes `app.go`
+- **GUI build**: `wails build` or `wails dev` — uses `main_gui.go`, includes `app.go`
+- **Test**: `go test ./...` — runs all tests regardless of build tags
 
 ## Development Workflow
 
@@ -129,7 +154,8 @@ go test ./...
 go test -cover ./...
 
 # Run specific package tests
-go test ./analyzer/...
+go test ./pkg/analysis/...
+go test ./pkg/fileutil/...
 
 # Run tests with verbose output
 go test -v ./...
@@ -142,30 +168,29 @@ go tool cover -html=coverage.out
 #### Writing Tests
 
 ```go
-// Example test file: analyzer_core_test.go
-package main
+// Example test file: pkg/analysis/core_test.go
+package analysis
 
 import (
     "testing"
-    "sssd-inspector/constants"
 )
 
 func TestGetSSSDVersion(t *testing.T) {
     tests := []struct {
-        name     string
-        packages []string
-        wantMajor int
-        wantMinor int
+        name       string
+        packages   []string
+        wantMajor  int
+        wantMinor  int
     }{
         {
-            name: "valid version",
-            packages: []string{"sssd-2.6.2-1.x86_64"},
+            name:      "valid version",
+            packages:  []string{"sssd-2.6.2-1.x86_64"},
             wantMajor: 2,
             wantMinor: 6,
         },
         {
-            name: "invalid version",
-            packages: []string{"other-package-1.0"},
+            name:      "invalid version",
+            packages:  []string{"other-package-1.0"},
             wantMajor: 0,
             wantMinor: 0,
         },
@@ -173,9 +198,9 @@ func TestGetSSSDVersion(t *testing.T) {
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            major, minor := getSSSDVersion(tt.packages)
+            major, minor := GetSSSDVersion(tt.packages)
             if major != tt.wantMajor || minor != tt.wantMinor {
-                t.Errorf("getSSSDVersion() = (%d, %d), want (%d, %d)",
+                t.Errorf("GetSSSDVersion() = (%d, %d), want (%d, %d)",
                     major, minor, tt.wantMajor, tt.wantMinor)
             }
         })
