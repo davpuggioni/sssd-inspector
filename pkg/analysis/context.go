@@ -2,7 +2,8 @@
 package analysis
 
 import (
-	"regexp"
+	"strings"
+
 	"sssd-inspector/pkg/fileutil"
 	"sssd-inspector/pkg/types"
 )
@@ -158,9 +159,8 @@ func (ctx *AnalyzerContext) matchKBArticles(dirPath string, report *types.Report
 
 	for _, article := range kbArticles {
 		for _, pattern := range article.LogPatterns {
-			matcher := fileutil.GlobalRegexCache.Get(regexp.QuoteMeta(pattern))
 			ctx.ScanFiles(dirPath, logFiles, func(line string) {
-				if matcher.MatchString(line) {
+				if strings.Contains(line, pattern) {
 					evidence[article.TIDID] = append(evidence[article.TIDID], line)
 				}
 			})

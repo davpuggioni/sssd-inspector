@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"sssd-inspector/pkg/fileutil"
@@ -75,7 +74,7 @@ func (ctx *AnalyzerContext) matchKBArticlesWithEvidence(dirPath string, report *
 		configMatched := len(article.ConfigPatterns) == 0
 		if !configMatched {
 			for _, pattern := range article.ConfigPatterns {
-				matcher := fileutil.GlobalRegexCache.Get("(?i)" + regexp.QuoteMeta(pattern))
+				matcher := fileutil.GlobalRegexCache.Get("(?i)" + pattern)
 				ctx.ScanFiles(dirPath, configFiles, func(line string) {
 					if matcher.MatchString(line) {
 						configMatched = true
