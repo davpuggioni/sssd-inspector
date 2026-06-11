@@ -172,7 +172,7 @@ func (ctx *AnalyzerContext) analyzeMACDenials(dirPath string, report *types.Repo
 
 	if len(macDenials) > 0 {
 		report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
-		report.MACDenialExamples = deduplicateProblems(macDenials)
+		report.MACDenialExamples = DeduplicateProblems(macDenials)
 	}
 }
 

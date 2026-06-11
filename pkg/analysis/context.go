@@ -2,14 +2,12 @@
 package analysis
 
 import (
-	"sssd-inspector/constants"
+	"regexp"
 	"sssd-inspector/pkg/fileutil"
 	"sssd-inspector/pkg/types"
 )
 
 // AnalyzerContext provides dependency injection for analysis functions.
-// It encapsulates all dependencies needed by the analyzers, making them
-// testable without global state.
 type AnalyzerContext struct {
 	Scanner    *fileutil.FileProcessor
 	SecExtract *fileutil.SectionExtractor
@@ -27,16 +25,152 @@ func NewAnalyzerContext() *AnalyzerContext {
 	}
 }
 
-// AnalyzeData is the main orchestrator. It routes the streaming directory path
-// to specialized analyzers. Now uses Single-Pass scanning for log files.
+// --- Public API methods ---
+
+// AnalyzeData is the main orchestrator for full supportconfig analysis
 func (ctx *AnalyzerContext) AnalyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) types.ReportData {
 	return ctx.analyzeData(dirPath, anonymize, progressFunc)
 }
 
-// AnalyzeLogsOnly performs a lightweight analysis on raw SSSD log files only.
+// AnalyzeLogsOnly performs lightweight analysis on raw SSSD log files
 func (ctx *AnalyzerContext) AnalyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) types.ReportData {
 	return ctx.analyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
 }
+
+// --- Test support methods (exported for use by tests via legacy_test_helpers.go) ---
+
+// AnalyzeMACStatus delegates to private method
+func (ctx *AnalyzerContext) AnalyzeMACStatus(dirPath string, report *types.ReportData) {
+	ctx.analyzeMACStatus(dirPath, report)
+}
+
+// AnalyzeSSSDConfigAndLogs delegates to private method
+func (ctx *AnalyzerContext) AnalyzeSSSDConfigAndLogs(dirPath string, report *types.ReportData) {
+	ctx.analyzeSSSDConfigAndLogs(dirPath, report)
+}
+
+// AnalyzeTime delegates to private method
+func (ctx *AnalyzerContext) AnalyzeTime(dirPath string, report *types.ReportData) {
+	ctx.analyzeTime(dirPath, report)
+}
+
+// AnalyzeNSSwitch delegates to private method
+func (ctx *AnalyzerContext) AnalyzeNSSwitch(dirPath string, report *types.ReportData) {
+	ctx.analyzeNSSwitch(dirPath, report)
+}
+
+// AnalyzePerformance delegates to private method
+func (ctx *AnalyzerContext) AnalyzePerformance(dirPath string, report *types.ReportData) {
+	ctx.analyzePerformance(dirPath, report)
+}
+
+// AnalyzePackages delegates to private method
+func (ctx *AnalyzerContext) AnalyzePackages(dirPath string, report *types.ReportData) {
+	ctx.analyzePackages(dirPath, report)
+}
+
+// AnalyzeSSSDFilePermissions delegates to private method
+func (ctx *AnalyzerContext) AnalyzeSSSDFilePermissions(dirPath string, report *types.ReportData) {
+	ctx.analyzeSSSDFilePermissions(dirPath, report)
+}
+
+// AnalyzeDiskSpace delegates to private method
+func (ctx *AnalyzerContext) AnalyzeDiskSpace(dirPath string, report *types.ReportData) {
+	ctx.analyzeDiskSpace(dirPath, report)
+}
+
+// AnalyzeServices delegates to private method
+func (ctx *AnalyzerContext) AnalyzeServices(dirPath string, report *types.ReportData) {
+	ctx.analyzeServices(dirPath, report)
+}
+
+// AnalyzeHostnameAndFQDN delegates to private method
+func (ctx *AnalyzerContext) AnalyzeHostnameAndFQDN(dirPath string, report *types.ReportData) {
+	ctx.analyzeHostnameAndFQDN(dirPath, report)
+}
+
+// AnalyzeOSAndHardware delegates to private method
+func (ctx *AnalyzerContext) AnalyzeOSAndHardware(dirPath string, report *types.ReportData) {
+	ctx.analyzeOSAndHardware(dirPath, report)
+}
+
+// MatchKBArticles delegates to the KB matching logic (used by tests)
+func (ctx *AnalyzerContext) MatchKBArticles(dirPath string, report *types.ReportData) {
+	ctx.matchKBArticles(dirPath, report)
+}
+
+// buildErrorPatterns loads the SSSD error pattern dictionary from embedded YAML
+func (ctx *AnalyzerContext) buildErrorPatterns(macType string) map[string]string {
+	entries := ctx.loadErrorPatternEntries(macType)
+	errorPatterns := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		errorPatterns[entry.Pattern] = entry.Description
+	}
+	return errorPatterns
+}
+
+// analyzeSSSDConfigAndLogs performs combined config and log analysis (used by tests)
+func (ctx *AnalyzerContext) analyzeSSSDConfigAndLogs(dirPath string, report *types.ReportData) {
+	sssdConfContent := ctx.ReadFileSafe(dirPath, "sssd.conf")
+	if sssdConfContent == "" {
+		sssdConfContent = ctx.ExtractSection(dirPath, "sssd.txt", "# /etc/sssd/sssd.conf")
+	}
+
+	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
+
+	// Quick checks for known issues
+	if ctx.AnyFileContains(dirPath, logFiles, "User account has expired") || ctx.AnyFileContains(dirPath, logFiles, "Clients credentials have been revoked") {
+		report.Problems = append(report.Problems, "[AUTHENTICATION] Logs indicate an Active Directory user account is expired, locked, or credentials have been revoked.")
+	}
+	if ctx.AnyFileContains(dirPath, logFiles, "terminated by own WATCHDOG") {
+		report.Warnings = append(report.Warnings, "[TUNING] Since a WATCHDOG termination was found, consider setting 'ignore_group_members = true' in sssd.conf to speed up ssh/sudo initial lookups.")
+	}
+	if ctx.AnyFileContains(dirPath, logFiles, "service key not available") || ctx.AnyFileContains(dirPath, logFiles, "TGT failed verification") || ctx.AnyFileContains(dirPath, logFiles, "KDC has no support for encryption type") {
+		report.Warnings = append(report.Warnings, "[AD CRYPTO BUG] Crypto mismatch or 'service key not available' detected.")
+	}
+
+	errorPatterns := ctx.buildErrorPatterns(report.MACType)
+	detectedLogErrors, timelineEvents := ctx.scanAndCollectErrors(dirPath, errorPatterns)
+
+	report.Timeline = timelineEvents
+	report.SSSDLogErrors = buildSortedLogErrors(detectedLogErrors)
+
+	if sssdConfContent != "" {
+		ctx.analyzeSSSDConfig(sssdConfContent, report)
+	} else {
+		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
+	}
+
+	if report.SssdService != "Running" {
+		report.Problems = append(report.Problems, "sssd.service is not actively running.")
+	}
+}
+
+// matchKBArticles performs KB matching with inline evidence scanning (used by tests)
+func (ctx *AnalyzerContext) matchKBArticles(dirPath string, report *types.ReportData) {
+	kbArticles := ctx.loadKBArticles(dirPath)
+	if len(kbArticles) == 0 {
+		return
+	}
+
+	logFiles := []string{"sssd.txt", "messages", "messages.txt", "sssd_pam.log"}
+	evidence := make(map[string][]string)
+
+	for _, article := range kbArticles {
+		for _, pattern := range article.LogPatterns {
+			matcher := fileutil.GlobalRegexCache.Get(regexp.QuoteMeta(pattern))
+			ctx.ScanFiles(dirPath, logFiles, func(line string) {
+				if matcher.MatchString(line) {
+					evidence[article.TIDID] = append(evidence[article.TIDID], line)
+				}
+			})
+		}
+	}
+
+	ctx.matchKBArticlesWithEvidence(dirPath, report, kbArticles, evidence)
+}
+
+// --- Convenience wrappers ---
 
 // ScanFiles is a convenience wrapper for scanning files
 func (ctx *AnalyzerContext) ScanFiles(dirPath string, files []string, lineFunc func(line string)) {
@@ -61,16 +195,3 @@ func (ctx *AnalyzerContext) ReadFileSafe(dirPath string, fileName string) string
 	}
 	return fileutil.DefaultSafeFileReader.ReadFileSafe(lines)
 }
-
-// getDecade checks the first digit of a version number for MAC type checks
-func getDecade(v string) int {
-	if len(v) == 0 {
-		return 0
-	}
-	return int(v[0] - '0')
-}
-
-// Constants used by analyzers
-func unknown() string       { return constants.StatusUnknown }
-func notRunning() string    { return constants.StatusNotRunning }
-func notConfigured() string { return constants.StatusNotConfigured }

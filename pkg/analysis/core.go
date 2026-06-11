@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// deduplicateProblems removes duplicate strings from a slice
-func deduplicateProblems(problems []string) []string {
+// DeduplicateProblems removes duplicate strings from a slice
+func DeduplicateProblems(problems []string) []string {
 	seen := make(map[string]struct{})
 	var result []string
 	for _, p := range problems {
@@ -23,8 +23,8 @@ func deduplicateProblems(problems []string) []string {
 	return result
 }
 
-// getSSSDVersion extracts major and minor version numbers from package string
-func getSSSDVersion(packages []string) (int, int) {
+// GetSSSDVersion extracts major and minor version numbers from package string
+func GetSSSDVersion(packages []string) (int, int) {
 	for _, pkg := range packages {
 		parts := strings.Fields(pkg)
 		for _, p := range parts {
@@ -147,8 +147,8 @@ func (ctx *AnalyzerContext) analyzeData(dirPath string, anonymize bool, progress
 	ctx.matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence)
 
 	// ---- Phase 7: Final checks ----
-	report.Problems = deduplicateProblems(report.Problems)
-	report.Warnings = deduplicateProblems(report.Warnings)
+	report.Problems = DeduplicateProblems(report.Problems)
+	report.Warnings = DeduplicateProblems(report.Warnings)
 
 	// Check debug_level
 	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
@@ -175,7 +175,7 @@ func (ctx *AnalyzerContext) analyzeData(dirPath string, anonymize bool, progress
 		if progressFunc != nil {
 			progressFunc("Sanitizing PII data...", 95)
 		}
-		anonymizeReport(&report)
+		AnonymizeReport(&report)
 	}
 
 	return report
@@ -222,21 +222,21 @@ func (ctx *AnalyzerContext) analyzeLogsOnly(dirPath string, logFiles []string, a
 		progressFunc("Compiling log analysis results...", 80)
 	}
 
-	report.Problems = deduplicateProblems(report.Problems)
-	report.Warnings = deduplicateProblems(report.Warnings)
+	report.Problems = DeduplicateProblems(report.Problems)
+	report.Warnings = DeduplicateProblems(report.Warnings)
 
 	if anonymize {
 		if progressFunc != nil {
 			progressFunc("Sanitizing PII data...", 95)
 		}
-		anonymizeReport(&report)
+		AnonymizeReport(&report)
 	}
 
 	return report
 }
 
-// anonymizeReport scrubs PII from the report
-func anonymizeReport(r *types.ReportData) {
+// AnonymizeReport scrubs PII from the report
+func AnonymizeReport(r *types.ReportData) {
 	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
 	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)

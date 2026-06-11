@@ -211,11 +211,11 @@ func (ctx *AnalyzerContext) analyzePackages(dirPath string, report *types.Report
 			report.SSSDPackages = append(report.SSSDPackages, line)
 		}
 	})
-	report.SSSDPackages = deduplicateProblems(report.SSSDPackages)
+	report.SSSDPackages = DeduplicateProblems(report.SSSDPackages)
 }
 
 func (ctx *AnalyzerContext) analyzeSSSDVersionAge(report *types.ReportData) {
-	major, minor := getSSSDVersion(report.SSSDPackages)
+	major, minor := GetSSSDVersion(report.SSSDPackages)
 	if major == 1 {
 		report.Problems = append(report.Problems, fmt.Sprintf("[DEPRECATION] Installed SSSD version is %d.%d. The 1.x series is extremely outdated (last upstream release in 2020) and End-of-Life. Consider upgrading your OS or packages.", major, minor))
 	} else if major == 2 && minor < 8 {
@@ -224,7 +224,7 @@ func (ctx *AnalyzerContext) analyzeSSSDVersionAge(report *types.ReportData) {
 }
 
 func (ctx *AnalyzerContext) analyzeSSSDFilePermissions(dirPath string, report *types.ReportData) {
-	major, minor := getSSSDVersion(report.SSSDPackages)
+	major, minor := GetSSSDVersion(report.SSSDPackages)
 	if major == 0 {
 		return
 	}
