@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+// Package-level compiled regex patterns for PII redaction.
+// Compiling once improves performance and avoids repeated allocations.
+var (
+	anonymizeIPRegex    = regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+	anonymizeMACRegex   = regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
+	anonymizeIPv6Regex  = regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
+	anonymizeEmailRegex = regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
+	anonymizeFQDNRegex  = regexp.MustCompile(`(?i)\b[a-z0-9]+(?:[-][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-][a-z0-9]+)*)+\b`)
+)
+
 // DeduplicateProblems removes duplicate strings from a slice
 func DeduplicateProblems(problems []string) []string {
 	seen := make(map[string]struct{})
@@ -237,11 +247,6 @@ func (ctx *AnalyzerContext) analyzeLogsOnly(dirPath string, logFiles []string, a
 
 // AnonymizeReport scrubs PII from the report
 func AnonymizeReport(r *types.ReportData) {
-	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
-	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
-	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
-	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
-
 	origDomain := r.SearchDomain
 	origRealm := r.KerberosRealm
 
@@ -253,10 +258,8 @@ func AnonymizeReport(r *types.ReportData) {
 		domainValues = append(domainValues, origRealm)
 	}
 
-	fqdnRegex := regexp.MustCompile(`(?i)\b[a-z0-9]+(?:[-][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-][a-z0-9]+)*)+\b`)
-
 	if r.SSSDConfigSnippet != "" {
-		matches := fqdnRegex.FindAllString(r.SSSDConfigSnippet, -1)
+		matches := anonymizeFQDNRegex.FindAllString(r.SSSDConfigSnippet, -1)
 		domainValues = append(domainValues, matches...)
 	}
 
@@ -282,10 +285,10 @@ func AnonymizeReport(r *types.ReportData) {
 	})
 
 	maskString := func(s string) string {
-		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
-		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
-		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
-		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
+		s = anonymizeIPRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
+		s = anonymizeIPv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
+		s = anonymizeMACRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
+		s = anonymizeEmailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
 		for _, d := range uniqueDomains {
 			dRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(d))

@@ -1,6 +1,5 @@
-// utils.go - Legacy wrapper functions
-// All actual implementations have moved to pkg/fileutil.
-// These functions maintain backward compatibility.
+// utils.go - Legacy wrapper functions for backward compatibility
+// All actual implementations have moved to pkg/ subpackages.
 package main
 
 import (
@@ -8,11 +7,10 @@ import (
 	"fmt"
 
 	"sssd-inspector/pkg/analysis"
+	"sssd-inspector/pkg/extract"
 	"sssd-inspector/pkg/fileutil"
+	"sssd-inspector/pkg/report"
 )
-
-// Global analysis context for backward compatibility
-var globalAnalyzer = analysis.NewAnalyzerContext()
 
 // anyFileContains streams files line-by-line, instantly stopping if a match is found
 func anyFileContains(dirPath string, files []string, search string) bool {
@@ -56,12 +54,29 @@ func scanFilesWithContext(ctx context.Context, dirPath string, files []string, l
 	}
 }
 
-// analyzeData delegates to the new package
+// analyzeData delegates to the new package creating a fresh context each time
 func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
-	return globalAnalyzer.AnalyzeData(dirPath, anonymize, progressFunc)
+	ctx := analysis.NewAnalyzerContext()
+	return ctx.AnalyzeData(dirPath, anonymize, progressFunc)
 }
 
-// analyzeLogsOnly delegates to the new package
+// analyzeLogsOnly delegates to the new package creating a fresh context each time
 func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
-	return globalAnalyzer.AnalyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+	ctx := analysis.NewAnalyzerContext()
+	return ctx.AnalyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+}
+
+// extractArchiveToTemp extracts an XZ archive to a temporary directory
+func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
+	return extract.ExtractArchiveToTemp(archivePath, progressFunc)
+}
+
+// buildTextReport generates a text report from the analysis data
+func buildTextReport(data ReportData) string {
+	return report.BuildTextReport(data)
+}
+
+// writeHTMLReportFile generates an HTML report file
+func writeHTMLReportFile(data ReportData, filename string) {
+	report.WriteHTMLReportFile(data, filename)
 }
