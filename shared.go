@@ -11,6 +11,7 @@ import (
 
 	"sssd-inspector/config"
 	"sssd-inspector/constants"
+	sssderrors "sssd-inspector/errors"
 )
 
 // Global configuration instance
@@ -47,7 +48,7 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("error accessing path: %w", err)
+		return sssderrors.NewFileAccess(path, err)
 	}
 
 	var dirPath string
@@ -57,7 +58,7 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 		// Use the new secure archive extractor
 		dirPath, err = extractArchiveToTemp(path, progressFunc)
 		if err != nil {
-			return fmt.Errorf("extract error: %w", err)
+			return sssderrors.Wrap(err, sssderrors.ErrInvalidArchive, "extract error")
 		}
 		defer os.RemoveAll(dirPath) // Clean up temp files when done
 	}
@@ -77,7 +78,7 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat
 		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
 		if err != nil {
-			return fmt.Errorf("error writing txt report: %w", err)
+			return sssderrors.Wrap(err, sssderrors.ErrSystemError, "error writing txt report")
 		}
 		fmt.Printf("Text report saved to: %s\n", txtReportFile)
 	}
@@ -85,7 +86,7 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 	if genHtml {
 		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
 		writeHTMLReportFile(report, htmlReportFile)
-		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+		fmt.Printf("HTML report saved: %s\n", htmlReportFile)
 	}
 
 	return nil
@@ -103,10 +104,10 @@ func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool)
 	// Verify the directory exists
 	info, err := os.Stat(dirPath)
 	if err != nil {
-		return fmt.Errorf("error accessing log directory: %w", err)
+		return sssderrors.NewFileAccess(dirPath, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("path is not a directory: %s", dirPath)
+		return sssderrors.NewConfigInvalid(fmt.Sprintf("path is not a directory: %s", dirPath))
 	}
 
 	// Progress func for CLI output
@@ -117,7 +118,7 @@ func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool)
 	// Find all .log files in the directory
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return fmt.Errorf("error reading log directory: %w", err)
+		return sssderrors.NewFileAccess(dirPath, err)
 	}
 
 	var logFiles []string
@@ -128,7 +129,7 @@ func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool)
 	}
 
 	if len(logFiles) == 0 {
-		return fmt.Errorf("no .log files found in directory: %s", dirPath)
+		return sssderrors.NewConfigNotFound(dirPath)
 	}
 
 	fmt.Printf("Found %d SSSD log files\n", len(logFiles))
@@ -147,7 +148,7 @@ func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool)
 		txtReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.TXTFormat
 		err = os.WriteFile(txtReportFile, []byte(reportText), 0644)
 		if err != nil {
-			return fmt.Errorf("error writing txt report: %w", err)
+			return sssderrors.Wrap(err, sssderrors.ErrSystemError, "error writing txt report")
 		}
 		fmt.Printf("Text report saved to: %s\n", txtReportFile)
 	}
@@ -155,7 +156,7 @@ func runLogDirAnalyze(dirPath string, genTxt bool, genHtml bool, anonymize bool)
 	if genHtml {
 		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
 		writeHTMLReportFile(report, htmlReportFile)
-		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+		fmt.Printf("HTML report saved: %s\n", htmlReportFile)
 	}
 
 	return nil

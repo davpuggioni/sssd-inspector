@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	sssderrors "sssd-inspector/errors"
+
 	"github.com/ulikunitz/xz"
 )
 
@@ -53,7 +55,7 @@ func isRelevantFile(name string) bool {
 func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
 	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %v", err)
+		return "", sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to create temp dir")
 	}
 
 	f, err := os.Open(archivePath)
@@ -67,7 +69,7 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	fileInfo, err := f.Stat()
 	if err != nil {
 		os.RemoveAll(tempDir)
-		return "", fmt.Errorf("failed to stat archive: %v", err)
+		return "", sssderrors.NewFileNotFound(archivePath)
 	}
 	totalArchiveSize := fileInfo.Size()
 
@@ -101,12 +103,12 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	case res := <-xzCh:
 		if res.err != nil {
 			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("xz decompression init failed: %v", res.err)
+			return "", sssderrors.Wrap(res.err, sssderrors.ErrInvalidArchive, "xz decompression init failed")
 		}
 		r = res.r
 	case <-signalCtx.Done():
 		os.RemoveAll(tempDir)
-		return "", fmt.Errorf("decompression cancelled: %v", signalCtx.Err())
+		return "", sssderrors.NewTimeout("archive decompression")
 	}
 
 	tr := tar.NewReader(r)
@@ -137,7 +139,7 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 		select {
 		case <-signalCtx.Done():
 			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("decompression cancelled: %v", signalCtx.Err())
+			return "", sssderrors.NewTimeout("archive decompression")
 		default:
 		}
 

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	sssderrors "sssd-inspector/errors"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -240,7 +242,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if configPath != "" {
 		config := DefaultConfig()
 		if err := loadFromFile(configPath, config); err != nil {
-			return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
+			return nil, sssderrors.Wrap(err, sssderrors.ErrConfigInvalid, fmt.Sprintf("failed to load config from %s", configPath))
 		}
 		return config, nil
 	}
@@ -256,7 +258,7 @@ func LoadConfig(configPath string) (*Config, error) {
 		if _, err := os.Stat(location); err == nil {
 			config := DefaultConfig()
 			if err := loadFromFile(location, config); err != nil {
-				return nil, fmt.Errorf("failed to load config from %s: %w", location, err)
+				return nil, sssderrors.Wrap(err, sssderrors.ErrConfigInvalid, fmt.Sprintf("failed to load config from %s", location))
 			}
 			return config, nil
 		}
@@ -281,16 +283,16 @@ func SaveConfig(config *Config, path string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to create config directory")
 	}
 
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to marshal config")
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to write config file")
 	}
 
 	return nil
@@ -300,25 +302,25 @@ func SaveConfig(config *Config, path string) error {
 func (c *Config) Validate() error {
 	// Validate app config
 	if c.App.Name == "" {
-		return fmt.Errorf("app name cannot be empty")
+		return sssderrors.NewConfigInvalid("app name cannot be empty")
 	}
 	if c.App.Version == "" {
-		return fmt.Errorf("app version cannot be empty")
+		return sssderrors.NewConfigInvalid("app version cannot be empty")
 	}
 
 	// Validate analysis config
 	if _, err := time.ParseDuration(c.Analysis.Timeout); err != nil {
-		return fmt.Errorf("invalid timeout format: %s", c.Analysis.Timeout)
+		return sssderrors.NewConfigInvalid(fmt.Sprintf("invalid timeout format: %s", c.Analysis.Timeout))
 	}
 
 	// Validate GUI config
 	if c.GUI.Window.Width <= 0 || c.GUI.Window.Height <= 0 {
-		return fmt.Errorf("window dimensions must be positive")
+		return sssderrors.NewConfigInvalid("window dimensions must be positive")
 	}
 
 	// Validate performance config
 	if c.Performance.MaxWorkers <= 0 {
-		return fmt.Errorf("max_workers must be positive")
+		return sssderrors.NewConfigInvalid("max_workers must be positive")
 	}
 
 	return nil

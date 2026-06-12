@@ -284,19 +284,31 @@ func AnonymizeReport(r *types.ReportData) {
 		return len(uniqueDomains[i]) > len(uniqueDomains[j])
 	})
 
+	// Pre-compile domain regexes once to avoid regexp.MustCompile per-call overhead
+	type domainRepl struct {
+		re   *regexp.Regexp
+		repl string
+	}
+	domainRepls := make([]domainRepl, 0, len(uniqueDomains))
+	for _, d := range uniqueDomains {
+		repl := "example.com"
+		if d == strings.ToUpper(d) {
+			repl = "EXAMPLE.COM"
+		}
+		domainRepls = append(domainRepls, domainRepl{
+			re:   regexp.MustCompile(`(?i)` + regexp.QuoteMeta(d)),
+			repl: repl,
+		})
+	}
+
 	maskString := func(s string) string {
 		s = anonymizeIPRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
 		s = anonymizeIPv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
 		s = anonymizeMACRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
 		s = anonymizeEmailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
-		for _, d := range uniqueDomains {
-			dRegex := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(d))
-			replacement := "example.com"
-			if d == strings.ToUpper(d) {
-				replacement = "EXAMPLE.COM"
-			}
-			s = dRegex.ReplaceAllString(s, replacement)
+		for _, dr := range domainRepls {
+			s = dr.re.ReplaceAllString(s, dr.repl)
 		}
 		return s
 	}

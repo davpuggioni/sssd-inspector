@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	sssderrors "sssd-inspector/errors"
 )
 
 // FileProcessor provides streaming file processing capabilities
@@ -75,7 +77,7 @@ func (fp *FileProcessor) scanFile(filePath string, lineFunc func(line string)) e
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to open file %s: %w", filePath, err)
+		return sssderrors.NewFileAccess(filePath, err)
 	}
 	defer f.Close()
 
@@ -85,7 +87,7 @@ func (fp *FileProcessor) scanFile(filePath string, lineFunc func(line string)) e
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error for file %s: %w", filePath, err)
+		return sssderrors.Wrap(err, sssderrors.ErrParsingFailed, fmt.Sprintf("scanner error for file %s", filePath))
 	}
 	return nil
 }

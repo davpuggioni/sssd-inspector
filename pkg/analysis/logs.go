@@ -45,15 +45,29 @@ type configChecksYAML struct {
 	SSSDConfigChecks []configCheck `yaml:"SSSD_CONFIG_CHECKS"`
 }
 
-// loadErrorPatternEntries loads all error pattern entries from embedded YAML
-func (ctx *AnalyzerContext) loadErrorPatternEntries(macType string) []errorPatternEntry {
-	var config errorPatternConfig
-	if err := yaml.Unmarshal(embeddedPatternsYAML, &config); err != nil {
-		return nil
-	}
+// Package-level cached YAML data, parsed once at init.
+// These are immutable after init and safe for concurrent read access.
+var (
+	cachedErrorPatterns []errorPatternEntry
+	cachedConfigChecks  []configCheck
+)
 
+func init() {
+	var errCfg errorPatternConfig
+	if err := yaml.Unmarshal(embeddedPatternsYAML, &errCfg); err == nil {
+		cachedErrorPatterns = errCfg.SSSDErrorPatterns
+	}
+	var cfg configChecksYAML
+	if err := yaml.Unmarshal(embeddedConfigChecksYAML, &cfg); err == nil {
+		cachedConfigChecks = cfg.SSSDConfigChecks
+	}
+}
+
+// loadErrorPatternEntries returns error pattern entries filtered by MAC type.
+// The underlying data is parsed once at package init and cached.
+func (ctx *AnalyzerContext) loadErrorPatternEntries(macType string) []errorPatternEntry {
 	var entries []errorPatternEntry
-	for _, entry := range config.SSSDErrorPatterns {
+	for _, entry := range cachedErrorPatterns {
 		if macType != "SELinux" && strings.Contains(entry.Description, "SELinux") && !strings.Contains(entry.Description, "AppArmor") {
 			continue
 		}
@@ -244,13 +258,10 @@ func (ctx *AnalyzerContext) analyzeSSSDConfig(sssdConfContent string, report *ty
 	}
 }
 
-// loadConfigChecks loads SSSD config check rules from embedded YAML
+// loadConfigChecks returns SSSD config check rules from cached parsed YAML.
+// The underlying data is parsed once at package init and cached.
 func (ctx *AnalyzerContext) loadConfigChecks() []configCheck {
-	var cfg configChecksYAML
-	if err := yaml.Unmarshal(embeddedConfigChecksYAML, &cfg); err != nil {
-		return nil
-	}
-	return cfg.SSSDConfigChecks
+	return cachedConfigChecks
 }
 
 // analyzeKerberosConfig analyzes krb5.conf without scanning log files
