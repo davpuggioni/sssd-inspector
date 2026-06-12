@@ -2,6 +2,7 @@
 package analysis
 
 import (
+	"context"
 	"strings"
 
 	"sssd-inspector/pkg/fileutil"
@@ -14,6 +15,7 @@ type AnalyzerContext struct {
 	SecExtract *fileutil.SectionExtractor
 	FileCache  *fileutil.FileCache
 	RegexCache *fileutil.RegexCache
+	ctx        context.Context // current analysis context, set before each run
 }
 
 // NewAnalyzerContext creates a new AnalyzerContext with default dependencies.
@@ -23,6 +25,7 @@ func NewAnalyzerContext() *AnalyzerContext {
 		SecExtract: fileutil.DefaultSectionExtractor,
 		FileCache:  fileutil.GlobalFileCache,
 		RegexCache: fileutil.GlobalRegexCache,
+		ctx:        context.Background(),
 	}
 }
 
@@ -33,22 +36,32 @@ func NewAnalyzerContextWithBuffer(bufferSize, maxLineLength int) *AnalyzerContex
 		SecExtract: fileutil.NewSectionExtractor(),
 		FileCache:  fileutil.GlobalFileCache,
 		RegexCache: fileutil.GlobalRegexCache,
+		ctx:        context.Background(),
 	}
+}
+
+// CTX returns the current analysis context (set before each AnalyzeData/AnalyzeLogsOnly call).
+func (ctx *AnalyzerContext) CTX() context.Context {
+	return ctx.ctx
 }
 
 // --- Public API methods ---
 
-// AnalyzeData is the main orchestrator for full supportconfig analysis
-func (ctx *AnalyzerContext) AnalyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) types.ReportData {
+// AnalyzeData is the main orchestrator for full supportconfig analysis.
+// Pass context.Background() for normal operation, or a cancellable context for early termination.
+func (ctx *AnalyzerContext) AnalyzeData(c context.Context, dirPath string, anonymize bool, progressFunc func(string, int)) types.ReportData {
+	ctx.ctx = c
 	return ctx.analyzeData(dirPath, anonymize, progressFunc)
 }
 
-// AnalyzeLogsOnly performs lightweight analysis on raw SSSD log files
-func (ctx *AnalyzerContext) AnalyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) types.ReportData {
+// AnalyzeLogsOnly performs lightweight analysis on raw SSSD log files.
+// Pass context.Background() for normal operation, or a cancellable context for early termination.
+func (ctx *AnalyzerContext) AnalyzeLogsOnly(c context.Context, dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) types.ReportData {
+	ctx.ctx = c
 	return ctx.analyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
 }
 
-// --- Test support methods (exported for use by tests via legacy_test_helpers.go) ---
+// --- Test support methods (exported for use by tests) ---
 
 // AnalyzeMACStatus delegates to private method
 func (ctx *AnalyzerContext) AnalyzeMACStatus(dirPath string, report *types.ReportData) {
@@ -182,14 +195,14 @@ func (ctx *AnalyzerContext) matchKBArticles(dirPath string, report *types.Report
 
 // --- Convenience wrappers ---
 
-// ScanFiles is a convenience wrapper for scanning files
+// ScanFiles scans files line-by-line, checking context for cancellation between files.
 func (ctx *AnalyzerContext) ScanFiles(dirPath string, files []string, lineFunc func(line string)) {
-	_ = ctx.Scanner.ScanFiles(dirPath, files, lineFunc)
+	_ = ctx.Scanner.ScanFilesContext(ctx.ctx, dirPath, files, lineFunc)
 }
 
-// AnyFileContains checks if any file contains a pattern
+// AnyFileContains checks if any file contains a pattern, respecting context cancellation.
 func (ctx *AnalyzerContext) AnyFileContains(dirPath string, files []string, search string) bool {
-	return ctx.Scanner.AnyFileContains(dirPath, files, search)
+	return ctx.Scanner.AnyFileContainsContext(ctx.ctx, dirPath, files, search)
 }
 
 // ExtractSection extracts a specific section from a config file

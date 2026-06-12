@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+
 	"sssd-inspector/pkg/analysis"
 	"sssd-inspector/pkg/extract"
 	"sssd-inspector/pkg/fileutil"
@@ -44,7 +46,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		appConfig.GetBufferSizeBytes(),
 		appConfig.GetMaxLineLengthBytes(),
 	)
-	return ctx.AnalyzeData(dirPath, anonymize, progressFunc)
+	return ctx.AnalyzeData(context.Background(), dirPath, anonymize, progressFunc)
 }
 
 // analyzeLogsOnly delegates to the new package using appConfig for buffer settings
@@ -53,7 +55,7 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 		appConfig.GetBufferSizeBytes(),
 		appConfig.GetMaxLineLengthBytes(),
 	)
-	return ctx.AnalyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+	return ctx.AnalyzeLogsOnly(context.Background(), dirPath, logFiles, anonymize, progressFunc)
 }
 
 // extractArchiveToTemp extracts an XZ archive to a temporary directory

@@ -59,9 +59,9 @@ const (
 	DefaultOutputSuffix = "_report"
 	DefaultOutputDir    = "./reports"
 
-	// Template paths
-	DefaultHTMLTemplate = "./templates/report.html"
-	DefaultTXTTemplate  = "./templates/report.txt"
+	// Template paths (now embedded via go:embed in pkg/report)
+	DefaultHTMLTemplate = "embedded" // templates/report.html is embedded in the binary
+	DefaultTXTTemplate  = "embedded" // built inline by report.BuildTextReport()
 )
 
 // CLI constants

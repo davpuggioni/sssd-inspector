@@ -3,6 +3,7 @@ package fileutil
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -155,6 +156,34 @@ func NewSafeFileReader() *SafeFileReader {
 // For large files, use the streaming methods instead.
 func (sfr *SafeFileReader) ReadFileSafe(lines []string) string {
 	return strings.Join(lines, "\n")
+}
+
+// --- Context-aware variants ---
+
+// AnyFileContainsContext streams files line-by-line, stopping on first match or context cancellation.
+func (fp *FileProcessor) AnyFileContainsContext(c context.Context, dirPath string, files []string, search string) bool {
+	for _, name := range files {
+		if c.Err() != nil {
+			return false
+		}
+		if fp.fileContains(filepath.Join(dirPath, name), search) {
+			return true
+		}
+	}
+	return false
+}
+
+// ScanFilesContext streams files line-by-line with context cancellation support.
+func (fp *FileProcessor) ScanFilesContext(c context.Context, dirPath string, files []string, lineFunc func(line string)) error {
+	for _, name := range files {
+		if c.Err() != nil {
+			return c.Err()
+		}
+		if err := fp.scanFile(filepath.Join(dirPath, name), lineFunc); err != nil {
+			logger.Warn("failed to scan file", logger.Fields{"file": name, "error": err.Error()})
+		}
+	}
+	return nil
 }
 
 // Default instances

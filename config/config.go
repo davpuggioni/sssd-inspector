@@ -115,9 +115,8 @@ type PerformanceConfig struct {
 
 // ReportsConfig contains report generation settings
 type ReportsConfig struct {
-	DefaultFormats  []string          `yaml:"default_formats"`
-	OutputDirectory string            `yaml:"output_directory"`
-	Templates       map[string]string `yaml:"templates"`
+	DefaultFormats  []string `yaml:"default_formats"`
+	OutputDirectory string   `yaml:"output_directory"`
 }
 
 // CLIConfig contains CLI-specific settings
@@ -196,10 +195,6 @@ func DefaultConfig() *Config {
 		Reports: ReportsConfig{
 			DefaultFormats:  constants.DefaultReportFormats(),
 			OutputDirectory: constants.DefaultOutputDir,
-			Templates: map[string]string{
-				"html": constants.DefaultHTMLTemplate,
-				"txt":  constants.DefaultTXTTemplate,
-			},
 		},
 		CLI: CLIConfig{
 			DefaultGenerateBothFormats: constants.DefaultGenerateBothFormats,
