@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	sssderrors "sssd-inspector/errors"
+	"sssd-inspector/logger"
 )
 
 // FileProcessor provides streaming file processing capabilities
@@ -64,7 +65,7 @@ func (fp *FileProcessor) fileContains(filePath, search string) bool {
 func (fp *FileProcessor) ScanFiles(dirPath string, files []string, lineFunc func(line string)) error {
 	for _, name := range files {
 		if err := fp.scanFile(filepath.Join(dirPath, name), lineFunc); err != nil {
-			fmt.Printf("Warning: failed to scan file %s: %v\n", name, err)
+			logger.Warn("failed to scan file", logger.Fields{"file": name, "error": err.Error()})
 		}
 	}
 	return nil

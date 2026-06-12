@@ -117,8 +117,14 @@ func (ctx *AnalyzerContext) performSinglePassScanOnFiles(dirPath string, logFile
 	}
 
 	combinedRegex := ctx.RegexCache.Get("(?i)(" + strings.Join(quotedPatterns, "|") + ")")
+	if combinedRegex == nil {
+		return result
+	}
 
 	timeRegex := ctx.RegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
+	if timeRegex == nil {
+		return result
+	}
 
 	errorExamples := make(map[string][]string)
 

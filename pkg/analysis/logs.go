@@ -318,8 +318,14 @@ func (ctx *AnalyzerContext) scanAndCollectErrors(dirPath string, errorPatterns m
 		fastLookup[strings.ToLower(pattern)] = desc
 	}
 	errorRegex := ctx.RegexCache.Get("(?i)(" + strings.Join(errorKeys, "|") + ")")
+	if errorRegex == nil {
+		return detectedLogErrors, timelineEvents
+	}
 
 	timeRegex := ctx.RegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
+	if timeRegex == nil {
+		return detectedLogErrors, timelineEvents
+	}
 
 	ctx.ScanFiles(dirPath, constants.LogFileNames(), func(line string) {
 		lineTrimmed := strings.TrimSpace(line)

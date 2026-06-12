@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"sssd-inspector/constants"
 )
 
 // TestExtractArchiveToTemp_InvalidFile tests behavior with non-existent file
@@ -47,7 +49,7 @@ func TestIsRelevantFile_Custom(t *testing.T) {
 func TestCopyWithBuffer(t *testing.T) {
 	pool := &sync.Pool{
 		New: func() interface{} {
-			b := make([]byte, ExtractionBufferSize)
+			b := make([]byte, constants.ExtractionBufferSize)
 			return &b
 		},
 	}
@@ -98,19 +100,16 @@ func TestCopyWithBuffer(t *testing.T) {
 	}
 }
 
-// TestConstants verifies expected constant values
+// TestConstants verifies expected constant values from centralized constants package
 func TestConstants(t *testing.T) {
-	if ExtractionBufferSize != 32*1024 {
-		t.Errorf("expected ExtractionBufferSize=32768, got %d", ExtractionBufferSize)
+	if constants.ExtractionBufferSize != 64*1024 {
+		t.Errorf("expected ExtractionBufferSize=65536, got %d", constants.ExtractionBufferSize)
 	}
-	if DefaultExtractionTimeout != 5*60*1000*1000*1000 {
-		// Just verify it's set
-		if DefaultExtractionTimeout <= 0 {
-			t.Error("DefaultExtractionTimeout should be positive")
-		}
+	if constants.DefaultExtractionTimeout <= 0 {
+		t.Error("DefaultExtractionTimeout should be positive")
 	}
-	if MaxArchiveFileSize != 100*1024*1024 {
-		t.Errorf("expected MaxArchiveFileSize=104857600, got %d", MaxArchiveFileSize)
+	if constants.MaxArchiveFileSize != 100*1024*1024 {
+		t.Errorf("expected MaxArchiveFileSize=104857600, got %d", constants.MaxArchiveFileSize)
 	}
 }
 

@@ -2,6 +2,7 @@ package fileutil
 
 import (
 	"bufio"
+	"container/list"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +23,7 @@ func NewRegexCache() *RegexCache {
 }
 
 // Get returns a compiled regex for the given pattern, compiling it on first access.
+// Returns nil if the pattern is invalid (no panic).
 func (rc *RegexCache) Get(pattern string) *regexp.Regexp {
 	rc.mu.RLock()
 	re, ok := rc.patterns[pattern]
@@ -33,11 +35,19 @@ func (rc *RegexCache) Get(pattern string) *regexp.Regexp {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
+	// Double-check after acquiring write lock
 	if re, ok := rc.patterns[pattern]; ok {
 		return re
 	}
 
-	re = regexp.MustCompile(pattern)
+	// Use Compile instead of MustCompile to avoid panic on invalid patterns
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		// Log the error and return a non-nil regex that matches nothing or re-throw
+		// We return nil; callers should check for nil
+		rc.patterns[pattern] = nil
+		return nil
+	}
 	rc.patterns[pattern] = re
 	return re
 }
@@ -49,12 +59,18 @@ func (rc *RegexCache) Clear() {
 	rc.patterns = make(map[string]*regexp.Regexp)
 }
 
-// FileCache provides thread-safe caching of file contents (lines).
+// lruEntry holds a cache entry with its key for LRU eviction
+type lruEntry struct {
+	key   string
+	lines []string
+}
+
+// FileCache provides thread-safe caching of file contents (lines) with LRU eviction.
 type FileCache struct {
 	mu       sync.RWMutex
-	buffers  map[string][]string
+	entries  map[string]*list.Element
+	lruList  *list.List
 	maxFiles int
-	curFiles int
 }
 
 // NewFileCache creates a new FileCache with the specified maximum number of cached files
@@ -63,7 +79,8 @@ func NewFileCache(maxFiles int) *FileCache {
 		maxFiles = 20
 	}
 	return &FileCache{
-		buffers:  make(map[string][]string),
+		entries:  make(map[string]*list.Element),
+		lruList:  list.New(),
 		maxFiles: maxFiles,
 	}
 }
@@ -73,13 +90,18 @@ func (fc *FileCache) GetLines(dirPath, fileName string) []string {
 	cacheKey := filepath.Join(dirPath, fileName)
 
 	fc.mu.RLock()
-	lines, ok := fc.buffers[cacheKey]
-	fc.mu.RUnlock()
+	elem, ok := fc.entries[cacheKey]
 	if ok {
+		// Move to front (most recently used)
+		fc.lruList.MoveToFront(elem)
+		lines := elem.Value.(*lruEntry).lines
+		fc.mu.RUnlock()
 		return lines
 	}
+	fc.mu.RUnlock()
 
-	lines = fc.readFileLines(filepath.Join(dirPath, fileName))
+	// Not in cache, read the file
+	lines := fc.readFileLines(filepath.Join(dirPath, fileName))
 	if lines == nil {
 		return nil
 	}
@@ -87,20 +109,25 @@ func (fc *FileCache) GetLines(dirPath, fileName string) []string {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
-	if lines, ok := fc.buffers[cacheKey]; ok {
-		return lines
+	// Double-check after acquiring write lock
+	if elem, ok := fc.entries[cacheKey]; ok {
+		fc.lruList.MoveToFront(elem)
+		return elem.Value.(*lruEntry).lines
 	}
 
-	if fc.curFiles >= fc.maxFiles {
-		for key := range fc.buffers {
-			delete(fc.buffers, key)
-			fc.curFiles--
-			break
+	// Evict least recently used if at capacity
+	if fc.lruList.Len() >= fc.maxFiles {
+		oldest := fc.lruList.Back()
+		if oldest != nil {
+			fc.lruList.Remove(oldest)
+			delete(fc.entries, oldest.Value.(*lruEntry).key)
 		}
 	}
 
-	fc.buffers[cacheKey] = lines
-	fc.curFiles++
+	// Add new entry
+	entry := &lruEntry{key: cacheKey, lines: lines}
+	elem = fc.lruList.PushFront(entry)
+	fc.entries[cacheKey] = elem
 	return lines
 }
 
@@ -141,7 +168,7 @@ func (fc *FileCache) readFileLines(filePath string) []string {
 func (fc *FileCache) Has(dirPath, fileName string) bool {
 	cacheKey := filepath.Join(dirPath, fileName)
 	fc.mu.RLock()
-	_, ok := fc.buffers[cacheKey]
+	_, ok := fc.entries[cacheKey]
 	fc.mu.RUnlock()
 	return ok
 }
@@ -150,9 +177,11 @@ func (fc *FileCache) Has(dirPath, fileName string) bool {
 func (fc *FileCache) Clear() {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	fc.buffers = make(map[string][]string)
-	fc.curFiles = 0
+	fc.entries = make(map[string]*list.Element)
+	fc.lruList.Init()
 }
+
+// Pool-related global variables
 
 // scannerPool provides reusable buffer allocations for scanners.
 var ScannerPool = sync.Pool{
@@ -163,7 +192,11 @@ var ScannerPool = sync.Pool{
 
 // CreatePooledScanner creates a new bufio.Scanner with a buffer from the pool.
 func CreatePooledScanner(f *os.File) *bufio.Scanner {
-	buf := ScannerPool.Get().([]byte)
+	bufPtr := ScannerPool.Get()
+	buf, ok := bufPtr.([]byte)
+	if !ok {
+		return bufio.NewScanner(f)
+	}
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(buf, 1024*1024)
 	return scanner

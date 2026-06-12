@@ -4,10 +4,10 @@ package report
 import (
 	"fmt"
 	"html/template"
-	"log"
 	"os"
 	"strings"
 
+	"sssd-inspector/logger"
 	"sssd-inspector/pkg/types"
 )
 
@@ -314,18 +314,18 @@ func WriteHTMLReportFile(report types.ReportData, filename string) {
 `
 	t, err := template.New("report").Parse(tpl)
 	if err != nil {
-		log.Printf("Template parsing error: %v", err)
+		logger.Error("template parsing error", err, logger.Fields{"filename": filename})
 		return
 	}
 
 	file, err := os.Create(filename)
 	if err != nil {
-		log.Printf("Failed to create HTML report: %v", err)
+		logger.Error("failed to create HTML report", err, logger.Fields{"filename": filename})
 		return
 	}
 	defer file.Close()
 
 	if err := t.Execute(file, report); err != nil {
-		log.Printf("Template execution error: %v", err)
+		logger.Error("template execution error", err, logger.Fields{"filename": filename})
 	}
 }

@@ -12,6 +12,7 @@ const (
 	// Window dimensions
 	DefaultWindowWidth  = 1024
 	DefaultWindowHeight = 768
+	DefaultWindowTitle  = "SSSD Inspector"
 
 	// Background color RGBA
 	BackgroundR = 244
@@ -226,7 +227,7 @@ const (
 	ProgressComplete   = 100
 )
 
-// Timeout constants
+// Timeout and extraction constants (single source of truth)
 const (
 	// File scan timeout per file
 	DefaultFileScanTimeout = 30 * time.Second
@@ -235,7 +236,9 @@ const (
 	// Buffer size for extraction copies
 	ExtractionBufferSize = 64 * 1024 // 64KB
 	// Maximum allowed size for a single extracted file (tar bomb protection)
-	MaxArchiveFileSize = 2 * 1024 * 1024 * 1024 // 2GB
+	MaxArchiveFileSize = 100 * 1024 * 1024 // 100MB
+	// Threshold for triggering extra GC after extracting large archives
+	LargeArchiveThreshold = 50 * 1024 * 1024 // 50MB
 )
 
 // Time format constants

@@ -75,6 +75,9 @@ func (ctx *AnalyzerContext) matchKBArticlesWithEvidence(dirPath string, report *
 		if !configMatched {
 			for _, pattern := range article.ConfigPatterns {
 				matcher := fileutil.GlobalRegexCache.Get("(?i)" + pattern)
+				if matcher == nil {
+					continue
+				}
 				ctx.ScanFiles(dirPath, configFiles, func(line string) {
 					if matcher.MatchString(line) {
 						configMatched = true

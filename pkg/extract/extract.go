@@ -6,34 +6,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
+	"sssd-inspector/constants"
 	sssderrors "sssd-inspector/errors"
+	"sssd-inspector/logger"
 
 	"github.com/ulikunitz/xz"
 )
 
-// ExtractionBufferSize is the buffer size for archive extraction
-const ExtractionBufferSize = 32 * 1024
-
-// largeArchiveThreshold for triggering extra GC after extraction
-const largeArchiveThreshold = 50 * 1024 * 1024 // 50MB
-
-// DefaultExtractionTimeout for archive extraction
-const DefaultExtractionTimeout = 5 * time.Minute
-
 // XZEstimatedCompressionRatio for size-based progress estimation
 const XZEstimatedCompressionRatio = 12
-
-// MaxArchiveFileSize prevents zip/tar bombs
-const MaxArchiveFileSize = 100 * 1024 * 1024 // 100MB
 
 // IsRelevantFile determines if a file should be extracted
 var IsRelevantFile func(name string) bool
@@ -74,12 +62,10 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	totalArchiveSize := fileInfo.Size()
 
 	// For very large archives, adjust GC to handle the memory spike better
-	isLargeArchive := totalArchiveSize > largeArchiveThreshold
+	isLargeArchive := totalArchiveSize > constants.LargeArchiveThreshold
 
 	// --- Create context with timeout ---
-	extractionTimeout := DefaultExtractionTimeout
-
-	ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultExtractionTimeout)
 	defer cancel()
 
 	// --- Set up OS signal handling for graceful interruption ---
@@ -127,7 +113,7 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	// Pool for extraction write buffers
 	bufPool := sync.Pool{
 		New: func() interface{} {
-			b := make([]byte, ExtractionBufferSize)
+			b := make([]byte, constants.ExtractionBufferSize)
 			return &b
 		},
 	}
@@ -148,7 +134,7 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			break
 		}
 		if err != nil {
-			log.Printf("Warning: tar entry error (continuing): %v", err)
+			logger.Warn("tar entry error, continuing", logger.Fields{"error": err.Error()})
 			continue
 		}
 
@@ -165,21 +151,21 @@ func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			}
 
 			// Prevent Zip/Tar Bombs
-			if hdr.Size > MaxArchiveFileSize {
-				log.Printf("Warning: skipping oversized file %s (%d bytes)", fileName, hdr.Size)
+			if hdr.Size > constants.MaxArchiveFileSize {
+				logger.Warn("skipping oversized file", logger.Fields{"file": fileName, "size": hdr.Size})
 				continue
 			}
 
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 			if err != nil {
-				log.Printf("Warning: failed to create output file %s: %v", targetPath, err)
+				logger.Warn("failed to create output file", logger.Fields{"path": targetPath, "error": err.Error()})
 				continue
 			}
 
 			written, err := copyWithBuffer(outFile, io.LimitReader(tr, hdr.Size), &bufPool)
 			if err != nil {
 				outFile.Close()
-				log.Printf("Warning: failed to write file %s: %v", fileName, err)
+				logger.Warn("failed to write file", logger.Fields{"file": fileName, "error": err.Error()})
 				continue
 			}
 			outFile.Close()
