@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sssd-inspector/pkg/fileutil"
+	"sssd-inspector/pkg/types"
 )
 
 // Test: Verify the RC4 Downgrade bug is reported in Tuning
@@ -16,8 +19,8 @@ func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeSSSDConfigAndLogs(dir, &report)
 
 	if !containsString(report.Warnings, "[AD CRYPTO BUG]") {
 		t.Errorf("Failed to detect RC4 downgrade bug in streamed logs")
@@ -31,8 +34,8 @@ func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeSSSDConfigAndLogs(dir, &report)
 
 	if !containsString(report.Problems, "[DEPRECATION] 'enumerate = true' is set") {
 		t.Errorf("Failed to detect deprecated enumerate=true setting")
@@ -47,9 +50,10 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxSuppression(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeMACStatus(dir, &report)
-	analyzeSSSDConfigAndLogs(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzeMACStatus(dir, &report)
+	ctx.AnalyzeSSSDConfigAndLogs(dir, &report)
 
 	foundError := false
 	for _, err := range report.SSSDLogErrors {
@@ -72,9 +76,10 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeMACStatus(dir, &report)
-	analyzeSSSDConfigAndLogs(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzeMACStatus(dir, &report)
+	ctx.AnalyzeSSSDConfigAndLogs(dir, &report)
 
 	foundError := false
 	for _, err := range report.SSSDLogErrors {
@@ -104,7 +109,7 @@ func TestMatchKBArticles_Success(t *testing.T) {
 	defer os.RemoveAll(mockKBDir) // Clean up mock KB dir after test
 
 	// Create a mock KB Article matching TID-000020793
-	mockArticle := TIDArticle{
+	mockArticle := types.TIDArticle{
 		TIDID:       "TID-TEST-01",
 		Title:       "SSSD MEMORY Keytab Error",
 		Description: "Keytab is corrupted.",
@@ -113,8 +118,8 @@ func TestMatchKBArticles_Success(t *testing.T) {
 	articleBytes, _ := json.Marshal(mockArticle)
 	os.WriteFile(filepath.Join(mockKBDir, "test_article.json"), articleBytes, 0644)
 
-	var report ReportData
-	matchKBArticles(dir, &report)
+	var report types.ReportData
+	testAnalyzer().MatchKBArticles(dir, &report)
 
 	if len(report.MatchedTIDs) == 0 {
 		t.Fatalf("Failed to match mock KB article against log evidence")
@@ -142,7 +147,7 @@ func TestMatchKBArticles_AppArmorSuppression(t *testing.T) {
 	defer os.RemoveAll(mockKBDir)
 
 	// Create a mock SELinux KB Article
-	mockArticle := TIDArticle{
+	mockArticle := types.TIDArticle{
 		TIDID:       "TID-SELINUX-TEST",
 		Title:       "SELinux mapping failed",
 		Description: "SELinux maps were recently updated",
@@ -151,11 +156,11 @@ func TestMatchKBArticles_AppArmorSuppression(t *testing.T) {
 	articleBytes, _ := json.Marshal(mockArticle)
 	os.WriteFile(filepath.Join(mockKBDir, "test_selinux.json"), articleBytes, 0644)
 
-	var report ReportData
+	var report types.ReportData
 	// Simulate an AppArmor environment
 	report.MACType = "AppArmor"
 
-	matchKBArticles(dir, &report)
+	testAnalyzer().MatchKBArticles(dir, &report)
 
 	// The engine should explicitly ignore SELinux TIDs when AppArmor is active
 	if len(report.MatchedTIDs) > 0 {
@@ -176,7 +181,7 @@ More junk data`,
 	})
 	defer os.RemoveAll(dir)
 
-	extracted := extractSection(dir, "sssd.txt", "# /etc/sssd/sssd.conf")
+	extracted := fileutil.DefaultSectionExtractor.ExtractSection(dir, "sssd.txt", "# /etc/sssd/sssd.conf")
 
 	if !strings.Contains(extracted, "id_provider = ad") {
 		t.Errorf("Failed to extract 'id_provider = ad' from sssd.txt")
@@ -199,8 +204,8 @@ func TestAnalyzeSSSDConfigAndLogs_TimelineExtraction(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeSSSDConfigAndLogs(dir, &report)
 
 	if len(report.Timeline) != 4 {
 		t.Fatalf("Expected 4 timeline events, got %d", len(report.Timeline))

@@ -4,6 +4,8 @@ package main
 import (
 	"os"
 	"testing"
+
+	"sssd-inspector/pkg/types"
 )
 
 // Test: Verify vm.dirty_bytes performance issue
@@ -13,8 +15,8 @@ func TestAnalyzePerformance_DirtyBytes(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzePerformance(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzePerformance(dir, &report)
 
 	if !containsString(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0") {
 		t.Errorf("Failed to detect vm.dirty_bytes = 0 misconfiguration")
@@ -29,9 +31,10 @@ func TestAnalyzePermissions_NewVersion(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzePackages(dir, &report)
+	ctx.AnalyzeSSSDFilePermissions(dir, &report)
 
 	if !containsString(report.Problems, "strictly requires 'root:sssd'") {
 		t.Errorf("Failed to detect incorrect file ownership for SSSD 2.10+")
@@ -45,8 +48,8 @@ func TestAnalyzeDiskSpace_Critical(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeDiskSpace(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeDiskSpace(dir, &report)
 
 	if !containsString(report.Problems, "[CRITICAL] Partition / is 98% full") {
 		t.Errorf("Failed to detect 98%% full root partition")
@@ -60,8 +63,8 @@ func TestAnalyzeServices_CrashCode4(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeServices(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeServices(dir, &report)
 
 	if !containsString(report.Problems, "crashed with exit code 4 (Configuration Error)") {
 		t.Errorf("Failed to parse systemd exit code 4")
@@ -75,8 +78,8 @@ func TestAnalyzeHostname_ShortName(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeHostnameAndFQDN(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeHostnameAndFQDN(dir, &report)
 
 	if !containsString(report.Problems, "System is using a short hostname instead of an FQDN") {
 		t.Errorf("Failed to detect short hostname")
@@ -90,8 +93,8 @@ func TestAnalyzeMACStatus_AppArmor(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeMACStatus(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeMACStatus(dir, &report)
 
 	if report.MACType != "AppArmor" {
 		t.Errorf("Expected MACType 'AppArmor', got '%s'", report.MACType)
@@ -105,8 +108,8 @@ func TestAnalyzeMACStatus_SELinux(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeMACStatus(dir, &report)
+	var report types.ReportData
+	testAnalyzer().AnalyzeMACStatus(dir, &report)
 
 	if report.MACType != "SELinux" {
 		t.Errorf("Expected MACType 'SELinux', got '%s'", report.MACType)
@@ -129,9 +132,10 @@ total 33900
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzePackages(dir, &report)
+	ctx.AnalyzeSSSDFilePermissions(dir, &report)
 
 	if containsString(report.Problems, "/var/lib/sss/") {
 		t.Errorf("Expected no /var/lib/sss/ permissions errors for perfectly owned directories, but found one.")
@@ -154,9 +158,10 @@ total 33900
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzePackages(dir, &report)
+	ctx.AnalyzeSSSDFilePermissions(dir, &report)
 
 	if !containsString(report.Problems, "2 files or directories in /var/lib/sss/ are incorrectly owned") {
 		t.Errorf("Failed to detect exactly 2 incorrectly owned files in /var/lib/sss/ for SSSD 2.10+")
@@ -180,10 +185,11 @@ total 33900
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeOSAndHardware(dir, &report)
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzeOSAndHardware(dir, &report)
+	ctx.AnalyzePackages(dir, &report)
+	ctx.AnalyzeSSSDFilePermissions(dir, &report)
 
 	if !containsString(report.Problems, "upgrade to a version of sssd later than") && !containsString(report.Problems, "greater than version sssd-2.10.2") {
 		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
@@ -207,10 +213,11 @@ total 33900
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeOSAndHardware(dir, &report)
-	analyzePackages(dir, &report)
-	analyzeSSSDFilePermissions(dir, &report)
+	ctx := testAnalyzer()
+	var report types.ReportData
+	ctx.AnalyzeOSAndHardware(dir, &report)
+	ctx.AnalyzePackages(dir, &report)
+	ctx.AnalyzeSSSDFilePermissions(dir, &report)
 
 	if containsString(report.Problems, "incorrectly owned") {
 		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
