@@ -3,9 +3,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
-
 	"sssd-inspector/pkg/analysis"
 	"sssd-inspector/pkg/extract"
 	"sssd-inspector/pkg/fileutil"
@@ -41,28 +38,21 @@ func isRelevantFile(name string) bool {
 	return fileutil.DefaultFileFilter.IsRelevantFile(name)
 }
 
-// Context-aware scanning functions
-func scanFilesWithContext(ctx context.Context, dirPath string, files []string, lineFunc func(line string)) {
-	for _, name := range files {
-		select {
-		case <-ctx.Done():
-			fmt.Printf("Warning: scan of %s cancelled: %v\n", name, ctx.Err())
-			return
-		default:
-		}
-		_ = fileutil.DefaultFileProcessor.ScanFiles(dirPath, []string{name}, lineFunc)
-	}
-}
-
-// analyzeData delegates to the new package creating a fresh context each time
+// analyzeData delegates to the new package using appConfig for buffer settings
 func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
-	ctx := analysis.NewAnalyzerContext()
+	ctx := analysis.NewAnalyzerContextWithBuffer(
+		appConfig.GetBufferSizeBytes(),
+		appConfig.GetMaxLineLengthBytes(),
+	)
 	return ctx.AnalyzeData(dirPath, anonymize, progressFunc)
 }
 
-// analyzeLogsOnly delegates to the new package creating a fresh context each time
+// analyzeLogsOnly delegates to the new package using appConfig for buffer settings
 func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
-	ctx := analysis.NewAnalyzerContext()
+	ctx := analysis.NewAnalyzerContextWithBuffer(
+		appConfig.GetBufferSizeBytes(),
+		appConfig.GetMaxLineLengthBytes(),
+	)
 	return ctx.AnalyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
 }
 

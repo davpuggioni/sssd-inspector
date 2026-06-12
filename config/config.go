@@ -297,3 +297,80 @@ func (c *Config) Validate() error {
 
 	return nil
 }
+
+// GetBufferSizeBytes returns the buffer size in bytes from config or default
+func (c *Config) GetBufferSizeBytes() int {
+	if c.Analysis.BufferSize == "" {
+		return 64 * 1024 // 64KB default
+	}
+	size, err := parseSize(c.Analysis.BufferSize)
+	if err != nil || size <= 0 {
+		return 64 * 1024
+	}
+	return int(size)
+}
+
+// GetMaxLineLengthBytes returns the max line length in bytes from config or default
+func (c *Config) GetMaxLineLengthBytes() int {
+	if c.Analysis.MaxLineLength == "" {
+		return 1024 * 1024 // 1MB default
+	}
+	size, err := parseSize(c.Analysis.MaxLineLength)
+	if err != nil || size <= 0 {
+		return 1024 * 1024
+	}
+	return int(size)
+}
+
+// GetAnalysisTimeout returns the analysis timeout duration
+func (c *Config) GetAnalysisTimeout() time.Duration {
+	if c.Analysis.Timeout == "" {
+		return 10 * time.Minute
+	}
+	d, err := time.ParseDuration(c.Analysis.Timeout)
+	if err != nil {
+		return 10 * time.Minute
+	}
+	return d
+}
+
+// parseSize parses size string (e.g., "100MB") to bytes
+func parseSize(size string) (int64, error) {
+	var multiplier int64
+	var numStr string
+
+	for i, r := range size {
+		if r >= '0' && r <= '9' || r == '.' {
+			continue
+		}
+		numStr = size[:i]
+		unit := size[i:]
+
+		switch unit {
+		case "B", "b":
+			multiplier = 1
+		case "KB", "kb":
+			multiplier = 1024
+		case "MB", "mb":
+			multiplier = 1024 * 1024
+		case "GB", "gb":
+			multiplier = 1024 * 1024 * 1024
+		default:
+			return 0, fmt.Errorf("unknown size unit: %s", unit)
+		}
+		break
+	}
+
+	if numStr == "" {
+		numStr = size
+		multiplier = 1
+	}
+
+	var value float64
+	_, err := fmt.Sscanf(numStr, "%f", &value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size format: %s", size)
+	}
+
+	return int64(value * float64(multiplier)), nil
+}

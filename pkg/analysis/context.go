@@ -26,6 +26,16 @@ func NewAnalyzerContext() *AnalyzerContext {
 	}
 }
 
+// NewAnalyzerContextWithBuffer creates a new AnalyzerContext with custom buffer sizes.
+func NewAnalyzerContextWithBuffer(bufferSize, maxLineLength int) *AnalyzerContext {
+	return &AnalyzerContext{
+		Scanner:    fileutil.NewFileProcessorWithConfig(bufferSize, maxLineLength),
+		SecExtract: fileutil.NewSectionExtractor(),
+		FileCache:  fileutil.GlobalFileCache,
+		RegexCache: fileutil.GlobalRegexCache,
+	}
+}
+
 // --- Public API methods ---
 
 // AnalyzeData is the main orchestrator for full supportconfig analysis
