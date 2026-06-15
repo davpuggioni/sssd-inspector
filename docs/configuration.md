@@ -17,7 +17,7 @@ The application searches for `config.yaml` in the following order:
 # Application metadata
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.2"
   author: "Davide Michele Puggioni"
   
 # Analysis parameters
@@ -35,6 +35,10 @@ analysis:
   
   # Analysis timeouts
   timeout: "30m"
+  extraction_timeout: "30m"
+  
+  # Progress reporting
+  progress_steps: 10
   
 # File patterns and locations
 files:
@@ -145,6 +149,14 @@ reports:
   templates:
     html: "./templates/report.html"
     txt: "./templates/report.txt"
+
+# CLI settings
+cli:
+  # Default behavior when no format flags are specified
+  default_generate_both_formats: true
+  
+  # Output file naming
+  output_suffix: "_report"
 ```
 
 ## Environment Variables

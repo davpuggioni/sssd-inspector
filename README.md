@@ -1,13 +1,13 @@
 # SSSD Inspector 🔍
 
-**SSSD Inspector** is a native diagnostic utility designed to parse supportconfig archives generated on SLES or OpenSUSE and identify complex identity management failures. Unlike generic log viewers, this tool uses a specialized pattern-matching engine derived directly from the SSSD C source code to provide human-readable explanations for cryptic error messages.
+**SSSD Inspector** is a diagnostic utility designed to parse supportconfig archives generated on SLES or OpenSUSE and identify identity management failures. The tool uses a specialized pattern-matching engine derived directly from the SSSD C source code to provide human-readable explanations for cryptic error messages.
 
 ---
 
 ## ✨ Features
 
 ### Core Analysis Engine
-- **Single-Pass Log Scanning** — Analyzes all log files (sssd.txt, messages) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously — up to **10× faster** than traditional multi-scan approaches
+- **Single-Pass Log Scanning** — Analyzes all log files (sssd.txt, messages) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously.
 - **350+ Pattern Matching** — Comprehensive database of SSSD error patterns mapped to human-readable descriptions, covering:
   - **Kerberos** — Clock skew, encryption type mismatches, KDC unreachable, FAST tunnel failures
   - **LDAP/AD** — TLS handshake failures, SASL bind errors, USN rollbacks, LDAP size limits
@@ -237,33 +237,42 @@ wails build -platform darwin/amd64
 ```
 sssd-inspector/
 ├── main_cli.go              # CLI entry point (build tag: cli)
-├── main_gui.go              # GUI entry point (Wails framework)
-├── app.go                   # Application structure & Wails bindings
-├── shared.go                # Shared CLI/GUI logic & configuration
-│
-├── analyzer_core.go         # Main analysis orchestrator (analyzeData)
-├── analyzer_singlepass.go   # Single-pass log scanner (mega-regex engine)
-├── analyzer_parallel.go     # Parallel analysis phases
-├── analyzer_system.go       # OS, hardware, services analysis
-├── analyzer_auth.go         # DNS, Kerberos, PAM, NSS analysis
-├── analyzer_logs.go         # SSSD log pattern definitions (350+ patterns)
-│
-├── utils.go                 # File scanning, section extraction
-├── utils_parallel.go        # Parallel file/batch processing
-├── cache.go                 # RegexCache, FileCache, Scanner Pool
-├── interfaces.go            # Core interfaces for DI
-│
-├── loaders.go               # Secure archive extraction (.txz)
-├── kb.go                    # Knowledge base article matching
-├── report.go                # Text & HTML report generation
-├── types.go                 # Data structures (ReportData, TIDArticle, etc.)
+├── main_gui.go              # GUI entry point (build tag: !cli)
+├── app.go                   # Wails app structure & API methods (GUI mode)
+├── shared.go                # Shared CLI/GUI logic (runCLI, runLogDirAnalyze)
+├── types.go                 # Root-level type definitions (ReportData, etc.)
+├── utils.go                 # Legacy wrapper functions (backward compatibility)
 │
 ├── config/                  # YAML-based configuration
+│   └── config.go            # Config structs, loading, validation
 ├── constants/               # Application constants
-├── errors/                  # Custom error types
+│   └── constants.go         # All constant definitions
+├── errors/                  # Custom error types and helpers
+│   └── errors.go            # Error wrapping, context, helpers
 ├── logger/                  # Structured logging
+│   └── logger.go            # Logger with levels and fields
 │
-├── frontend/                # Web UI (Vite + Vanilla JS)
+├── pkg/
+│   ├── analysis/            # Core analysis engine
+│   │   ├── core.go          # Orchestrator, AnonymizeReport, deduplication
+│   │   ├── context.go       # AnalyzerContext (file I/O, cache, scanning)
+│   │   ├── auth.go          # DNS, Kerberos, PAM, NSS analysis
+│   │   ├── logs.go          # SSSD log pattern definitions (350+ patterns)
+│   │   ├── kb.go            # Knowledge base article matching
+│   │   ├── singlepass.go    # Single-pass log scanner (mega-regex engine)
+│   │   └── system.go        # OS, hardware, services analysis
+│   ├── extract/             # Secure archive extraction (.txz)
+│   │   └── extract.go       # XZ/tar extraction with path traversal protection
+│   ├── fileutil/            # File I/O utilities
+│   │   ├── cache.go         # RegexCache, FileCache, Scanner Pool
+│   │   ├── filter.go        # File relevance filtering
+│   │   └── scanner.go       # File scanning utilities
+│   ├── report/              # Report generation
+│   │   └── report.go        # Text & HTML report builders
+│   └── types/               # Shared data structures
+│       └── types.go         # ReportData, TIDArticle, TimelineEvent, SSSDLogError
+│
+├── frontend/                # Web UI (Wails + Vanilla JS)
 │   ├── src/
 │   │   ├── main.js          # Application entry point
 │   │   ├── components/      # Reusable UI components
@@ -294,7 +303,7 @@ sssd-inspector/
 
 ### Single-Pass Scanning Engine
 
-SSSD Inspector uses a single-pass log scanning engine. Instead of reading the same log files ~29 times during analysis, the engine:
+SSSD Inspector uses a single-pass log scanning engine:
 
 1. **Combines all patterns** — 350+ error patterns + quick checks + KB article patterns → one mega-regex
 2. **Pre-filters lines** — Fast keyword check (`sssd`, `krb5`, `ldap`, `pam`, etc.) skips ~90% of unrelated syslog lines
@@ -356,7 +365,7 @@ The application supports YAML-based configuration in multiple locations (checked
 # SSSD Inspector Configuration
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.2"
 
 analysis:
   max_file_size: "100MB"
@@ -405,7 +414,7 @@ cli:
 
 Contributions are welcome! Here's how you can help:
 
-1. **Add new error patterns** — Extend `buildErrorPatterns()` in `analyzer_logs.go` with SSSD error messages from real-world troubleshooting
+1. **Add new error patterns** — Extend the error patterns map in `pkg/analysis/logs.go` with SSSD error messages from real-world troubleshooting
 2. **Create KB articles** — Add JSON files to `kb_articles/` with log patterns and configuration checks
 3. **Improve tests** — Add test cases for new scenarios and edge cases
 4. **Report issues** — Open GitHub issues with supportconfig samples (anonymized) showing missing detections
@@ -413,7 +422,7 @@ Contributions are welcome! Here's how you can help:
 ### Adding a New Error Pattern
 
 ```go
-// In analyzer_logs.go, add to the errorPatterns map:
+// In pkg/analysis/logs.go, add to the errorPatterns map:
 "Your new SSSD error message": "Human-readable explanation of what this means and how to fix it",
 ```
 
@@ -447,6 +456,8 @@ This tool is intended for diagnostic purposes. It parses logs based on patterns 
 ## 👤 Author
 
 **Davide M. Puggioni** — SUSE Technical Support
+
+This software is developed with the assistance of AI tools, including Google Gemini Pro.
 
 ---
 

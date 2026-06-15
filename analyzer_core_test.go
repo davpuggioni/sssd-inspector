@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sssd-inspector/pkg/analysis"
+	"sssd-inspector/pkg/types"
 )
 
 // Shared Helper: Checks if a specific string exists in a slice
@@ -36,7 +39,7 @@ func setupMockDir(t *testing.T, fileMap map[string]string) string {
 // Test: Verify that SSSD version extraction works correctly
 func TestGetSSSDVersion(t *testing.T) {
 	packages := []string{"sssd-2.10.2-150700.9.17.1.x86_64", "sssd-ad-2.10.2"}
-	major, minor := getSSSDVersion(packages)
+	major, minor := analysis.GetSSSDVersion(packages)
 
 	if major != 2 || minor != 10 {
 		t.Errorf("Expected version 2.10, but got %d.%d", major, minor)
@@ -45,10 +48,10 @@ func TestGetSSSDVersion(t *testing.T) {
 
 // Test: Verify Deep PII Redaction (IPv6, MAC, Emails)
 func TestAnonymizeReport_DeepPII(t *testing.T) {
-	report := ReportData{
+	report := types.ReportData{
 		SearchDomain:  "suse.com",
 		KerberosRealm: "SUSE.COM",
-		SSSDLogErrors: []SSSDLogError{
+		SSSDLogErrors: []types.SSSDLogError{
 			{
 				Description: "Connection to AD failed for IPv6 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
 				Examples: []string{
@@ -59,7 +62,7 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 		},
 	}
 
-	anonymizeReport(&report)
+	analysis.AnonymizeReport(&report)
 
 	if strings.Contains(report.SSSDLogErrors[0].Description, "2001:0db8:85a3") {
 		t.Errorf("Failed to redact IPv6 address")
@@ -79,7 +82,7 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 // including domains from "domains =", "ad_domain =", and "ldap_search_base ="
 // that may differ from SearchDomain and KerberosRealm.
 func TestAnonymizeReport_ConfigSnippetDomain(t *testing.T) {
-	report := ReportData{
+	report := types.ReportData{
 		SearchDomain:  "company.com",
 		KerberosRealm: "COMPANY.COM",
 		SSSDConfigSnippet: `[sssd]
@@ -97,7 +100,7 @@ krb5_realm = CORP.COMPANY.COM
 		},
 	}
 
-	anonymizeReport(&report)
+	analysis.AnonymizeReport(&report)
 
 	// The domains "sub.corp.company.com" and "CORP.COMPANY.COM" from sssd.conf
 	// should be redacted in the config snippet. The raw "dc=..." characters
@@ -130,7 +133,7 @@ krb5_realm = CORP.COMPANY.COM
 // This tests the case-insensitive regex replacement for domains
 func TestAnonymizeReport_MixedCaseDomain(t *testing.T) {
 	// Test with domain containing mixed case like "Corp.Suse.Com"
-	report := ReportData{
+	report := types.ReportData{
 		SearchDomain:  "corp.suse.com",
 		KerberosRealm: "SUSE.COM",
 		Problems: []string{
@@ -143,7 +146,7 @@ func TestAnonymizeReport_MixedCaseDomain(t *testing.T) {
 		},
 	}
 
-	anonymizeReport(&report)
+	analysis.AnonymizeReport(&report)
 
 	// All variants should now be redacted to "example.com" / "EXAMPLE.COM"
 	for _, p := range report.Problems {

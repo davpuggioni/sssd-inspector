@@ -8,13 +8,13 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"sssd-inspector/constants"
+	sssderrors "sssd-inspector/errors"
 )
 
 // App represents the main application structure for SSSD Inspector.
@@ -91,7 +91,7 @@ func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 
 	info, err := os.Stat(targetPath)
 	if err != nil {
-		return ReportData{}, fmt.Errorf("error accessing path: %w", err)
+		return ReportData{}, sssderrors.NewFileAccess(targetPath, err)
 	}
 
 	var dirPath string
@@ -125,12 +125,12 @@ func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 func (a *App) SavePDF(b64 string) (string, error) {
 	parts := strings.SplitN(b64, "base64,", 2)
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid PDF data received from frontend")
+		return "", sssderrors.NewValidationError("invalid PDF data format")
 	}
 
 	pdfBytes, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", fmt.Errorf("failed to decode base64: %w", err)
+		return "", sssderrors.Wrap(err, sssderrors.ErrParsingFailed, "failed to decode PDF base64")
 	}
 
 	options := runtime.SaveDialogOptions{
@@ -151,7 +151,7 @@ func (a *App) SavePDF(b64 string) (string, error) {
 
 	err = os.WriteFile(filePath, pdfBytes, 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to write file: %w", err)
+		return "", sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to write file")
 	}
 
 	return filePath, nil
@@ -185,7 +185,7 @@ func (a *App) SaveTXT(report ReportData) (string, error) {
 	txtContent := buildTextReport(report)
 	err = os.WriteFile(filePath, []byte(txtContent), 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to write file: %w", err)
+		return "", sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to write file")
 	}
 	return filePath, nil
 }

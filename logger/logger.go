@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -61,6 +62,7 @@ type Logger interface {
 
 // logger implements the Logger interface
 type logger struct {
+	mu     sync.RWMutex
 	level  Level
 	output io.Writer
 	fields Fields
@@ -100,63 +102,82 @@ func New(config *Config) Logger {
 	}
 }
 
-// globalLogger is the default global logger
-var globalLogger Logger = New(DefaultConfig())
+// globalLogger is the default global logger, protected by a mutex
+var (
+	globalLoggerMu sync.RWMutex
+	globalLogger   Logger = New(DefaultConfig())
+)
 
 // Global logger functions for backward compatibility
 
 // Debug logs a debug message using the global logger
 func Debug(msg string, fields Fields) {
-	globalLogger.Debug(msg, fields)
+	GetGlobalLogger().Debug(msg, fields)
 }
 
 // Info logs an info message using the global logger
 func Info(msg string, fields Fields) {
-	globalLogger.Info(msg, fields)
+	GetGlobalLogger().Info(msg, fields)
 }
 
 // Warn logs a warning message using the global logger
 func Warn(msg string, fields Fields) {
-	globalLogger.Warn(msg, fields)
+	GetGlobalLogger().Warn(msg, fields)
 }
 
 // Error logs an error message using the global logger
 func Error(msg string, err error, fields Fields) {
-	globalLogger.Error(msg, err, fields)
+	GetGlobalLogger().Error(msg, err, fields)
 }
 
-// SetGlobalLogger sets the global logger instance
+// SetGlobalLogger sets the global logger instance in a thread-safe manner
 func SetGlobalLogger(l Logger) {
+	globalLoggerMu.Lock()
+	defer globalLoggerMu.Unlock()
 	globalLogger = l
 }
 
-// GetGlobalLogger returns the global logger instance
+// GetGlobalLogger returns the global logger instance in a thread-safe manner
 func GetGlobalLogger() Logger {
+	globalLoggerMu.RLock()
+	defer globalLoggerMu.RUnlock()
 	return globalLogger
 }
 
 // Implementation of Logger interface
 
 func (l *logger) Debug(msg string, fields Fields) {
-	if l.level <= DebugLevel {
+	l.mu.RLock()
+	level := l.level
+	l.mu.RUnlock()
+	if level <= DebugLevel {
 		l.log(DebugLevel, msg, fields)
 	}
 }
 
 func (l *logger) Info(msg string, fields Fields) {
-	if l.level <= InfoLevel {
+	l.mu.RLock()
+	level := l.level
+	l.mu.RUnlock()
+	if level <= InfoLevel {
 		l.log(InfoLevel, msg, fields)
 	}
 }
 
 func (l *logger) Warn(msg string, fields Fields) {
-	if l.level <= WarnLevel {
+	l.mu.RLock()
+	level := l.level
+	l.mu.RUnlock()
+	if level <= WarnLevel {
 		l.log(WarnLevel, msg, fields)
 	}
 }
 
 func (l *logger) Error(msg string, err error, fields Fields) {
-	if l.level <= ErrorLevel {
+	l.mu.RLock()
+	level := l.level
+	l.mu.RUnlock()
+	if level <= ErrorLevel {
 		if err != nil {
 			if fields == nil {
 				fields = make(Fields)
@@ -185,6 +206,8 @@ func (l *logger) WithFields(fields Fields) Logger {
 }
 
 func (l *logger) SetLevel(level Level) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.level = level
 }
 

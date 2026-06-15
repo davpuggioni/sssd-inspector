@@ -1,17 +1,17 @@
-// analyzer_auth.go
-package main
+package analysis
 
 import (
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+
+	"sssd-inspector/pkg/types"
 )
 
-func analyzeDNS(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeDNS(dirPath string, report *types.ReportData) {
 	dnsStatusMap := make(map[string]string)
-
-	scanFiles(dirPath, []string{"network.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"network.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "# Connectivity Test, DNS Server") {
 			parts := strings.Split(line, ":")
@@ -24,9 +24,9 @@ func analyzeDNS(dirPath string, report *ReportData) {
 		}
 	})
 
-	resolvContent := extractSection(dirPath, "network.txt", "# /etc/resolv.conf")
+	resolvContent := ctx.ExtractSection(dirPath, "network.txt", "# /etc/resolv.conf")
 	if resolvContent == "" {
-		resolvContent = extractSection(dirPath, "etc.txt", "# /etc/resolv.conf")
+		resolvContent = ctx.ExtractSection(dirPath, "etc.txt", "# /etc/resolv.conf")
 	}
 
 	if resolvContent != "" {
@@ -56,12 +56,12 @@ func analyzeDNS(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeTime(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeTime(dirPath string, report *types.ReportData) {
 	timeFiles := []string{"systemd.txt", "ntp.txt"}
 
-	hasChronyd := anyFileContains(dirPath, timeFiles, "chronyd.service")
-	hasNtpd := anyFileContains(dirPath, timeFiles, "ntpd.service")
-	isActive := anyFileContains(dirPath, timeFiles, "Active: active (running)")
+	hasChronyd := ctx.AnyFileContains(dirPath, timeFiles, "chronyd.service")
+	hasNtpd := ctx.AnyFileContains(dirPath, timeFiles, "ntpd.service")
+	isActive := ctx.AnyFileContains(dirPath, timeFiles, "Active: active (running)")
 
 	if hasChronyd && isActive {
 		report.TimeService = "chronyd (Running)"
@@ -69,19 +69,19 @@ func analyzeTime(dirPath string, report *ReportData) {
 		report.TimeService = "ntpd (Running)"
 	}
 
-	isSynced := anyFileContains(dirPath, timeFiles, "System clock synchronized: yes") ||
-		(anyFileContains(dirPath, timeFiles, "^*") && anyFileContains(dirPath, timeFiles, "377"))
+	isSynced := ctx.AnyFileContains(dirPath, timeFiles, "System clock synchronized: yes") ||
+		(ctx.AnyFileContains(dirPath, timeFiles, "^*") && ctx.AnyFileContains(dirPath, timeFiles, "377"))
 
-	if anyFileContains(dirPath, timeFiles, "chronyc sources") {
-		if !anyFileContains(dirPath, timeFiles, " 377 ") {
+	if ctx.AnyFileContains(dirPath, timeFiles, "chronyc sources") {
+		if !ctx.AnyFileContains(dirPath, timeFiles, " 377 ") {
 			report.Problems = append(report.Problems, "[NTP] Chrony reachability is not 377. Time servers may be unreachable, risking Kerberos authentication failure.")
 		}
-		if anyFileContains(dirPath, timeFiles, "#* PHC0") {
+		if ctx.AnyFileContains(dirPath, timeFiles, "#* PHC0") {
 			report.Problems = append(report.Problems, "[NTP] System is synchronized only to a local clock (PHC0) instead of a network time server.")
 		}
 	}
 
-	scanFiles(dirPath, timeFiles, func(line string) {
+	ctx.ScanFiles(dirPath, timeFiles, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "System time") && strings.Contains(line, "seconds") {
 			parts := strings.SplitN(line, ":", 2)
@@ -110,60 +110,8 @@ func analyzeTime(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeKerberosAndKeytab(dirPath string, report *ReportData) {
-	krb5Content := extractSection(dirPath, "etc.txt", "# /etc/krb5.conf")
-
-	if krb5Content != "" {
-		inDomainRealm := false
-		for _, line := range strings.Split(krb5Content, "\n") {
-			line = strings.TrimSpace(line)
-			if strings.Contains(line, "rc4-hmac") {
-				report.Warnings = append(report.Warnings, "[SECURITY] Legacy 'rc4-hmac' encryption found in /etc/krb5.conf. Modern Active Directory domains will reject this, causing silent authentication failures.")
-			}
-			if strings.HasPrefix(line, "default_realm") {
-				parts := strings.Split(line, "=")
-				if len(parts) >= 2 {
-					report.KerberosRealm = strings.TrimSpace(parts[1])
-				}
-			}
-			if strings.HasPrefix(line, "[domain_realm]") {
-				inDomainRealm = true
-				continue
-			} else if strings.HasPrefix(line, "[") {
-				inDomainRealm = false
-			}
-
-			if inDomainRealm && strings.Contains(line, "=") && !strings.HasPrefix(line, "#") {
-				parts := strings.SplitN(line, "=", 2)
-				if len(parts) >= 2 {
-					domainPart := strings.TrimSpace(parts[0])
-					if !strings.HasPrefix(domainPart, ".") && !strings.HasPrefix(domainPart, "*") {
-						report.Warnings = append(report.Warnings, fmt.Sprintf("[KERBEROS] The [domain_realm] mapping '%s' lacks a leading dot. Consider changing it to '.%s' to properly map subdomains.", domainPart, domainPart))
-					}
-				}
-			}
-		}
-	}
-
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
-
-	if anyFileContains(dirPath, logFiles, "KVNO Principal") || anyFileContains(dirPath, logFiles, "Default principal:") {
-		report.KeytabFound = true
-	}
-	if !report.KeytabFound {
-		report.Problems = append(report.Problems, "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.")
-	}
-
-	if anyFileContains(dirPath, logFiles, "Key table file '/etc/krb5.keytab' not found") {
-		report.Problems = append(report.Problems, "[KERBEROS] /etc/krb5.keytab file is missing, preventing SSSD from authenticating.")
-	} else if anyFileContains(dirPath, logFiles, "No suitable principal found in keytab") {
-		report.Problems = append(report.Problems, "[KERBEROS] No suitable principal found in keytab. The machine password may have been changed externally.")
-		report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] Run 'kvno HOSTNAME$' and compare the output to 'klist -k'. If kvno is higher, the keytab is outdated and needs to be refreshed.")
-	}
-}
-
-func analyzePAM(dirPath string, report *ReportData) {
-	pam := readFileSafe(dirPath, "pam.txt")
+func (ctx *AnalyzerContext) analyzePAM(dirPath string, report *types.ReportData) {
+	pam := ctx.ReadFileSafe(dirPath, "pam.txt")
 	if strings.Contains(pam, "FORCE_OPTION_PAM=1") || strings.Contains(pam, "General Data Protection Regulation") {
 		report.PamGDPRRestricted = true
 		report.Problems = append(report.Problems, "[WARNING] PAM data is restricted (GDPR). Please collect a new supportconfig using: FORCE_OPTION_PAM=1 supportconfig")
@@ -176,13 +124,13 @@ func analyzePAM(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeNSSwitch(dirPath string, report *ReportData) {
-	nssContent := readFileSafe(dirPath, "nsswitch.conf")
+func (ctx *AnalyzerContext) analyzeNSSwitch(dirPath string, report *types.ReportData) {
+	nssContent := ctx.ReadFileSafe(dirPath, "nsswitch.conf")
 	if nssContent == "" {
-		nssContent = extractSection(dirPath, "etc.txt", "# /etc/nsswitch.conf")
+		nssContent = ctx.ExtractSection(dirPath, "etc.txt", "# /etc/nsswitch.conf")
 	}
 	if nssContent == "" {
-		nssContent = extractSection(dirPath, "sssd.txt", "# /etc/nsswitch.conf")
+		nssContent = ctx.ExtractSection(dirPath, "sssd.txt", "# /etc/nsswitch.conf")
 	}
 
 	if nssContent != "" {
@@ -225,9 +173,9 @@ func analyzeNSSwitch(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeHosts(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeHosts(dirPath string, report *types.ReportData) {
 	hasLocalhost := false
-	scanFiles(dirPath, []string{"hosts"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"hosts"}, func(line string) {
 		if strings.Contains(line, "127.0.0.1") {
 			hasLocalhost = true
 		}
@@ -238,8 +186,8 @@ func analyzeHosts(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeNSCD(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"nscd.conf"}, func(line string) {
+func (ctx *AnalyzerContext) analyzeNSCD(dirPath string, report *types.ReportData) {
+	ctx.ScanFiles(dirPath, []string{"nscd.conf"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "enable-cache") {
 			parts := strings.Fields(line)
@@ -251,9 +199,9 @@ func analyzeNSCD(dirPath string, report *ReportData) {
 	})
 }
 
-func analyzePackages(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzePackages(dirPath string, report *types.ReportData) {
 	inPackageBlock := false
-	scanFiles(dirPath, []string{"rpm.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"rpm.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#==[") && inPackageBlock {
 			inPackageBlock = false
@@ -263,11 +211,11 @@ func analyzePackages(dirPath string, report *ReportData) {
 			report.SSSDPackages = append(report.SSSDPackages, line)
 		}
 	})
-	report.SSSDPackages = deduplicateProblems(report.SSSDPackages)
+	report.SSSDPackages = DeduplicateProblems(report.SSSDPackages)
 }
 
-func analyzeSSSDVersionAge(report *ReportData) {
-	major, minor := getSSSDVersion(report.SSSDPackages)
+func (ctx *AnalyzerContext) analyzeSSSDVersionAge(report *types.ReportData) {
+	major, minor := GetSSSDVersion(report.SSSDPackages)
 	if major == 1 {
 		report.Problems = append(report.Problems, fmt.Sprintf("[DEPRECATION] Installed SSSD version is %d.%d. The 1.x series is extremely outdated (last upstream release in 2020) and End-of-Life. Consider upgrading your OS or packages.", major, minor))
 	} else if major == 2 && minor < 8 {
@@ -275,8 +223,8 @@ func analyzeSSSDVersionAge(report *ReportData) {
 	}
 }
 
-func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
-	major, minor := getSSSDVersion(report.SSSDPackages)
+func (ctx *AnalyzerContext) analyzeSSSDFilePermissions(dirPath string, report *types.ReportData) {
+	major, minor := GetSSSDVersion(report.SSSDPackages)
 	if major == 0 {
 		return
 	}
@@ -301,7 +249,7 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 	inVarLibSss := false
 	foundSssdUserInVar := false
 
-	scanFiles(dirPath, []string{"sssd.txt", "etc.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"sssd.txt", "etc.txt"}, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 		if len(lineTrimmed) == 0 {
 			return

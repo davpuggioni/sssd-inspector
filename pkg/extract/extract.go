@@ -1,39 +1,49 @@
-package main
+// Package extract provides archive extraction functionality for SSSD Inspector
+package extract
 
 import (
 	"archive/tar"
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
-
-	"github.com/ulikunitz/xz"
 
 	"sssd-inspector/constants"
+	sssderrors "sssd-inspector/errors"
+	"sssd-inspector/logger"
+
+	"github.com/ulikunitz/xz"
 )
 
-// extractArchiveToTemp safely extracts relevant files to a temporary directory.
-// It uses a context with timeout to prevent hanging on corrupted archives,
-// provides real-time progress updates per extracted file,
-// and handles OS interrupt signals (Ctrl+C) for graceful cleanup.
-//
-// Memory optimizations:
-//   - Single-pass extraction: no pre-scan phase (eliminates double decompression)
-//   - Size-based progress: uses compressed file size × estimated ratio instead
-//     of a full tar header pre-scan, avoiding a second decompression pass
-//   - Large archives (>50MB compressed) get extra GC and buffer adjustments
-//   - Buffer pooling reduces allocation pressure during file writes
-func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
+// XZEstimatedCompressionRatio for size-based progress estimation
+const XZEstimatedCompressionRatio = 12
+
+// IsRelevantFile determines if a file should be extracted
+var IsRelevantFile func(name string) bool
+
+func init() {
+	// Default: extract everything (can be overridden by main package)
+	IsRelevantFile = func(name string) bool { return true }
+}
+
+// isRelevantFile checks if a file name matches relevant files for analysis
+func isRelevantFile(name string) bool {
+	if IsRelevantFile != nil {
+		return IsRelevantFile(name)
+	}
+	return true
+}
+
+// ExtractArchiveToTemp safely extracts relevant files to a temporary directory.
+func ExtractArchiveToTemp(archivePath string, progressFunc func(string, int)) (string, error) {
 	tempDir, err := os.MkdirTemp("", "sssd-inspector-*")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %v", err)
+		return "", sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to create temp dir")
 	}
 
 	f, err := os.Open(archivePath)
@@ -47,7 +57,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	fileInfo, err := f.Stat()
 	if err != nil {
 		os.RemoveAll(tempDir)
-		return "", fmt.Errorf("failed to stat archive: %v", err)
+		return "", sssderrors.NewFileNotFound(archivePath)
 	}
 	totalArchiveSize := fileInfo.Size()
 
@@ -55,13 +65,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	isLargeArchive := totalArchiveSize > constants.LargeArchiveThreshold
 
 	// --- Create context with timeout ---
-	extractionTimeout := constants.DefaultExtractionTimeout
-	if appConfig != nil && appConfig.Analysis.ExtractionTimeout != "" {
-		if d, err := time.ParseDuration(appConfig.Analysis.ExtractionTimeout); err == nil && d > 0 {
-			extractionTimeout = d
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultExtractionTimeout)
 	defer cancel()
 
 	// --- Set up OS signal handling for graceful interruption ---
@@ -69,7 +73,6 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	defer signalStop()
 
 	// Wrap the file with a context-aware reader that can be interrupted
-	// even during XZ decompression initialization.
 	type readResult struct {
 		r   *xz.Reader
 		err error
@@ -86,21 +89,18 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	case res := <-xzCh:
 		if res.err != nil {
 			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("xz decompression init failed: %v", res.err)
+			return "", sssderrors.Wrap(res.err, sssderrors.ErrInvalidArchive, "xz decompression init failed")
 		}
 		r = res.r
 	case <-signalCtx.Done():
 		os.RemoveAll(tempDir)
-		return "", fmt.Errorf("decompression cancelled: %v", signalCtx.Err())
+		return "", sssderrors.NewTimeout("archive decompression")
 	}
 
 	tr := tar.NewReader(r)
 
-	// --- Single-pass extraction (no pre-scan) ---
-	// Instead of doing a pre-scan to count files, we use size-based progress.
-	// The estimated decompressed size = compressed_size × compression_ratio.
-	// This eliminates the expensive second decompression pass.
-	estimatedDecompressedSize := totalArchiveSize * constants.XZEstimatedCompressionRatio
+	// Single-pass extraction with size-based progress estimation
+	estimatedDecompressedSize := totalArchiveSize * XZEstimatedCompressionRatio
 
 	if progressFunc != nil {
 		if isLargeArchive {
@@ -110,7 +110,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 		}
 	}
 
-	// Pool for extraction write buffers to reduce allocations
+	// Pool for extraction write buffers
 	bufPool := sync.Pool{
 		New: func() interface{} {
 			b := make([]byte, constants.ExtractionBufferSize)
@@ -122,11 +122,10 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	totalExtractedBytes := int64(0)
 
 	for {
-		// Check for cancellation between each tar entry
 		select {
 		case <-signalCtx.Done():
 			os.RemoveAll(tempDir)
-			return "", fmt.Errorf("decompression cancelled: %v", signalCtx.Err())
+			return "", sssderrors.NewTimeout("archive decompression")
 		default:
 		}
 
@@ -135,7 +134,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			break
 		}
 		if err != nil {
-			log.Printf("Warning: tar entry error (continuing): %v", err)
+			logger.Warn("tar entry error, continuing", logger.Fields{"error": err.Error()})
 			continue
 		}
 
@@ -153,21 +152,20 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 
 			// Prevent Zip/Tar Bombs
 			if hdr.Size > constants.MaxArchiveFileSize {
-				log.Printf("Warning: skipping oversized file %s (%d bytes)", fileName, hdr.Size)
+				logger.Warn("skipping oversized file", logger.Fields{"file": fileName, "size": hdr.Size})
 				continue
 			}
 
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 			if err != nil {
-				log.Printf("Warning: failed to create output file %s: %v", targetPath, err)
+				logger.Warn("failed to create output file", logger.Fields{"path": targetPath, "error": err.Error()})
 				continue
 			}
 
-			// Copy with buffered I/O for better performance on large files
 			written, err := copyWithBuffer(outFile, io.LimitReader(tr, hdr.Size), &bufPool)
 			if err != nil {
 				outFile.Close()
-				log.Printf("Warning: failed to write file %s: %v", fileName, err)
+				logger.Warn("failed to write file", logger.Fields{"file": fileName, "error": err.Error()})
 				continue
 			}
 			outFile.Close()
@@ -175,10 +173,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			extractedCount++
 			totalExtractedBytes += written
 
-			// Update progress after each relevant file
 			if progressFunc != nil {
-				// Size-based progress: use bytes decompressed vs estimated total
-				// Progress range: 5% to 95% spanning the extraction phase
 				var pct int
 				if estimatedDecompressedSize > 0 {
 					pct = 5 + int(85*totalExtractedBytes/estimatedDecompressedSize)
@@ -199,8 +194,6 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 		}
 	}
 
-	// For large archives, help the GC reclaim XZ decoder buffers and temp allocations
-	// that may still be referenced after the extraction loop completes.
 	if isLargeArchive {
 		runtime.GC()
 	}
@@ -208,9 +201,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 	return tempDir, nil
 }
 
-// copyWithBuffer copies from src to dst using a reusable buffer from the pool,
-// returning the number of bytes written. This is more efficient than io.CopyN
-// for large files because it reuses buffers and reduces GC pressure.
+// copyWithBuffer copies from src to dst using a reusable buffer from the pool.
 func copyWithBuffer(dst io.Writer, src io.Reader, pool *sync.Pool) (int64, error) {
 	bufPtr := pool.Get().(*[]byte)
 	defer pool.Put(bufPtr)

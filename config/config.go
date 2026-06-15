@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"sssd-inspector/constants"
+	sssderrors "sssd-inspector/errors"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,9 +115,8 @@ type PerformanceConfig struct {
 
 // ReportsConfig contains report generation settings
 type ReportsConfig struct {
-	DefaultFormats  []string          `yaml:"default_formats"`
-	OutputDirectory string            `yaml:"output_directory"`
-	Templates       map[string]string `yaml:"templates"`
+	DefaultFormats  []string `yaml:"default_formats"`
+	OutputDirectory string   `yaml:"output_directory"`
 }
 
 // CLIConfig contains CLI-specific settings
@@ -123,59 +125,30 @@ type CLIConfig struct {
 	OutputSuffix               string `yaml:"output_suffix"`
 }
 
-// Constants for default values
-const (
-	DefaultAppName           = "SSSD Inspector"
-	DefaultAppVersion        = "0.2.0"
-	DefaultMaxFileSize       = "100MB"
-	DefaultMaxLineLength     = "1MB"
-	DefaultBufferSize        = "64KB"
-	DefaultTimeout           = "30m"
-	DefaultExtractionTimeout = "30m"
-	DefaultProgressSteps     = 10
-	DefaultWindowWidth       = 1024
-	DefaultWindowHeight      = 768
-	DefaultWindowTitle       = "SSSD Inspector"
-	DefaultMaxWorkers        = 4
-	DefaultGCPercent         = 100
-	DefaultChunkSize         = "32KB"
-	DefaultOutputSuffix      = "_report"
-	DefaultLogLevel          = "info"
-	DefaultLogFormat         = "json"
-	DefaultMaxBackups        = 5
-)
-
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		App: AppConfig{
-			Name:    DefaultAppName,
-			Version: DefaultAppVersion,
+			Name:    constants.AppName,
+			Version: constants.AppVersion,
 		},
 		Analysis: AnalysisConfig{
-			MaxFileSize:       DefaultMaxFileSize,
-			MaxLineLength:     DefaultMaxLineLength,
-			BufferSize:        DefaultBufferSize,
-			ArchiveFormats:    []string{"txz", "tar.xz", "tar.gz"},
-			Timeout:           DefaultTimeout,
-			ExtractionTimeout: DefaultExtractionTimeout,
-			ProgressSteps:     DefaultProgressSteps,
+			MaxFileSize:       constants.DefaultMaxFileSize,
+			MaxLineLength:     constants.DefaultMaxLineLength,
+			BufferSize:        constants.DefaultBufferSize,
+			ArchiveFormats:    constants.ArchiveFormats(),
+			Timeout:           constants.DefaultTimeout,
+			ExtractionTimeout: "30m",
+			ProgressSteps:     constants.DefaultProgressSteps,
 		},
 		Files: FilesConfig{
-			RelevantFiles: []string{
-				"nsswitch.conf", "hosts", "nscd.conf", "sssd.conf",
-				"systemd.txt", "basic-environment.txt", "updates.txt",
-				"y2log.txt", "sssd.txt", "rpm.txt", "etc.txt",
-				"network.txt", "ntp.txt", "pam.txt", "fs-diskio.txt",
-				"storage.txt", "security-apparmor.txt", "security-selinux.txt",
-				"memory.txt", "sar.txt", "messages", "messages.txt", "boot.txt",
-			},
+			RelevantFiles: constants.RelevantFiles(),
 		},
 		GUI: GUIConfig{
 			Window: WindowConfig{
-				Width:  DefaultWindowWidth,
-				Height: DefaultWindowHeight,
-				Title:  DefaultWindowTitle,
+				Width:  constants.DefaultWindowWidth,
+				Height: constants.DefaultWindowHeight,
+				Title:  constants.DefaultWindowTitle,
 			},
 			Colors: ColorConfig{
 				Background: RGBA{R: 244, G: 244, B: 249, A: 255},
@@ -184,52 +157,48 @@ func DefaultConfig() *Config {
 		Anonymization: AnonymizationConfig{
 			Enabled: true,
 			Patterns: map[string]string{
-				"ip_v4": `\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`,
-				"ip_v6": `(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`,
-				"mac":   `(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`,
-				"email": `(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`,
+				"ip_v4": constants.IPv4Pattern,
+				"ip_v6": constants.IPv6Pattern,
+				"mac":   constants.MACPattern,
+				"email": constants.EmailPattern,
 			},
 			Replacements: map[string]string{
-				"ip_v4":    "XXX.XXX.XXX.XXX",
-				"ip_v6":    "XXXX:XXXX::XXXX",
-				"mac":      "XX:XX:XX:XX:XX:XX",
-				"email":    "[REDACTED_USER]@example.com",
-				"domain":   "example.com",
-				"hardware": "[REDACTED]",
+				"ip_v4":    constants.IPv4Replacement,
+				"ip_v6":    constants.IPv6Replacement,
+				"mac":      constants.MACReplacement,
+				"email":    constants.EmailReplacement,
+				"domain":   constants.DomainReplacement,
+				"hardware": constants.HardwareReplacement,
 			},
 		},
 		KnowledgeBase: KnowledgeBaseConfig{
-			TIDDirectory:    "./kb_articles",
-			AutoRefresh:     true,
-			RefreshInterval: "24h",
+			TIDDirectory:    constants.DefaultTIDDirectory,
+			AutoRefresh:     constants.DefaultAutoRefresh,
+			RefreshInterval: constants.DefaultRefreshInterval,
 		},
 		Logging: LoggingConfig{
-			Level:  DefaultLogLevel,
-			Format: DefaultLogFormat,
+			Level:  constants.DefaultLogLevel,
+			Format: constants.DefaultLogFormat,
 			File: LogFileConfig{
 				Enabled:    true,
-				Path:       "./logs/sssd-inspector.log",
-				MaxSize:    "10MB",
-				MaxBackups: DefaultMaxBackups,
-				Compress:   true,
+				Path:       constants.DefaultLogPath,
+				MaxSize:    constants.DefaultLogMaxSize,
+				MaxBackups: constants.DefaultLogMaxBackups,
+				Compress:   constants.DefaultLogCompress,
 			},
 		},
 		Performance: PerformanceConfig{
-			MaxWorkers: DefaultMaxWorkers,
-			GCPercent:  DefaultGCPercent,
-			ChunkSize:  DefaultChunkSize,
+			MaxWorkers: constants.DefaultMaxWorkers,
+			GCPercent:  constants.DefaultGCPercent,
+			ChunkSize:  constants.DefaultChunkSize,
 		},
 		Reports: ReportsConfig{
-			DefaultFormats:  []string{"txt", "html"},
-			OutputDirectory: "./reports",
-			Templates: map[string]string{
-				"html": "./templates/report.html",
-				"txt":  "./templates/report.txt",
-			},
+			DefaultFormats:  constants.DefaultReportFormats(),
+			OutputDirectory: constants.DefaultOutputDir,
 		},
 		CLI: CLIConfig{
-			DefaultGenerateBothFormats: true,
-			OutputSuffix:               DefaultOutputSuffix,
+			DefaultGenerateBothFormats: constants.DefaultGenerateBothFormats,
+			OutputSuffix:               constants.DefaultOutputSuffix,
 		},
 	}
 }
@@ -240,7 +209,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if configPath != "" {
 		config := DefaultConfig()
 		if err := loadFromFile(configPath, config); err != nil {
-			return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
+			return nil, sssderrors.Wrap(err, sssderrors.ErrConfigInvalid, fmt.Sprintf("failed to load config from %s", configPath))
 		}
 		return config, nil
 	}
@@ -256,7 +225,7 @@ func LoadConfig(configPath string) (*Config, error) {
 		if _, err := os.Stat(location); err == nil {
 			config := DefaultConfig()
 			if err := loadFromFile(location, config); err != nil {
-				return nil, fmt.Errorf("failed to load config from %s: %w", location, err)
+				return nil, sssderrors.Wrap(err, sssderrors.ErrConfigInvalid, fmt.Sprintf("failed to load config from %s", location))
 			}
 			return config, nil
 		}
@@ -281,16 +250,16 @@ func SaveConfig(config *Config, path string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to create config directory")
 	}
 
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to marshal config")
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+		return sssderrors.Wrap(err, sssderrors.ErrSystemError, "failed to write config file")
 	}
 
 	return nil
@@ -300,53 +269,68 @@ func SaveConfig(config *Config, path string) error {
 func (c *Config) Validate() error {
 	// Validate app config
 	if c.App.Name == "" {
-		return fmt.Errorf("app name cannot be empty")
+		return sssderrors.NewConfigInvalid("app name cannot be empty")
 	}
 	if c.App.Version == "" {
-		return fmt.Errorf("app version cannot be empty")
+		return sssderrors.NewConfigInvalid("app version cannot be empty")
 	}
 
 	// Validate analysis config
 	if _, err := time.ParseDuration(c.Analysis.Timeout); err != nil {
-		return fmt.Errorf("invalid timeout format: %s", c.Analysis.Timeout)
+		return sssderrors.NewConfigInvalid(fmt.Sprintf("invalid timeout format: %s", c.Analysis.Timeout))
 	}
 
 	// Validate GUI config
 	if c.GUI.Window.Width <= 0 || c.GUI.Window.Height <= 0 {
-		return fmt.Errorf("window dimensions must be positive")
+		return sssderrors.NewConfigInvalid("window dimensions must be positive")
 	}
 
 	// Validate performance config
 	if c.Performance.MaxWorkers <= 0 {
-		return fmt.Errorf("max_workers must be positive")
+		return sssderrors.NewConfigInvalid("max_workers must be positive")
 	}
 
 	return nil
 }
 
-// GetMaxFileSizeBytes returns max file size in bytes
-func (c *Config) GetMaxFileSizeBytes() (int64, error) {
-	return parseSize(c.Analysis.MaxFileSize)
+// GetBufferSizeBytes returns the buffer size in bytes from config or default
+func (c *Config) GetBufferSizeBytes() int {
+	if c.Analysis.BufferSize == "" {
+		return 64 * 1024 // 64KB default
+	}
+	size, err := parseSize(c.Analysis.BufferSize)
+	if err != nil || size <= 0 {
+		return 64 * 1024
+	}
+	return int(size)
 }
 
-// GetMaxLineLengthBytes returns max line length in bytes
-func (c *Config) GetMaxLineLengthBytes() (int64, error) {
-	return parseSize(c.Analysis.MaxLineLength)
+// GetMaxLineLengthBytes returns the max line length in bytes from config or default
+func (c *Config) GetMaxLineLengthBytes() int {
+	if c.Analysis.MaxLineLength == "" {
+		return 1024 * 1024 // 1MB default
+	}
+	size, err := parseSize(c.Analysis.MaxLineLength)
+	if err != nil || size <= 0 {
+		return 1024 * 1024
+	}
+	return int(size)
 }
 
-// GetBufferSizeBytes returns buffer size in bytes
-func (c *Config) GetBufferSizeBytes() (int64, error) {
-	return parseSize(c.Analysis.BufferSize)
-}
-
-// GetTimeoutDuration returns timeout as time.Duration
-func (c *Config) GetTimeoutDuration() (time.Duration, error) {
-	return time.ParseDuration(c.Analysis.Timeout)
+// GetAnalysisTimeout returns the analysis timeout duration
+func (c *Config) GetAnalysisTimeout() time.Duration {
+	if c.Analysis.Timeout == "" {
+		return 10 * time.Minute
+	}
+	d, err := time.ParseDuration(c.Analysis.Timeout)
+	if err != nil {
+		return 10 * time.Minute
+	}
+	return d
 }
 
 // parseSize parses size string (e.g., "100MB") to bytes
 func parseSize(size string) (int64, error) {
-	// Simple implementation - could be enhanced with a proper size parser
 	var multiplier int64
 	var numStr string
 

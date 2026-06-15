@@ -1,5 +1,4 @@
-// analyzer_system.go
-package main
+package analysis
 
 import (
 	"fmt"
@@ -8,21 +7,21 @@ import (
 	"strings"
 
 	"sssd-inspector/constants"
+	"sssd-inspector/pkg/types"
 )
 
-// Global regex for parsing systemd exit codes
 var reStatus = regexp.MustCompile(`status=(\d+)`)
 
-func analyzeBasicHealth(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-health-check.txt", "basic-environment.txt"}, func(line string) {
+func (ctx *AnalyzerContext) analyzeBasicHealth(dirPath string, report *types.ReportData) {
+	ctx.ScanFiles(dirPath, []string{"basic-health-check.txt", "basic-environment.txt"}, func(line string) {
 		if strings.HasPrefix(line, "SR#:") {
 			report.SupportCaseID = strings.TrimSpace(strings.TrimPrefix(line, "SR#:"))
 		}
 	})
 }
 
-func analyzeOSAndHardware(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
+func (ctx *AnalyzerContext) analyzeOSAndHardware(dirPath string, report *types.ReportData) {
+	ctx.ScanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Linux") && strings.Contains(line, "SMP") {
 			report.KernelVersion = line
@@ -45,8 +44,8 @@ func analyzeOSAndHardware(dirPath string, report *ReportData) {
 	})
 }
 
-func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
+func (ctx *AnalyzerContext) analyzeHostnameAndFQDN(dirPath string, report *types.ReportData) {
+	ctx.ScanFiles(dirPath, []string{"basic-environment.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Hostname:") {
 			hostname := strings.TrimSpace(strings.TrimPrefix(line, "Hostname:"))
@@ -57,9 +56,9 @@ func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
 	})
 }
 
-func analyzeSCC(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeSCC(dirPath string, report *types.ReportData) {
 	sccFound := false
-	scanFiles(dirPath, []string{"updates.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"updates.txt"}, func(line string) {
 		if strings.Contains(line, "Registered") || strings.Contains(line, "Status: Active") {
 			report.SCCStatus = "Registered"
 			sccFound = true
@@ -70,12 +69,12 @@ func analyzeSCC(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzePerformance(dirPath string, report *ReportData) {
-	if anyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
+func (ctx *AnalyzerContext) analyzePerformance(dirPath string, report *types.ReportData) {
+	if ctx.AnyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
 		report.Problems = append(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
 	}
 
-	scanFiles(dirPath, []string{"sar.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"sar.txt"}, func(line string) {
 		line = strings.TrimSpace(line)
 		if strings.Contains(line, "all") && !strings.Contains(line, "CPU") {
 			fields := strings.Fields(line)
@@ -89,10 +88,10 @@ func analyzePerformance(dirPath string, report *ReportData) {
 	})
 }
 
-func analyzeServices(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeServices(dirPath string, report *types.ReportData) {
 	var sssdStatusBlock []string
 	inSssdStatus := false
-	scanFiles(dirPath, []string{"systemd.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"systemd.txt"}, func(line string) {
 		if strings.Contains(line, "sssd.service") && (strings.Contains(line, "Loaded:") || strings.HasPrefix(line, "●") || strings.Contains(line, "System Security Services Daemon")) {
 			inSssdStatus = true
 		}
@@ -146,8 +145,8 @@ func analyzeServices(dirPath string, report *ReportData) {
 	}
 }
 
-func analyzeDiskSpace(dirPath string, report *ReportData) {
-	scanFiles(dirPath, []string{"fs-diskio.txt", "storage.txt"}, func(line string) {
+func (ctx *AnalyzerContext) analyzeDiskSpace(dirPath string, report *types.ReportData) {
+	ctx.ScanFiles(dirPath, []string{"fs-diskio.txt", "storage.txt"}, func(line string) {
 		fields := strings.Fields(line)
 		if len(fields) >= 5 && strings.HasSuffix(fields[len(fields)-2], "%") {
 			mount := fields[len(fields)-1]
@@ -160,9 +159,9 @@ func analyzeDiskSpace(dirPath string, report *ReportData) {
 	})
 }
 
-func analyzeMACDenials(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeMACDenials(dirPath string, report *types.ReportData) {
 	var macDenials []string
-	scanFiles(dirPath, []string{"security-apparmor.txt", "security-selinux.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"security-apparmor.txt", "security-selinux.txt"}, func(line string) {
 		lowerLine := strings.ToLower(line)
 		if (strings.Contains(lowerLine, "denied") || strings.Contains(lowerLine, "denying")) && strings.Contains(lowerLine, "sssd") {
 			if len(macDenials) < 5 {
@@ -173,14 +172,14 @@ func analyzeMACDenials(dirPath string, report *ReportData) {
 
 	if len(macDenials) > 0 {
 		report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
-		report.MACDenialExamples = deduplicateProblems(macDenials)
+		report.MACDenialExamples = DeduplicateProblems(macDenials)
 	}
 }
 
-func analyzeMACStatus(dirPath string, report *ReportData) {
+func (ctx *AnalyzerContext) analyzeMACStatus(dirPath string, report *types.ReportData) {
 	report.MACType = constants.StatusUnknownNone
 
-	scanFiles(dirPath, []string{"boot.txt"}, func(line string) {
+	ctx.ScanFiles(dirPath, []string{"boot.txt"}, func(line string) {
 		if strings.Contains(line, "security=apparmor") {
 			report.MACType = "AppArmor"
 		} else if strings.Contains(line, "security=selinux") || strings.Contains(line, "selinux=1") {
@@ -189,9 +188,9 @@ func analyzeMACStatus(dirPath string, report *ReportData) {
 	})
 
 	if report.MACType == constants.StatusUnknownNone {
-		if anyFileContains(dirPath, []string{"security-apparmor.txt"}, "apparmor module is loaded") || anyFileContains(dirPath, []string{"security-apparmor.txt"}, "Active: active") {
+		if ctx.AnyFileContains(dirPath, []string{"security-apparmor.txt"}, "apparmor module is loaded") || ctx.AnyFileContains(dirPath, []string{"security-apparmor.txt"}, "Active: active") {
 			report.MACType = "AppArmor"
-		} else if anyFileContains(dirPath, []string{"security-selinux.txt"}, "SELinux status:                 enabled") {
+		} else if ctx.AnyFileContains(dirPath, []string{"security-selinux.txt"}, "SELinux status:                 enabled") {
 			report.MACType = "SELinux"
 		}
 	}

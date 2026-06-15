@@ -8,8 +8,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"sssd-inspector/constants"
+	"sssd-inspector/logger"
 )
 
 // main is the application entry point for CLI mode
@@ -23,6 +26,15 @@ func main() {
 	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
 	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
 	flag.Parse()
+
+	// Set up signal handling for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		logger.Info("shutdown signal received, exiting gracefully", nil)
+		os.Exit(0)
+	}()
 
 	if *versionShort {
 		fmt.Printf("%s version %s (CLI)\n", constants.AppName, constants.AppVersion)

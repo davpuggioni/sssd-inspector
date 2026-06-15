@@ -7,11 +7,12 @@ import "time"
 const (
 	// App metadata
 	AppName    = "SSSD Inspector"
-	AppVersion = "0.2.1"
+	AppVersion = "0.2.2"
 
 	// Window dimensions
 	DefaultWindowWidth  = 1024
 	DefaultWindowHeight = 768
+	DefaultWindowTitle  = "SSSD Inspector"
 
 	// Background color RGBA
 	BackgroundR = 244
@@ -58,9 +59,9 @@ const (
 	DefaultOutputSuffix = "_report"
 	DefaultOutputDir    = "./reports"
 
-	// Template paths
-	DefaultHTMLTemplate = "./templates/report.html"
-	DefaultTXTTemplate  = "./templates/report.txt"
+	// Template paths (now embedded via go:embed in pkg/report)
+	DefaultHTMLTemplate = "embedded" // templates/report.html is embedded in the binary
+	DefaultTXTTemplate  = "embedded" // built inline by report.BuildTextReport()
 )
 
 // CLI constants
@@ -226,7 +227,7 @@ const (
 	ProgressComplete   = 100
 )
 
-// Timeout constants
+// Timeout and extraction constants (single source of truth)
 const (
 	// File scan timeout per file
 	DefaultFileScanTimeout = 30 * time.Second
@@ -235,7 +236,9 @@ const (
 	// Buffer size for extraction copies
 	ExtractionBufferSize = 64 * 1024 // 64KB
 	// Maximum allowed size for a single extracted file (tar bomb protection)
-	MaxArchiveFileSize = 2 * 1024 * 1024 * 1024 // 2GB
+	MaxArchiveFileSize = 100 * 1024 * 1024 // 100MB
+	// Threshold for triggering extra GC after extracting large archives
+	LargeArchiveThreshold = 50 * 1024 * 1024 // 50MB
 )
 
 // Cache constants
@@ -252,10 +255,6 @@ const (
 	// of XZ archives for progress reporting. XZ typically achieves 10x-15x
 	// compression on text/log files. We use a conservative 12x estimate.
 	XZEstimatedCompressionRatio = 12
-
-	// LargeArchiveThreshold is the compressed file size (in bytes) above which
-	// we consider an archive "large" and apply extra memory-safety measures.
-	LargeArchiveThreshold = 50 * 1024 * 1024 // 50MB
 )
 
 // Time format constants
