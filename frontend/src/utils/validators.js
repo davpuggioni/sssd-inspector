@@ -63,8 +63,9 @@ export class FileValidator {
       };
     }
 
-    const extension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-    const isSupported = FILES.SUPPORTED_EXTENSIONS.includes(extension);
+    const lowerName = fileName.toLowerCase();
+    // Check for multi-part extension first (.tar.xz) then single (.txz)
+    const isSupported = FILES.SUPPORTED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
 
     return {
       isValid: isSupported,

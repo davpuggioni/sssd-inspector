@@ -32,12 +32,16 @@ export class Button {
    * @returns {HTMLElement} Button element
    */
   createElement() {
+    const attrs = {
+      id: this.id,
+      type: 'button',
+      ...this.attributes
+    };
+    if (this.disabled) {
+      attrs.disabled = true;
+    }
     const button = DOMHelper.createElement('button', {
-      attributes: {
-        id: this.id,
-        type: 'button',
-        ...this.attributes
-      },
+      attributes: attrs,
       className: this.className,
       textContent: this.text,
       styles: {
@@ -53,6 +57,8 @@ export class Button {
         ...this.styles
       }
     });
+
+    this.element = button;
 
     if (this.onClick) {
       this.addClickListener();

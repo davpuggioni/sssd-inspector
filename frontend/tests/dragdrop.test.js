@@ -4,7 +4,7 @@
  * @version 1.0.0
  */
 
-import { TestUtils } from './components.test.js';
+import { describe, it, expect } from 'vitest';
 
 /**
  * Mock the Wails runtime and backend for testing
@@ -44,7 +44,7 @@ class MockWailsRuntime {
     listeners.forEach(cb => cb(...args));
   }
 
-  // Mock backend Analyze function
+  // Mock backend functions
   async Analyze(path, anonymize) {
     this._callOrder.push(`Analyze:${path}:${anonymize}`);
     return {
@@ -57,19 +57,16 @@ class MockWailsRuntime {
     };
   }
 
-  // Mock backend OpenFileBrowser
   async OpenFileBrowser() {
     this._callOrder.push('OpenFileBrowser');
     return '/mock/path/supportconfig.txz';
   }
 
-  // Mock backend SaveTXT
   async SaveTXT(report) {
     this._callOrder.push('SaveTXT');
     return '/mock/path/report.txt';
   }
 
-  // Reset mock state
   reset() {
     this._dropCallbacks = [];
     this._eventListeners = {};
@@ -78,50 +75,23 @@ class MockWailsRuntime {
 }
 
 /**
- * Drag-and-Drop Tests for main.js UI
+ * Drag-and-Drop Tests
  */
-class DragDropTests {
-  static runAll() {
-    console.log('Running Drag-and-Drop tests...');
-    
-    this.testOnFileDropCallbackOrder();
-    this.testOnFileDropPopulatesInput();
-    this.testOnFileDropMultipleFiles();
-    this.testOnFileDropEmpty();
-    this.testEventsOnRegistered();
-    this.testAnalyzeProgressUpdatesButton();
-    this.testAnalyzeProgressStartEnd();
-    
-    console.log('Drag-and-Drop tests completed successfully!');
-  }
-
-  static testOnFileDropCallbackOrder() {
-    console.log('  Testing OnFileDrop callback parameter order...');
-    
+describe('Drag-and-Drop', () => {
+  it('OnFileDrop callback populates input with dropped file', () => {
     const mockRuntime = new MockWailsRuntime();
     const filePathInput = { value: '' };
 
-    // Simulate what main.js does: OnFileDrop((x, y, files) => { ... })
     mockRuntime.OnFileDrop((x, y, files) => {
       if (files.length > 0) filePathInput.value = files[0];
     });
 
-    // Simulate a drop event — Wails passes (x, y, paths)
     mockRuntime.simulateDrop(['/tmp/supportconfig.txz']);
 
-    TestUtils.assertEqual(
-      filePathInput.value,
-      '/tmp/supportconfig.txz',
-      'OnFileDrop should populate filePathInput with the dropped file path'
-    );
+    expect(filePathInput.value).toBe('/tmp/supportconfig.txz');
+  });
 
-    mockRuntime.reset();
-    console.log('  ✓ OnFileDrop callback parameter order is correct');
-  }
-
-  static testOnFileDropPopulatesInput() {
-    console.log('  Testing OnFileDrop populates input value...');
-    
+  it('OnFileDrop handles multiple files by taking the first one', () => {
     const mockRuntime = new MockWailsRuntime();
     const filePathInput = { value: '' };
 
@@ -129,22 +99,12 @@ class DragDropTests {
       if (files.length > 0) filePathInput.value = files[0];
     });
 
-    // Drop a single file
-    mockRuntime.simulateDrop(['/home/user/supportconfig.txz']);
+    mockRuntime.simulateDrop(['/tmp/first.txz', '/tmp/second.txz', '/tmp/third.txz']);
 
-    TestUtils.assertEqual(
-      filePathInput.value,
-      '/home/user/supportconfig.txz',
-      'Input value should match the dropped file path'
-    );
+    expect(filePathInput.value).toBe('/tmp/first.txz');
+  });
 
-    mockRuntime.reset();
-    console.log('  ✓ OnFileDrop correctly populates input');
-  }
-
-  static testOnFileDropMultipleFiles() {
-    console.log('  Testing OnFileDrop with multiple files...');
-    
+  it('OnFileDrop handles empty file list gracefully', () => {
     const mockRuntime = new MockWailsRuntime();
     const filePathInput = { value: '' };
 
@@ -152,120 +112,42 @@ class DragDropTests {
       if (files.length > 0) filePathInput.value = files[0];
     });
 
-    // Drop multiple files — should only take the first one
-    mockRuntime.simulateDrop([
-      '/tmp/first.txz',
-      '/tmp/second.txz',
-      '/tmp/third.txz'
-    ]);
-
-    TestUtils.assertEqual(
-      filePathInput.value,
-      '/tmp/first.txz',
-      'Should use only the first file when multiple are dropped'
-    );
-
-    mockRuntime.reset();
-    console.log('  ✓ OnFileDrop handles multiple files correctly');
-  }
-
-  static testOnFileDropEmpty() {
-    console.log('  Testing OnFileDrop with empty file list...');
-    
-    const mockRuntime = new MockWailsRuntime();
-    const filePathInput = { value: '' };
-
-    mockRuntime.OnFileDrop((x, y, files) => {
-      if (files.length > 0) filePathInput.value = files[0];
-    });
-
-    // Drop with empty file list — should NOT change input
     mockRuntime.simulateDrop([]);
 
-    TestUtils.assertEqual(
-      filePathInput.value,
-      '',
-      'Input should remain empty when no files are dropped'
-    );
+    expect(filePathInput.value).toBe('');
+  });
 
-    mockRuntime.reset();
-    console.log('  ✓ OnFileDrop handles empty file list gracefully');
-  }
-
-  static testEventsOnRegistered() {
-    console.log('  Testing EventsOn registration...');
-    
+  it('EventsOn registers analyze-progress listener', () => {
     const mockRuntime = new MockWailsRuntime();
-    
-    // Simulate the two EventsOn calls from main.js
+
     mockRuntime.EventsOn('analyze-progress', () => {});
 
-    TestUtils.assert(
-      mockRuntime._eventListeners['analyze-progress'] !== undefined,
-      'EventsOn should register an analyze-progress listener'
-    );
-    TestUtils.assert(
-      mockRuntime._eventListeners['analyze-progress'].length === 1,
-      'Should have exactly one analyze-progress listener'
-    );
+    expect(mockRuntime._eventListeners['analyze-progress']).toBeDefined();
+    expect(mockRuntime._eventListeners['analyze-progress'].length).toBe(1);
+  });
+});
 
-    mockRuntime.reset();
-    console.log('  ✓ EventsOn listeners are registered correctly');
-  }
-
-  static testAnalyzeProgressUpdatesButton() {
-    console.log('  Testing analyze-progress event updates button text...');
-    
+/**
+ * Window Events Tests (analyze-progress)
+ */
+describe('Analysis Progress Events', () => {
+  it('updates button text with progress percentage and message', () => {
     const mockRuntime = new MockWailsRuntime();
-    const analyzeBtn = { 
-      textContent: 'Analyze',
-      disabled: false
-    };
+    const analyzeBtn = { textContent: 'Analyze', disabled: false };
 
-    // Simulate EventsOn('analyze-progress', ...) from main.js
     mockRuntime.EventsOn('analyze-progress', (message, percentage) => {
       if (percentage > 0 && percentage < 100) {
         analyzeBtn.textContent = `${percentage}% - ${message}`;
       }
     });
 
-    // Simulate progress at 50%
     mockRuntime.simulateEvent('analyze-progress', 'Processing...', 50);
-    TestUtils.assertEqual(
-      analyzeBtn.textContent,
-      '50% - Processing...',
-      'Button text should show progress percentage and message'
-    );
+    expect(analyzeBtn.textContent).toBe('50% - Processing...');
+  });
 
-    // Simulate progress at 0% (start) — should NOT update button
-    analyzeBtn.textContent = 'Analyze';
-    mockRuntime.simulateEvent('analyze-progress', 'Starting...', 0);
-    TestUtils.assertEqual(
-      analyzeBtn.textContent,
-      'Analyze',
-      'Button text should NOT change at 0% progress'
-    );
-
-    // Simulate progress at 100% (complete) — should NOT update button
-    mockRuntime.simulateEvent('analyze-progress', 'Complete!', 100);
-    TestUtils.assertEqual(
-      analyzeBtn.textContent,
-      'Analyze',
-      'Button text should NOT change at 100% progress'
-    );
-
-    mockRuntime.reset();
-    console.log('  ✓ analyze-progress updates button correctly');
-  }
-
-  static testAnalyzeProgressStartEnd() {
-    console.log('  Testing analyze-progress boundary conditions...');
-    
+  it('does not update button at 0% progress', () => {
     const mockRuntime = new MockWailsRuntime();
-    const analyzeBtn = { 
-      textContent: 'Analyze',
-      disabled: false
-    };
+    const analyzeBtn = { textContent: 'Analyze', disabled: false };
 
     mockRuntime.EventsOn('analyze-progress', (message, percentage) => {
       if (percentage > 0 && percentage < 100) {
@@ -273,45 +155,56 @@ class DragDropTests {
       }
     });
 
-    // Simulate progress sequence
+    mockRuntime.simulateEvent('analyze-progress', 'Starting...', 0);
+    expect(analyzeBtn.textContent).toBe('Analyze');
+  });
+
+  it('does not update button at 100% progress', () => {
+    const mockRuntime = new MockWailsRuntime();
+    const analyzeBtn = { textContent: 'Analyze', disabled: false };
+
+    mockRuntime.EventsOn('analyze-progress', (message, percentage) => {
+      if (percentage > 0 && percentage < 100) {
+        analyzeBtn.textContent = `${percentage}% - ${message}`;
+      }
+    });
+
+    mockRuntime.simulateEvent('analyze-progress', 'Complete!', 100);
+    expect(analyzeBtn.textContent).toBe('Analyze');
+  });
+
+  it('handles full progress sequence correctly', () => {
+    const mockRuntime = new MockWailsRuntime();
+    const analyzeBtn = { textContent: 'Analyze', disabled: false };
+
+    mockRuntime.EventsOn('analyze-progress', (message, percentage) => {
+      if (percentage > 0 && percentage < 100) {
+        analyzeBtn.textContent = `${percentage}% - ${message}`;
+      }
+    });
+
     mockRuntime.simulateEvent('analyze-progress', 'Starting', 0);
-    TestUtils.assertEqual(analyzeBtn.textContent, 'Analyze', 'At 0%, button should still say Analyze');
+    expect(analyzeBtn.textContent).toBe('Analyze');
 
     mockRuntime.simulateEvent('analyze-progress', 'Extracting...', 10);
-    TestUtils.assertEqual(analyzeBtn.textContent, '10% - Extracting...', 'At 10%, button should show progress');
+    expect(analyzeBtn.textContent).toBe('10% - Extracting...');
 
     mockRuntime.simulateEvent('analyze-progress', 'Analyzing logs...', 50);
-    TestUtils.assertEqual(analyzeBtn.textContent, '50% - Analyzing logs...', 'At 50%, button should show progress');
+    expect(analyzeBtn.textContent).toBe('50% - Analyzing logs...');
 
     mockRuntime.simulateEvent('analyze-progress', 'Done', 100);
-    TestUtils.assertEqual(analyzeBtn.textContent, '50% - Analyzing logs...', 'At 100%, button should keep last in-range value');
-
-    mockRuntime.reset();
-    console.log('  ✓ analyze-progress boundary conditions handled correctly');
-  }
-}
+    expect(analyzeBtn.textContent).toBe('50% - Analyzing logs...');
+  });
+});
 
 /**
  * Keyboard Shortcut Tests
  */
-class KeyboardShortcutTests {
-  static runAll() {
-    console.log('Running Keyboard Shortcut tests...');
-    
-    this.testCtrlOTriggersBrowse();
-    this.testCtrlEnterTriggersAnalyze();
-    this.testCtrlEnterNoOpWithoutPath();
-    
-    console.log('Keyboard Shortcut tests completed successfully!');
-  }
-
-  static testCtrlOTriggersBrowse() {
-    console.log('  Testing Ctrl+O triggers browse...');
-    
+describe('Keyboard Shortcuts', () => {
+  it('Ctrl+O triggers browse', () => {
     let browseClicked = false;
     const browseBtn = { click: () => { browseClicked = true; } };
 
-    // Simulate the keydown handler from main.js
     const keyHandler = (e) => {
       if (e.ctrlKey || e.metaKey) {
         switch(e.key) {
@@ -320,27 +213,12 @@ class KeyboardShortcutTests {
       }
     };
 
-    // Simulate Ctrl+O
-    const event = new KeyboardEvent('keydown', {
-      key: 'o',
-      ctrlKey: true,
-      metaKey: false,
-      bubbles: true,
-      cancelable: true
-    });
-    
-    // We can't easily call preventDefault on a constructed event,
-    // but we can test the logic directly
     keyHandler({ ctrlKey: true, key: 'o', preventDefault: () => {} });
 
-    TestUtils.assert(browseClicked, 'Ctrl+O should trigger browse button click');
+    expect(browseClicked).toBe(true);
+  });
 
-    console.log('  ✓ Ctrl+O triggers browse');
-  }
-
-  static testCtrlEnterTriggersAnalyze() {
-    console.log('  Testing Ctrl+Enter triggers analyze...');
-    
+  it('Ctrl+Enter triggers analyze when path is set', () => {
     let analyzeClicked = false;
     const filePathInput = { value: '/tmp/test.txz' };
     const analyzeBtn = { click: () => { analyzeClicked = true; } };
@@ -355,14 +233,10 @@ class KeyboardShortcutTests {
 
     keyHandler({ ctrlKey: true, key: 'Enter', preventDefault: () => {} });
 
-    TestUtils.assert(analyzeClicked, 'Ctrl+Enter should trigger analyze when path is set');
+    expect(analyzeClicked).toBe(true);
+  });
 
-    console.log('  ✓ Ctrl+Enter triggers analyze');
-  }
-
-  static testCtrlEnterNoOpWithoutPath() {
-    console.log('  Testing Ctrl+Enter no-op when path is empty...');
-    
+  it('Ctrl+Enter is no-op when path is empty', () => {
     let analyzeClicked = false;
     const filePathInput = { value: '' };
     const analyzeBtn = { click: () => { analyzeClicked = true; } };
@@ -377,50 +251,6 @@ class KeyboardShortcutTests {
 
     keyHandler({ ctrlKey: true, key: 'Enter', preventDefault: () => {} });
 
-    TestUtils.assert(!analyzeClicked, 'Ctrl+Enter should NOT trigger analyze when path is empty');
-
-    console.log('  ✓ Ctrl+Enter is guarded against empty path');
-  }
-}
-
-/**
- * Test Runner
- */
-class DragDropTestRunner {
-  static async runAllTests() {
-    console.log('\nStarting Drag-and-Drop & UI Interaction Tests...\n');
-    
-    try {
-      DragDropTests.runAll();
-      console.log('');
-      KeyboardShortcutTests.runAll();
-      console.log('');
-      
-      console.log('🎉 All drag-and-drop and UI interaction tests passed successfully!');
-      return true;
-    } catch (error) {
-      console.error('❌ Test failed:', error.message);
-      console.error(error.stack);
-      return false;
-    }
-  }
-}
-
-// Export for use in test runner
-export {
-  MockWailsRuntime,
-  DragDropTests,
-  KeyboardShortcutTests,
-  DragDropTestRunner
-};
-
-// Auto-run tests if executed directly
-if (typeof window !== 'undefined' && window.location) {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      DragDropTestRunner.runAllTests();
-    });
-  } else {
-    DragDropTestRunner.runAllTests();
-  }
-}
+    expect(analyzeClicked).toBe(false);
+  });
+});

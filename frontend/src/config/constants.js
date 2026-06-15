@@ -271,7 +271,7 @@ export const VALIDATION = {
   FILE_PATH: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 1000,
-    PATTERN: /^[a-zA-Z0-9._/\\-]+$/,
+    PATTERN: /^[a-zA-Z0-9.:_/\\ -]+$/,
   },
   
   /** Input validation */
