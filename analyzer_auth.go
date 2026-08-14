@@ -286,6 +286,16 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 
 	isSles15SP7 := strings.Contains(report.SLESRlease, "15 SP7") || strings.Contains(report.SLESRlease, "15-SP7")
 
+	// Detect the specific SLES 15 SP7 build (2.10.2-150700.9.17.1) that shipped
+	// with sssd-user (unprivileged) ownership before SUSE reverted to root:root.
+	isBuggySssdBuild := false
+	for _, pkg := range report.SSSDPackages {
+		if strings.Contains(pkg, "2.10.2-150700.9.17.1") {
+			isBuggySssdBuild = true
+			break
+		}
+	}
+
 	if major > 2 || (major == 2 && minor >= 10) {
 		if isSles15SP7 {
 			expectedConfOwner, expectedConfGroup, expectedConfPerms = "root", "root", "-rw-------"
@@ -299,7 +309,6 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 	foundConfErr := false
 	varDirMistakes := 0
 	inVarLibSss := false
-	foundSssdUserInVar := false
 
 	scanFiles(dirPath, []string{"sssd.txt", "etc.txt"}, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
@@ -312,7 +321,14 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 			if len(fields) >= 8 {
 				perms, owner, group := fields[0], fields[2], fields[3]
 				if owner != expectedConfOwner || group != expectedConfGroup {
-					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but installed SSSD version %d.%d strictly requires '%s:%s'. The service will fail to start.", owner, group, major, minor, expectedConfOwner, expectedConfGroup))
+					if isSles15SP7 {
+						report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but SLES 15 SP7 expects '%s:%s'. Please change the permissions.", owner, group, expectedConfOwner, expectedConfGroup))
+						if isBuggySssdBuild {
+							report.Problems = append(report.Problems, "sssd 2.10.2-150700.9.17.1 is installed, please update sssd to the most recent package.")
+						}
+					} else {
+						report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but installed SSSD version %d.%d strictly requires '%s:%s'. The service will fail to start.", owner, group, major, minor, expectedConfOwner, expectedConfGroup))
+					}
 					foundConfErr = true
 				}
 				if !foundConfErr && perms != expectedConfPerms {
@@ -336,20 +352,16 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 					owner, group := fields[2], fields[3]
 					if owner != expectedVarOwner || group != expectedVarGroup {
 						varDirMistakes++
-						if owner == "sssd" || group == "sssd" {
-							foundSssdUserInVar = true
-						}
 					}
 				}
 			}
 		}
 	})
 
-	if varDirMistakes > 0 {
-		if isSles15SP7 && foundSssdUserInVar {
-			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. On SLES 15 SP7, if the /var/lib/sss directory permissions are still assigned to the sssd user, it is recommended to upgrade to a version of sssd later than 2.10.2-150700.9.17.1. Earlier versions may exhibit regressions when running in unprivileged mode. Ensure that ownership is reverted to root:root.", varDirMistakes))
-		} else {
+	/*
+		// Temporarily disabled per request (2026): no /var/lib/sss/ ownership message is shown for now.
+		if varDirMistakes > 0 {
 			report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: %d files or directories in /var/lib/sss/ are incorrectly owned. SSSD version %d.%d strictly requires them to be owned by '%s:%s'. Please run 'chown -R %s:%s /var/lib/sss/' to fix.", varDirMistakes, major, minor, expectedVarOwner, expectedVarGroup, expectedVarOwner, expectedVarGroup))
 		}
-	}
+	*/
 }

@@ -138,7 +138,7 @@ total 33900
 	}
 }
 
-// Test: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+ (Standard Behavior)
+// Test: Verify invalid /var/lib/sss/ ownership for SSSD 2.10+ (message temporarily disabled)
 func TestAnalyzePermissions_VarLibSss_SSSD210_Invalid(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"rpm.txt": "sssd-2.10.2-150700.9.17.1.x86_64\n",
@@ -158,13 +158,13 @@ total 33900
 	analyzePackages(dir, &report)
 	analyzeSSSDFilePermissions(dir, &report)
 
-	if !containsString(report.Problems, "2 files or directories in /var/lib/sss/ are incorrectly owned") {
-		t.Errorf("Failed to detect exactly 2 incorrectly owned files in /var/lib/sss/ for SSSD 2.10+")
+	if containsString(report.Problems, "files or directories in /var/lib/sss/ are incorrectly owned") {
+		t.Errorf("Expected no /var/lib/sss/ ownership message for SSSD 2.10+ (currently disabled), but one was emitted.")
 	}
 }
 
-// Test: Verify SLES15 SP7 Bug Detection (sssd running unprivileged triggers warning)
-func TestAnalyzePermissions_SLES15SP7_UnprivilegedBug(t *testing.T) {
+// Test: Verify SLES15 SP7 sssd-owned /var/lib/sss/ emits no ownership message (currently disabled)
+func TestAnalyzePermissions_SLES15SP7_SssdOwnership(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
 		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
@@ -185,8 +185,8 @@ total 33900
 	analyzePackages(dir, &report)
 	analyzeSSSDFilePermissions(dir, &report)
 
-	if !containsString(report.Problems, "upgrade to a version of sssd later than") && !containsString(report.Problems, "greater than version sssd-2.10.2") {
-		t.Errorf("Failed to detect SLES15 SP7 unprivileged SSSD regression warning.")
+	if containsString(report.Problems, "files or directories in /var/lib/sss/ are incorrectly owned") {
+		t.Errorf("SLES15 SP7 should not emit the /var/lib/sss/ ownership message (currently disabled), but one was emitted.")
 	}
 }
 
@@ -216,3 +216,50 @@ total 33900
 		t.Errorf("SLES15 SP7 with root:root should be valid, but raised an error.")
 	}
 }
+
+// Test: Verify SLES15 SP7 sssd.conf ownership message (buggy build) suggests changing
+// permissions AND updating sssd when the 2.10.2-150700.9.17.1 package is installed.
+func TestAnalyzePermissions_SLES15SP7_ConfOwnership_BuggyBuild(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt":              "-rw-r----- 1 root sssd 1024 Mar 10 10:00 sssd.conf\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeOSAndHardware(dir, &report)
+	analyzePackages(dir, &report)
+	analyzeSSSDFilePermissions(dir, &report)
+
+	if !containsString(report.Problems, "Please change the permissions.") {
+		t.Errorf("Expected 'Please change the permissions.' message for SLES15 SP7 sssd.conf ownership.")
+	}
+	if !containsString(report.Problems, "sssd 2.10.2-150700.9.17.1 is installed, please update sssd to the most recent package.") {
+		t.Errorf("Expected update-sssd notification for buggy SLES15 SP7 build 2.10.2-150700.9.17.1.")
+	}
+}
+
+// Test: Verify SLES15 SP7 sssd.conf ownership message (non-buggy build) only suggests
+// changing permissions, without the update-sssd notification.
+func TestAnalyzePermissions_SLES15SP7_ConfOwnership_NonBuggyBuild(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.4.1.x86_64\n",
+		"sssd.txt":              "-rw-r----- 1 root sssd 1024 Mar 10 10:00 sssd.conf\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeOSAndHardware(dir, &report)
+	analyzePackages(dir, &report)
+	analyzeSSSDFilePermissions(dir, &report)
+
+	if !containsString(report.Problems, "Please change the permissions.") {
+		t.Errorf("Expected 'Please change the permissions.' message for SLES15 SP7 sssd.conf ownership.")
+	}
+	if containsString(report.Problems, "2.10.2-150700.9.17.1 is installed, please update sssd to the most recent package.") {
+		t.Errorf("Non-buggy SLES15 SP7 build should not emit the update-sssd notification.")
+	}
+}
+
