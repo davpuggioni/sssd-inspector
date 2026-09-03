@@ -13,6 +13,9 @@ supportconfig_sssd_report_*.html
 *.tar.xz
 *.tar.gz
 *.zip
+*.odt
+
+# Escludi file di documentazione ODT
 
 # Escludi eventuali file temporanei degli IDE (opzionale)
 .vscode/

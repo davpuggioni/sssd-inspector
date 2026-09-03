@@ -48,6 +48,7 @@ func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Hostname:") {
 			hostname := strings.TrimSpace(strings.TrimPrefix(line, "Hostname:"))
+			report.Hostname = hostname
 			if !strings.Contains(hostname, ".") {
 				report.Problems = append(report.Problems, "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.")
 			}

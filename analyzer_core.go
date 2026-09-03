@@ -137,7 +137,13 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		sssdConfContent = extractSection(dirPath, "sssd.txt", "# /etc/sssd/sssd.conf")
 	}
 	if sssdConfContent != "" {
-		analyzeSSSDConfig(sssdConfContent, &report)
+		report.SssdConfigFound = true
+		report.SSSDConfigSnippet = sssdConfContent
+		// Phase A: real INI parser + typed AD option validator (replaces the fragile
+		// substring-based legacy scanning in analyzeSSSDConfig.
+		cfg := parseSssdConfig(sssdConfContent)
+		validateDuplicateKeys(cfg, &report) // duplicate keys apply to the whole config
+		validateADConfig(cfg, &report)          // AD-specific typed-option checks
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}
@@ -145,6 +151,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	if report.SssdService != "Running" {
 		report.Problems = append(report.Problems, "sssd.service is not actively running.")
 	}
+
+	// Phase B: cross-source correlation/reconciliation. Runs after config, DNS,
+	// Kerberos,and hostname analysis have populated the report (see runCorrelation).
+	runCorrelation(dirPath, &report)
 
 	// MAC denials (from security-*.txt files, not from log scanning)
 	analyzeMACDenials(dirPath, &report)

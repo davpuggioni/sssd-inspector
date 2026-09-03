@@ -2,8 +2,6 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -40,7 +38,15 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 	report.SSSDLogErrors = buildSortedLogErrors(detectedLogErrors)
 
 	if sssdConfContent != "" {
-		analyzeSSSDConfig(sssdConfContent, report)
+		report.SssdConfigFound = true
+		report.SSSDConfigSnippet = sssdConfContent
+		// Phase A engine (same as analyzeData], instead of the removed legacy
+		// substring-based analyzeSSSDConfig: typed parser + whole-config duplicate
+		// detection + AD-specific option validation.
+
+		cfg := parseSssdConfig(sssdConfContent)
+		validateDuplicateKeys(cfg, report)
+		validateADConfig(cfg, report)
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}
@@ -496,92 +502,3 @@ func buildSortedLogErrors(detectedLogErrors map[string][]string) []SSSDLogError 
 	return errors
 }
 
-// analyzeSSSDConfig parses the sssd.conf content and detects common configuration issues,
-// such as missing options, duplicate parameters, and deprecated settings.
-func analyzeSSSDConfig(sssdConfContent string, report *ReportData) {
-	report.SssdConfigFound = true
-	report.SSSDConfigSnippet = sssdConfContent
-
-	scanner := bufio.NewScanner(strings.NewReader(sssdConfContent))
-	hasSimpleAllowGroups, hasSimpleAllow, accessProviderSimple, idMappingFalse := false, false, false, false
-
-	confLowerStr := strings.ToLower(sssdConfContent)
-	if !strings.Contains(confLowerStr, "ldap_use_tokengroups = false") {
-		report.Warnings = append(report.Warnings, "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'.")
-	}
-	if !strings.Contains(confLowerStr, "timeout =") {
-		report.Warnings = append(report.Warnings, "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections.")
-	}
-
-	currentSection := ""
-	seenKeys := make(map[string]map[string]bool)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			currentSection = line
-			if seenKeys[currentSection] == nil {
-				seenKeys[currentSection] = make(map[string]bool)
-			}
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := strings.ToLower(strings.TrimSpace(parts[0]))
-			if currentSection != "" && key != "debug_level" && key != "" {
-				if seenKeys[currentSection][key] {
-					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: Duplicate parameter '%s' found in section %s of sssd.conf. SSSD may behave unpredictably.", key, currentSection))
-				} else {
-					seenKeys[currentSection][key] = true
-				}
-			}
-		}
-
-		lowerLine := strings.ToLower(line)
-		if strings.Contains(lowerLine, "id_provider") && strings.Contains(lowerLine, "ad") {
-			report.ADProviderMode = true
-		}
-		if strings.Contains(lowerLine, "enumerate") && strings.Contains(lowerLine, "true") {
-			if !report.EnumerateIssue {
-				report.EnumerateIssue = true
-				report.Problems = append(report.Problems, "[DEPRECATION] 'enumerate = true' is set in sssd.conf. This causes severe performance issues, is deprecated for AD/IPA, and is unsupported in SSSD 2.10+.")
-			}
-		}
-		if strings.Contains(lowerLine, "use_fully_qualified_names") && strings.Contains(lowerLine, "true") {
-			report.UseFQDNSet = true
-		}
-		if strings.HasPrefix(lowerLine, "simple_allow_groups") {
-			hasSimpleAllowGroups, hasSimpleAllow = true, true
-		} else if strings.HasPrefix(lowerLine, "simple_allow_users") {
-			hasSimpleAllow = true
-		}
-		if strings.HasPrefix(lowerLine, "access_provider") && strings.Contains(lowerLine, "simple") {
-			accessProviderSimple = true
-		}
-		if strings.HasPrefix(lowerLine, "ldap_id_mapping") && strings.Contains(lowerLine, "false") {
-			idMappingFalse = true
-		}
-		if strings.HasPrefix(lowerLine, "krb5_validate") && strings.Contains(lowerLine, "false") {
-			report.Problems = append(report.Problems, "[SECURITY RISK] 'krb5_validate = false' is set. This disables KDC spoofing protection. If used to bypass the AD RC4 bug, remove this and fix the AD operatingSystemVersion attribute or update local crypto policies instead.")
-		}
-	}
-
-	// Check for scanner errors
-	if err := scanner.Err(); err != nil {
-		report.Problems = append(report.Problems, fmt.Sprintf("Error scanning sssd.conf: %v", err))
-	}
-
-	if hasSimpleAllow && !accessProviderSimple {
-		report.Problems = append(report.Problems, "CONFIGURATION ERROR: 'simple_allow_users' or 'simple_allow_groups' is used in sssd.conf, but 'access_provider = simple' is not set (e.g., using 'ad'). These parameters will be ignored. Use ad_access_filter instead.")
-	}
-	if hasSimpleAllowGroups {
-		report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] 'simple_allow_groups' is active. If users authenticate but fail authorization, test by commenting it out and using 'simple_allow_users = <username>' to isolate group resolution issues.")
-	}
-	if idMappingFalse {
-		report.Problems = append(report.Problems, "[WARNING] 'ldap_id_mapping = False' is set. AD logins will fail silently unless UNIX attributes (uidNumber, gidNumber) are manually populated in Active Directory (RFC2307).")
-	}
-}

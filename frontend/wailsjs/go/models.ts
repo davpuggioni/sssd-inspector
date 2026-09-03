@@ -1,5 +1,29 @@
 export namespace main {
 	
+	export class ConfigFinding {
+	    severity: number;
+	    category: string;
+	    message: string;
+	    source_path: string;
+	    source_key: string;
+	    source_line: number;
+	    evidence: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigFinding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.severity = source["severity"];
+	        this.category = source["category"];
+	        this.message = source["message"];
+	        this.source_path = source["source_path"];
+	        this.source_key = source["source_key"];
+	        this.source_line = source["source_line"];
+	        this.evidence = source["evidence"];
+	    }
+	}
 	export class TimelineEvent {
 	    timestamp: string;
 	    message: string;
@@ -83,6 +107,9 @@ export namespace main {
 	    ad_provider_mode: boolean;
 	    enumerate_issue: boolean;
 	    use_fqdn_set: boolean;
+	    ad_domain: string;
+	    hostname: string;
+	    config_findings: ConfigFinding[];
 	    sssd_log_errors: SSSDLogError[];
 	    sssd_config_snippet: string;
 	    mac_denial_examples: string[];
@@ -127,6 +154,9 @@ export namespace main {
 	        this.ad_provider_mode = source["ad_provider_mode"];
 	        this.enumerate_issue = source["enumerate_issue"];
 	        this.use_fqdn_set = source["use_fqdn_set"];
+	        this.ad_domain = source["ad_domain"];
+	        this.hostname = source["hostname"];
+	        this.config_findings = this.convertValues(source["config_findings"], ConfigFinding);
 	        this.sssd_log_errors = this.convertValues(source["sssd_log_errors"], SSSDLogError);
 	        this.sssd_config_snippet = source["sssd_config_snippet"];
 	        this.mac_denial_examples = source["mac_denial_examples"];

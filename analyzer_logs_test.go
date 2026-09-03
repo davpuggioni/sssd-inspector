@@ -27,14 +27,14 @@ func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
 // Test: Verify deprecated 'enumerate = true' is caught
 func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
-		"sssd.conf": "[domain/ad]\nenumerate = true\n",
+		"sssd.conf": "[domain/ad]\nid_provider = ad\nenumerate = true\n",
 	})
 	defer os.RemoveAll(dir)
 
 	var report ReportData
 	analyzeSSSDConfigAndLogs(dir, &report)
 
-	if !containsString(report.Problems, "[DEPRECATION] 'enumerate = true' is set") {
+	if !containsString(report.Warnings, "[DEPRECATION] 'enumerate = true' is set") {
 		t.Errorf("Failed to detect deprecated enumerate=true setting")
 	}
 }
