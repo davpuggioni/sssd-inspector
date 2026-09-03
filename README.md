@@ -24,8 +24,8 @@
 - **File Cache** — LRU-based file content cache reads each file only once per analysis
 - **Scanner Pool** — Reusable buffer allocations via `sync.Pool` to reduce GC pressure
 - **Context-Aware Scanning** — Timeout-based cancellation prevents hangs on corrupted or NFS-mounted files
-- **Parallel Analysis** — Independent analysis phases execute concurrently using worker pools
-- **Multi-Core Support** — Parallel file scanning and batch processing for large supportconfig archives
+- **Parallel-Analysis Helpers** — Optional worker-pool based phase helper functions (`analyzePhase1Parallel`/`analyzePhase2Parallel`) exist for large archives; the default CLI path runs phases sequentially
+- **Multi-Core File Processing** — Parallel file scanning and batch processing (`utils_parallel.go`) for large supportconfig archives
 
 ### Output Formats
 - **Text Report** — Formatted terminal output with problem severity indicators
@@ -55,7 +55,7 @@
 | Go | 1.23+ | Backend compilation |
 | Node.js | 18+ | Frontend asset build |
 | npm | 9+ | Frontend dependency management |
-| Wails CLI | 2.11+ | GUI framework (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`) |
+| Wails CLI | 2.12+ | GUI framework (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`) |
 
 ---
 
@@ -200,6 +200,7 @@ wails build -platform linux/amd64
 - File permission analysis (sssd.conf ownership and mode)
 - /var/lib/sss/ ownership verification
 - Configuration conflict detection (duplicate parameters)
+- Cross-source AD correlation — realm vs DNS vs hostname reconciliation (Phase B engine)
 
 ### Log Analysis
 - **Critical Errors** — Kerberos failures, LDAP connection issues, TLS handshake errors, cache corruption
@@ -228,6 +229,8 @@ sssd-inspector/
 ├── analyzer_system.go       # OS, hardware, services analysis
 ├── analyzer_auth.go         # DNS, Kerberos, PAM, NSS analysis
 ├── analyzer_logs.go         # SSSD log pattern definitions (350+ patterns)
+├── config_parser.go         # sssd.conf INI parser + AD typed option validator (Phase A)
+├── analyzer_correlate.go    # Cross-source correlation/reconciliation engine (Phase B)
 │
 ├── utils.go                 # File scanning, section extraction
 ├── utils_parallel.go        # Parallel file/batch processing
@@ -264,7 +267,7 @@ The core innovation of SSSD Inspector is its single-pass log scanning engine. In
 1. **Combines all patterns** — 350+ error patterns + quick checks + KB article patterns → one mega-regex
 2. **Pre-filters lines** — Fast keyword check (`sssd`, `krb5`, `ldap`, `pam`, etc.) skips ~90% of unrelated syslog lines
 3. **Single pass** — Each line is matched once against the combined regex, extracting errors, keytab info, watchdog alerts, crypto bugs, evidence, and timestamps simultaneously
-4. **Parallel phases** — Independent analysis steps (PAM, NSSwitch, hosts, packages, services) execute concurrently
+4. **Ordered phases** — Analysis runs through discrete sequential phases (config, logs, Kerberos, cross-source correlation) so dependent checks always see fully-populated report fields; parallel helper functions exist but are not invoked on this path
 
 ### Caching System
 
