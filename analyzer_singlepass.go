@@ -140,18 +140,21 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 		return result
 	}
 
-	// STEP 2: Build the mega-regex from all patterns
-	var quotedPatterns []string
-	patternLookup := make(map[string]patternInfo) // lowercased matched text -> info
-
-	for _, cp := range allPatterns {
-		qp := regexp.QuoteMeta(cp.pattern)
-		quotedPatterns = append(quotedPatterns, qp)
-		patternLookup[strings.ToLower(cp.pattern)] = cp.info
+	// STEP 2: Build the Aho-Corasick automaton from all literal patterns.
+	// All patterns are literal substrings (previously escaped with
+	// regexp.QuoteMeta and joined into one giant regex alternation); the
+	// trie matches them all in a single O(n) pass per line, avoiding RE2's
+	// alternation-size limits and per-branch exploration cost.
+	//
+	// The automaton is case-insensitive and cached per process like the
+	// regex cache, so it is compiled exactly once.
+	literalPatterns := make([]string, len(allPatterns))
+	patternInfos := make([]patternInfo, len(allPatterns))
+	for i, cp := range allPatterns {
+		literalPatterns[i] = cp.pattern
+		patternInfos[i] = cp.info
 	}
-
-	// Use the global regex cache (compiled once per process)
-	combinedRegex := globalRegexCache.Get("(?i)(" + strings.Join(quotedPatterns, "|") + ")")
+	acMatcher := globalACCache.Get(literalPatterns)
 
 	// Time regex for timeline extraction (also cached)
 	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
@@ -213,13 +216,12 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 			return
 		}
 
-		// Match against combined regex
-		matches := combinedRegex.FindAllString(lineTrimmed, -1)
-		for _, match := range matches {
-			info, ok := patternLookup[strings.ToLower(match)]
-			if !ok {
-				continue
-			}
+		// Single O(n) pass: match ALL literal patterns via the
+		// Aho-Corasick automaton (case-insensitive, overlapping matches
+		// included). `lowered` is already lowercased above, matching the
+		// automaton's folded patterns.
+		acMatcher.Match(lowered, func(idx int) {
+			info := patternInfos[idx]
 
 			switch info.category {
 			case mcError:
@@ -282,7 +284,7 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 					}
 				}
 			}
-		}
+		})
 	})
 
 	// STEP 4: Build SSSDLogErrors from collected examples

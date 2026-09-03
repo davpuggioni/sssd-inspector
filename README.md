@@ -224,7 +224,7 @@ sssd-inspector/
 ├── shared.go                # Shared CLI/GUI logic & configuration
 │
 ├── analyzer_core.go         # Main analysis orchestrator (analyzeData)
-├── analyzer_singlepass.go   # Single-pass log scanner (mega-regex engine)
+├── analyzer_singlepass.go   # Single-pass log scanner (Aho-Corasick engine)
 ├── analyzer_parallel.go     # Parallel analysis phases
 ├── analyzer_system.go       # OS, hardware, services analysis
 ├── analyzer_auth.go         # DNS, Kerberos, PAM, NSS analysis
@@ -235,6 +235,7 @@ sssd-inspector/
 ├── utils.go                 # File scanning, section extraction
 ├── utils_parallel.go        # Parallel file/batch processing
 ├── cache.go                 # RegexCache, FileCache, Scanner Pool
+├── ahocorasick.go           # Aho-Corasick multi-pattern matcher (O(n) literal scanning)
 ├── interfaces.go            # Core interfaces for DI
 │
 ├── loaders.go               # Secure archive extraction (.txz)
@@ -264,14 +265,15 @@ sssd-inspector/
 
 The core innovation of SSSD Inspector is its single-pass log scanning engine. Instead of reading the same log files ~29 times during analysis (as traditional tools do), the engine:
 
-1. **Combines all patterns** — 350+ error patterns + quick checks + KB article patterns → one mega-regex
+1. **Builds an Aho-Corasick automaton** — 350+ error patterns + quick checks + KB article patterns are almost entirely literal strings, so they run through an Aho-Corasick trie: **O(n) matching per line in a single pass regardless of how many patterns are registered**, avoiding the classic trap of throwing 350 patterns into one giant regex alternation and watching performance fall off a cliff
 2. **Pre-filters lines** — Fast keyword check (`sssd`, `krb5`, `ldap`, `pam`, etc.) skips ~90% of unrelated syslog lines
-3. **Single pass** — Each line is matched once against the combined regex, extracting errors, keytab info, watchdog alerts, crypto bugs, evidence, and timestamps simultaneously
+3. **Single pass** — Each surviving line is walked once through the automaton, extracting errors, keytab info, watchdog alerts, crypto bugs, evidence, and timestamps simultaneously
 4. **Ordered phases** — Analysis runs through discrete sequential phases (config, logs, Kerberos, cross-source correlation) so dependent checks always see fully-populated report fields; parallel helper functions exist but are not invoked on this path
 
 ### Caching System
 
 - **RegexCache** — Thread-safe `sync.RWMutex`-protected map of compiled regexp, compile-once per pattern per application lifetime
+- **ACCache** — Process-wide cache for compiled Aho-Corasick automatons, so the trie over all literal patterns is built exactly once per run
 - **FileCache** — LRU-like cache (max 20 files) with double-checked locking, reads each file only once per analysis
 - **ScannerPool** — `sync.Pool` of 64KB byte slices for scanner buffers, reducing GC pressure
 
