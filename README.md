@@ -419,4 +419,4 @@ This tool is intended for diagnostic purposes. It parses logs based on patterns 
 
 - Built with [Wails](https://wails.io/) — Native Go + WebKit desktop applications
 - Pattern engine inspired by SSSD C source code analysis
-- Knowledge Base articles sourced from SUSE Technical Information Database (TID)
+- Knowledge Base articles sourced from SUSE Knowledge Base Articles
