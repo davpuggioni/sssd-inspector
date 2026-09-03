@@ -50,7 +50,7 @@ func analyzeHostnameAndFQDN(dirPath string, report *ReportData) {
 			hostname := strings.TrimSpace(strings.TrimPrefix(line, "Hostname:"))
 			report.Hostname = hostname
 			if !strings.Contains(hostname, ".") {
-				report.Problems = append(report.Problems, "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.")
+				report.Warnings = append(report.Warnings, "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.")
 			}
 		}
 	})
@@ -71,7 +71,7 @@ func analyzeSCC(dirPath string, report *ReportData) {
 
 func analyzePerformance(dirPath string, report *ReportData) {
 	if anyFileContains(dirPath, []string{"memory.txt"}, "vm.dirty_bytes = 0") {
-		report.Problems = append(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
+		report.Warnings = append(report.Warnings, "[PERFORMANCE] vm.dirty_bytes is set to 0. This disables limits on dirty data, leading to uncontrolled accumulation and severe I/O bottlenecks that can block SSSD.")
 	}
 
 	scanFiles(dirPath, []string{"sar.txt"}, func(line string) {
@@ -171,7 +171,7 @@ func analyzeMACDenials(dirPath string, report *ReportData) {
 	})
 
 	if len(macDenials) > 0 {
-		report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
+		report.Warnings = append(report.Warnings, fmt.Sprintf("[WARNING] %s denials detected for SSSD. This can silently block authentication or cache access.", report.MACType))
 		report.MACDenialExamples = deduplicateProblems(macDenials)
 	}
 }

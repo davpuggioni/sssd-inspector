@@ -41,7 +41,7 @@ func analyzeDNS(dirPath string, report *ReportData) {
 						statusStr = status
 					}
 					if statusStr != "Success" && statusStr != "Unknown/Not Tested" {
-						report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] DNS Server %s ping test failed (Status: %s). Note: ICMP may be blocked in cloud environments like Azure.", ip, statusStr))
+						report.Warnings = append(report.Warnings, fmt.Sprintf("[WARNING] DNS Server %s ping test failed (Status: %s). Note: ICMP may be blocked in cloud environments like Azure.", ip, statusStr))
 					}
 					report.Nameservers = append(report.Nameservers, fmt.Sprintf("%s (%s)", ip, statusStr))
 				}
@@ -74,10 +74,10 @@ func analyzeTime(dirPath string, report *ReportData) {
 
 	if anyFileContains(dirPath, timeFiles, "chronyc sources") {
 		if !anyFileContains(dirPath, timeFiles, " 377 ") {
-			report.Problems = append(report.Problems, "[NTP] Chrony reachability is not 377. Time servers may be unreachable, risking Kerberos authentication failure.")
+			report.Warnings = append(report.Warnings, "[NTP] Chrony reachability is not 377. Time servers may be unreachable, risking Kerberos authentication failure.")
 		}
 		if anyFileContains(dirPath, timeFiles, "#* PHC0") {
-			report.Problems = append(report.Problems, "[NTP] System is synchronized only to a local clock (PHC0) instead of a network time server.")
+			report.Warnings = append(report.Warnings, "[NTP] System is synchronized only to a local clock (PHC0) instead of a network time server.")
 		}
 	}
 
@@ -166,7 +166,7 @@ func analyzePAM(dirPath string, report *ReportData) {
 	pam := readFileSafe(dirPath, "pam.txt")
 	if strings.Contains(pam, "FORCE_OPTION_PAM=1") || strings.Contains(pam, "General Data Protection Regulation") {
 		report.PamGDPRRestricted = true
-		report.Problems = append(report.Problems, "[WARNING] PAM data is restricted (GDPR). Please collect a new supportconfig using: FORCE_OPTION_PAM=1 supportconfig")
+		report.Warnings = append(report.Warnings, "[WARNING] PAM data is restricted (GDPR). Please collect a new supportconfig using: FORCE_OPTION_PAM=1 supportconfig")
 	} else if strings.Contains(pam, "pam_sss.so") {
 		report.PamSssInstalled = true
 	}
@@ -213,7 +213,7 @@ func analyzeNSSwitch(dirPath string, report *ReportData) {
 						}
 					}
 					if sssIdx != -1 && filesIdx != -1 && sssIdx < filesIdx {
-						report.Problems = append(report.Problems, fmt.Sprintf("[WARNING] In /etc/nsswitch.conf, 'sss' is listed before 'files'/'compat' for '%s'. This can lock out local root/system accounts if AD is unreachable.", strings.TrimSuffix(parts[0], ":")))
+						report.Warnings = append(report.Warnings, fmt.Sprintf("[WARNING] In /etc/nsswitch.conf, 'sss' is listed before 'files'/'compat' for '%s'. This can lock out local root/system accounts if AD is unreachable.", strings.TrimSuffix(parts[0], ":")))
 					}
 				}
 			}
@@ -269,7 +269,7 @@ func analyzePackages(dirPath string, report *ReportData) {
 func analyzeSSSDVersionAge(report *ReportData) {
 	major, minor := getSSSDVersion(report.SSSDPackages)
 	if major == 1 {
-		report.Problems = append(report.Problems, fmt.Sprintf("[DEPRECATION] Installed SSSD version is %d.%d. The 1.x series is extremely outdated (last upstream release in 2020) and End-of-Life. Consider upgrading your OS or packages.", major, minor))
+		report.Warnings = append(report.Warnings, fmt.Sprintf("[DEPRECATION] Installed SSSD version is %d.%d. The 1.x series is extremely outdated (last upstream release in 2020) and End-of-Life. Consider upgrading your OS or packages.", major, minor))
 	} else if major == 2 && minor < 8 {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("[MAINTENANCE] Installed SSSD version is 2.%d. Upstream SSSD is currently actively releasing 2.10+ and 2.12+. If you are experiencing unexpected bugs, check for available OS package updates.", minor))
 	}

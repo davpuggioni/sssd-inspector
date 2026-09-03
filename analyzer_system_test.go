@@ -16,7 +16,7 @@ func TestAnalyzePerformance_DirtyBytes(t *testing.T) {
 	var report ReportData
 	analyzePerformance(dir, &report)
 
-	if !containsString(report.Problems, "[PERFORMANCE] vm.dirty_bytes is set to 0") {
+	if !containsString(report.Warnings, "[PERFORMANCE] vm.dirty_bytes is set to 0") {
 		t.Errorf("Failed to detect vm.dirty_bytes = 0 misconfiguration")
 	}
 }
@@ -78,7 +78,7 @@ func TestAnalyzeHostname_ShortName(t *testing.T) {
 	var report ReportData
 	analyzeHostnameAndFQDN(dir, &report)
 
-	if !containsString(report.Problems, "System is using a short hostname instead of an FQDN") {
+	if !containsString(report.Warnings, "System is using a short hostname instead of an FQDN") {
 		t.Errorf("Failed to detect short hostname")
 	}
 }

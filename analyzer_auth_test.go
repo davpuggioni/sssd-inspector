@@ -32,7 +32,7 @@ func TestAnalyzeNSSwitch_BadOrdering(t *testing.T) {
 	var report ReportData
 	analyzeNSSwitch(dir, &report)
 
-	if !containsString(report.Problems, "'sss' is listed before 'files'/'compat' for 'passwd'") {
+	if !containsString(report.Warnings, "'sss' is listed before 'files'/'compat' for 'passwd'") {
 		t.Errorf("Failed to detect bad nsswitch.conf ordering")
 	}
 }
