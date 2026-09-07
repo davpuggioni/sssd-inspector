@@ -14,6 +14,7 @@
 package main
 
 import (
+	"hash/fnv"
 	"strings"
 	"sync"
 )
@@ -137,18 +138,31 @@ func lowerASCII(b byte) byte {
 // process, so each automaton is compiled exactly once.
 type ACCache struct {
 	mu    sync.Mutex
-	items map[string]*ACMatcher
+	items map[uint64]*ACMatcher
+}
+
+// acFingerprint computes a 64-bit FNV-1a hash over the joined pattern set.
+// Using a fixed-size fingerprint instead of the concatenated pattern string
+// keeps the cache key at constant size regardless of how many patterns are
+// registered (previously the key duplicated the whole pattern set in memory).
+func acFingerprint(patterns []string) uint64 {
+	h := fnv.New64a()
+	for _, p := range patterns {
+		h.Write([]byte(p))
+		h.Write([]byte{0})
+	}
+	return h.Sum64()
 }
 
 // NewACCache creates a new ACCache.
 func NewACCache() *ACCache {
-	return &ACCache{items: make(map[string]*ACMatcher)}
+	return &ACCache{items: make(map[uint64]*ACMatcher)}
 }
 
 // Get returns a compiled automaton for the given pattern set, building it on
 // first access. Thread-safe: multiple goroutines can call Get concurrently.
 func (c *ACCache) Get(patterns []string) *ACMatcher {
-	key := strings.Join(patterns, "\x00")
+	key := acFingerprint(patterns)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -164,7 +178,7 @@ func (c *ACCache) Get(patterns []string) *ACMatcher {
 func (c *ACCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items = make(map[string]*ACMatcher)
+	c.items = make(map[uint64]*ACMatcher)
 }
 
 // globalACCache is the application-wide Aho-Corasick cache.

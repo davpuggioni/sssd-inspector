@@ -806,3 +806,137 @@
     font-weight: 600;
   }
 }
+
+/* ==========================================================================
+   Executive Summary (triage) block
+   ========================================================================== */
+
+.exec-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: stretch;
+  margin: 20px 0;
+}
+
+.exec-score {
+  flex: 0 0 180px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  padding: 15px;
+  text-align: center;
+}
+
+.exec-score .score {
+  font-size: 2.6em;
+  font-weight: bold;
+  line-height: 1.1;
+}
+
+.exec-score .score-label {
+  font-size: 0.8em;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.exec-score .score-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #e9ecef;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.exec-score .score-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.score-fill.success { background: green; }
+.score-fill.warn { background: #d39e00; }
+.score-fill.fail { background: #d9534f; }
+
+.exec-headline {
+  flex: 1 1 300px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  padding: 15px;
+}
+
+.exec-headline .headline {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.exec-counts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exec-count {
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.count-critical { background: #b71c1c; }
+.count-error { background: #d9534f; }
+.count-warning { background: #d39e00; }
+.count-info { background: #17a2b8; }
+
+/* ==========================================================================
+   Configuration findings with provenance drill-down
+   ========================================================================== */
+
+.finding {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-left: 5px solid #888;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.finding.critical { border-left-color: #b71c1c; }
+.finding.error { border-left-color: #d9534f; }
+.finding.warning { border-left-color: #d39e00; }
+
+.finding .finding-meta {
+  font-family: monospace;
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 6px;
+}
+
+/* Dark-mode adjustments */
+.dark-mode .exec-score,
+.dark-mode .exec-headline,
+.dark-mode .finding {
+  background: #2b2b2b;
+  color: #e0e0e0;
+}
+
+.dark-mode .finding .finding-meta { color: #aaa; }
+.dark-mode .exec-score .score-bar { background: #444; }
+
+/* Print/PDF: clean pagination, no shadows */
+@media print {
+  .exec-score,
+  .exec-headline,
+  .finding {
+    box-shadow: none;
+  }
+  h2 { page-break-after: avoid; }
+  .exec-summary,
+  .finding,
+  .log-block,
+  details {
+    page-break-inside: avoid;
+  }
+}

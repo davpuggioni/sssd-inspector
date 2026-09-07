@@ -1,0 +1,24 @@
+# SSSD Inspector - data-driven analysis rules (optional).
+#
+# Copy this file to "rules.yaml" (next to the binary or in the working
+# directory) or drop "*.yaml" files into a "rules/" directory. Every rule
+# can only ADD findings to the report; invalid rules are skipped safely.
+#
+# Fields:
+#   name         required  unique rule identifier (shown in the finding)
+#   severity     required  critical | error | warning
+#   category     optional  grouping category (default: "rule")
+#   files        optional  files to scan (default: sssd.conf, sssd.txt, messages*)
+#   patterns     required  list of patterns to match
+#   pattern_type optional  literal (default) | regex
+#   match        optional  any (default) | all  (all = every pattern on the SAME line)
+#   message      required  human-readable text added to the finding
+
+rules: []
+#  - name: "example-rc4-detector"
+#    severity: "warning"
+#    category: "crypto"
+#    files: ["sssd.conf", "krb5.conf"]
+#    message: "Legacy RC4 enctype reference found; modern AD domains reject it."
+#    patterns:
+#      - "rc4-hmac"

@@ -58,6 +58,33 @@ type SinglePassResult struct {
 	Warnings []string
 }
 
+// prefilterKeywords are the case-insensitive literals used to quickly
+// discard lines that cannot be SSSD-related. They are matched through a
+// dedicated Aho-Corasick automaton so the pre-filter itself is O(n) per
+// line instead of N sequential strings.Contains scans.
+var prefilterKeywords = []string{
+	"sssd", "krb5", "ldap", "keytab", "winbind", "ad ", "gpo", "pam",
+	"nss", "hbac", "ipa", "kdc", "tgt ", "tls", "gssapi", "library",
+	"dlopen", "shared",
+}
+
+// regexMetaTokens identify patterns written with regular-expression syntax
+// rather than as plain literals. Such patterns cannot be matched by the
+// Aho-Corasick automaton (which treats every byte literally) and are routed
+// to RE2 instead. Without this split they previously failed SILENTLY: e.g.
+// "Attribute .* not allowed for user" never matched any log line.
+var regexMetaTokens = []string{`.*`, `\d`, `\s`, `\w`, `+?`, `(?i)`}
+
+// isRegexPattern reports whether a pattern uses regular-expression syntax.
+func isRegexPattern(pattern string) bool {
+	for _, tok := range regexMetaTokens {
+		if strings.Contains(pattern, tok) {
+			return true
+		}
+	}
+	return false
+}
+
 // performSinglePassScan does ONE scan of all log files (sssd.txt, messages, messages.txt)
 // and extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
 // account status, KB article evidence, and timeline events.
@@ -77,16 +104,24 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 		info    patternInfo
 	}
 
-	var allPatterns []combinedPattern
+	// Patterns routed to the Aho-Corasick automaton (plain literals) and
+	// patterns routed to RE2 (true regular expressions).
+	var literalPatterns []combinedPattern
+	var regexPatterns []combinedPattern
+
+	classify := func(pattern string, info patternInfo) {
+		if isRegexPattern(pattern) {
+			regexPatterns = append(regexPatterns, combinedPattern{pattern: pattern, info: info})
+		} else {
+			literalPatterns = append(literalPatterns, combinedPattern{pattern: pattern, info: info})
+		}
+	}
 
 	// Error patterns
 	for pattern, desc := range errorPatterns {
-		allPatterns = append(allPatterns, combinedPattern{
-			pattern: pattern,
-			info: patternInfo{
-				category:    mcError,
-				description: desc,
-			},
+		classify(pattern, patternInfo{
+			category:    mcError,
+			description: desc,
 		})
 	}
 
@@ -113,11 +148,8 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	}
 
 	for _, qp := range quickPatterns {
-		allPatterns = append(allPatterns, combinedPattern{
-			pattern: qp.pattern,
-			info: patternInfo{
-				category: qp.category,
-			},
+		classify(qp.pattern, patternInfo{
+			category: qp.category,
 		})
 	}
 
@@ -125,36 +157,53 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	for i := range kbArticles {
 		article := kbArticles[i]
 		for _, pat := range article.LogPatterns {
-			allPatterns = append(allPatterns, combinedPattern{
-				pattern: pat,
-				info: patternInfo{
-					category:  mcKB,
-					kbArticle: &article,
-				},
+			classify(pat, patternInfo{
+				category:  mcKB,
+				kbArticle: &article,
 			})
 		}
 	}
 
 	// No patterns to match? Return empty results
-	if len(allPatterns) == 0 {
+	if len(literalPatterns) == 0 && len(regexPatterns) == 0 {
 		return result
 	}
 
 	// STEP 2: Build the Aho-Corasick automaton from all literal patterns.
-	// All patterns are literal substrings (previously escaped with
-	// regexp.QuoteMeta and joined into one giant regex alternation); the
-	// trie matches them all in a single O(n) pass per line, avoiding RE2's
-	// alternation-size limits and per-branch exploration cost.
+	// All literal patterns are matched in a single O(n) pass per line,
+	// avoiding RE2's alternation-size limits and per-branch exploration cost.
 	//
 	// The automaton is case-insensitive and cached per process like the
 	// regex cache, so it is compiled exactly once.
-	literalPatterns := make([]string, len(allPatterns))
-	patternInfos := make([]patternInfo, len(allPatterns))
-	for i, cp := range allPatterns {
-		literalPatterns[i] = cp.pattern
+	//
+	// Patterns that use regular-expression syntax (e.g. "Attribute .* not
+	// allowed") cannot be matched by the trie and are evaluated with RE2
+	// on the pre-filtered lines only, so their cost stays negligible.
+	acLiterals := make([]string, len(literalPatterns))
+	patternInfos := make([]patternInfo, len(literalPatterns))
+	for i, cp := range literalPatterns {
+		acLiterals[i] = cp.pattern
 		patternInfos[i] = cp.info
 	}
-	acMatcher := globalACCache.Get(literalPatterns)
+	acMatcher := globalACCache.Get(acLiterals)
+
+	// Pre-compile the regex-routed patterns (cached, case-insensitive like AC).
+	type compiledRegex struct {
+		re   *regexp.Regexp
+		info patternInfo
+	}
+	regexMatchers := make([]compiledRegex, 0, len(regexPatterns))
+	for _, cp := range regexPatterns {
+		regexMatchers = append(regexMatchers, compiledRegex{
+			re:   globalRegexCache.Get("(?i)" + cp.pattern),
+			info: cp.info,
+		})
+	}
+
+	// Pre-filter automaton: matches ALL SSSD-related keywords in one O(n)
+	// pass per line, replacing ~18 sequential strings.Contains scans.
+	prefilterAC := globalACCache.Get(prefilterKeywords)
+	prefilterHits := make([]bool, prefilterAC.Len())
 
 	// Time regex for timeline extraction (also cached)
 	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
@@ -186,28 +235,26 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 		}
 
 		// Quick pre-filter: skip lines that don't contain SSSD-related keywords.
-		// This avoids running the expensive mega-regex on ~90% of syslog lines
-		// that are unrelated (kernel messages, sshd, cron, etc.)
-		// The ToLower call here is a bottleneck but avoids regex on 90% of lines.
+		// This avoids running the expensive pattern matching on ~90% of syslog
+		// lines that are unrelated (kernel messages, sshd, cron, etc.).
+		// The pre-filter itself is an Aho-Corasick automaton, so it costs one
+		// O(n) pass per line regardless of the number of keywords.
 		lowered := strings.ToLower(lineTrimmed)
-		if !strings.Contains(lowered, "sssd") &&
-			!strings.Contains(lowered, "krb5") &&
-			!strings.Contains(lowered, "ldap") &&
-			!strings.Contains(lowered, "keytab") &&
-			!strings.Contains(lowered, "winbind") &&
-			!strings.Contains(lowered, "ad ") &&
-			!strings.Contains(lowered, "gpo") &&
-			!strings.Contains(lowered, "pam") &&
-			!strings.Contains(lowered, "nss") &&
-			!strings.Contains(lowered, "hbac") &&
-			!strings.Contains(lowered, "ipa") &&
-			!strings.Contains(lowered, "kdc") &&
-			!strings.Contains(lowered, "tgt ") &&
-			!strings.Contains(lowered, "tls") &&
-			!strings.Contains(lowered, "gssapi") &&
-			!strings.Contains(lowered, "library") &&
-			!strings.Contains(lowered, "dlopen") &&
-			!strings.Contains(lowered, "shared") {
+		hitCount := 0
+		prefilterAC.Match(lowered, func(idx int) {
+			if !prefilterHits[idx] {
+				prefilterHits[idx] = true
+				hitCount++
+			}
+		})
+		matched := hitCount > 0
+		if matched {
+			// Reset the per-line hit flags for the next line.
+			for idx := range prefilterHits {
+				prefilterHits[idx] = false
+			}
+		}
+		if !matched {
 			return
 		}
 
@@ -216,13 +263,10 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 			return
 		}
 
-		// Single O(n) pass: match ALL literal patterns via the
-		// Aho-Corasick automaton (case-insensitive, overlapping matches
-		// included). `lowered` is already lowercased above, matching the
-		// automaton's folded patterns.
-		acMatcher.Match(lowered, func(idx int) {
-			info := patternInfos[idx]
-
+		// handlePattern centralizes the per-match processing so it can be
+		// invoked both by the Aho-Corasick automaton (literals) and by the
+		// RE2 fallback (regex-routed patterns).
+		handlePattern := func(info patternInfo) {
 			switch info.category {
 			case mcError:
 				// Collect error examples (max 3 per description)
@@ -284,7 +328,22 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 					}
 				}
 			}
+		}
+
+		// Single O(n) pass: match ALL literal patterns via the
+		// Aho-Corasick automaton (case-insensitive, overlapping matches
+		// included). `lowered` is already lowercased above, matching the
+		// automaton's folded patterns.
+		acMatcher.Match(lowered, func(idx int) {
+			handlePattern(patternInfos[idx])
 		})
+
+		// Regex-routed patterns: evaluated only on pre-filtered lines.
+		for _, rm := range regexMatchers {
+			if rm.re.MatchString(lineTrimmed) {
+				handlePattern(rm.info)
+			}
+		}
 	})
 
 	// STEP 4: Build SSSDLogErrors from collected examples
@@ -361,6 +420,7 @@ func analyzeKerberosConfig(dirPath string, report *ReportData) {
 
 	if krb5Content != "" {
 		inDomainRealm := false
+		inLibdefaults := false
 		for _, line := range strings.Split(krb5Content, "\n") {
 			line = strings.TrimSpace(line)
 			if strings.Contains(line, "rc4-hmac") {
@@ -370,6 +430,27 @@ func analyzeKerberosConfig(dirPath string, report *ReportData) {
 				parts := strings.Split(line, "=")
 				if len(parts) >= 2 {
 					report.KerberosRealm = strings.TrimSpace(parts[1])
+				}
+			}
+			// Phase 2: [libdefaults] encryption-type analysis. Restricting the
+			// ticket enctypes to RC4-only (or enabling weak crypto) breaks
+			// authentication against modern AD domains that disable RC4.
+			if strings.HasPrefix(line, "[libdefaults]") {
+				inLibdefaults = true
+				continue
+			} else if strings.HasPrefix(line, "[") {
+				inLibdefaults = false
+			}
+			if inLibdefaults && strings.Contains(line, "=") && !strings.HasPrefix(line, "#") {
+				parts := strings.SplitN(line, "=", 2)
+				key := strings.ToLower(strings.TrimSpace(parts[0]))
+				value := strings.ToLower(strings.TrimSpace(parts[1]))
+				if key == "allow_weak_crypto" && (value == "true" || value == "yes") {
+					report.Warnings = append(report.Warnings, "[SECURITY] 'allow_weak_crypto = true' is set in /etc/krb5.conf. This enables deprecated single-DES/RC4 encryption types; modern AD domains with RC4 disabled will reject tickets.")
+				}
+				if (key == "default_tgs_enctypes" || key == "default_tkt_enctypes") && value != "" &&
+					strings.Contains(value, "rc4") && !strings.Contains(value, "aes") {
+					report.Warnings = append(report.Warnings, fmt.Sprintf("[AD CRYPTO] '%s' in /etc/krb5.conf restricts tickets to RC4 only ('%s'). If the AD domain or the local crypto-policy disables RC4, authentication fails. Prefer 'aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96'.", key, value))
 				}
 			}
 			if strings.HasPrefix(line, "[domain_realm]") {
@@ -392,50 +473,98 @@ func analyzeKerberosConfig(dirPath string, report *ReportData) {
 	}
 }
 
-// matchKBArticlesWithEvidence matches KB articles using pre-collected evidence from single-pass.
-// It only scans for config patterns (not log patterns, which are already done).
+// matchKBArticlesWithEvidence matches KB articles using pre-collected evidence
+// from single-pass (log patterns) plus a SINGLE scan of sssd.conf for ALL
+// config patterns.
+//
+// Previously every article × every config pattern triggered its own regex
+// scan of sssd.conf (O(articles × patterns) file passes). Now all config
+// patterns are compiled into one Aho-Corasick automaton and the file is
+// read once, making the config-matching cost O(config size).
 func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles []TIDArticle, evidence map[string][]string) {
-	configFiles := []string{"sssd.conf"}
 	activeSecModule := report.MACType
 
-	for _, article := range kbArticles {
-		isSELinuxArticle := strings.Contains(strings.ToLower(article.Title), "selinux") ||
-			strings.Contains(strings.ToLower(article.Description), "selinux")
+	// Select the applicable articles (same gating as the legacy matcher).
+	type candidate struct {
+		article    *TIDArticle
+		hasConfig  bool
+		configHits int
+	}
+	candidates := make([]*candidate, 0, len(kbArticles))
+	// Map config pattern -> indices of candidates requiring it.
+	patternOwners := make(map[string][]int)
 
-		for _, pat := range article.LogPatterns {
-			if strings.Contains(strings.ToLower(pat), "selinux") {
-				isSELinuxArticle = true
-				break
+	for i := range kbArticles {
+		article := &kbArticles[i]
+		title := strings.ToLower(article.Title)
+		desc := strings.ToLower(article.Description)
+		isSELinuxArticle := strings.Contains(title, "selinux") || strings.Contains(desc, "selinux")
+		if !isSELinuxArticle {
+			for _, pat := range article.LogPatterns {
+				if strings.Contains(strings.ToLower(pat), "selinux") {
+					isSELinuxArticle = true
+					break
+				}
 			}
 		}
-
 		// Skip SELinux TIDs on AppArmor systems
 		if activeSecModule == "AppArmor" && isSELinuxArticle {
 			continue
 		}
 
 		article.Evidence = evidence[article.TIDID]
-
-		// Check if log pattern matched (evidence exists) or no log patterns required
-		logMatched := len(article.LogPatterns) == 0 || len(article.Evidence) > 0
-
-		// Check config patterns (still need to scan config files)
-		configMatched := len(article.ConfigPatterns) == 0
-		if !configMatched {
-			for _, pattern := range article.ConfigPatterns {
-				matcher := globalRegexCache.Get("(?i)" + regexp.QuoteMeta(pattern))
-				scanFiles(dirPath, configFiles, func(line string) {
-					if matcher.MatchString(line) {
-						configMatched = true
-					}
-				})
-			}
+		// Articles with no patterns at all are not reportable.
+		if len(article.LogPatterns) == 0 && len(article.ConfigPatterns) == 0 {
+			continue
 		}
 
-		if logMatched && configMatched {
-			if len(article.LogPatterns) > 0 || len(article.ConfigPatterns) > 0 {
-				report.MatchedTIDs = append(report.MatchedTIDs, article)
+		candidates = append(candidates, &candidate{article: article, hasConfig: len(article.ConfigPatterns) > 0})
+		idx := len(candidates) - 1
+		for _, pat := range article.ConfigPatterns {
+			patternOwners[strings.ToLower(pat)] = append(patternOwners[strings.ToLower(pat)], idx)
+		}
+	}
+
+	// Gather all unique config patterns and match them with ONE automaton
+	// over ONE scan of sssd.conf.
+	if len(patternOwners) > 0 {
+		allPatterns := make([]string, 0, len(patternOwners))
+		for pat := range patternOwners {
+			allPatterns = append(allPatterns, pat)
+		}
+		ac := globalACCache.Get(allPatterns)
+		hits := make([]bool, len(allPatterns))
+		patternIdx := make(map[string]int, len(allPatterns))
+		for i, pat := range allPatterns {
+			patternIdx[pat] = i
+		}
+
+		markHit := func(canonicalIdx int) {
+			hits[canonicalIdx] = true
+		}
+
+		scanFiles(dirPath, []string{"sssd.conf"}, func(line string) {
+			ac.Match(strings.ToLower(line), markHit)
+		})
+
+		for pat, idx := range patternIdx {
+			if !hits[idx] {
+				continue
 			}
+			for _, ci := range patternOwners[pat] {
+				candidates[ci].configHits++
+			}
+		}
+	}
+
+	// Assemble results: an article matches if its log patterns produced
+	// evidence (or it has none) AND at least one of its config patterns
+	// matched (or it has none) — preserving the legacy OR semantics.
+	for _, c := range candidates {
+		logMatched := len(c.article.LogPatterns) == 0 || len(c.article.Evidence) > 0
+		configMatched := !c.hasConfig || c.configHits > 0
+		if logMatched && configMatched {
+			report.MatchedTIDs = append(report.MatchedTIDs, *c.article)
 		}
 	}
 }
@@ -472,6 +601,9 @@ func loadKBArticles(dirPath string) []TIDArticle {
 		if err := json.Unmarshal(content, &article); err != nil {
 			continue
 		}
+		// Bridge both supported schemas (curated + scraper) into a
+		// uniform TIDArticle.
+		normalizeTIDArticle(&article)
 		kbArticles = append(kbArticles, article)
 	}
 

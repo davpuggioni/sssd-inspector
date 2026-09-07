@@ -31,6 +31,8 @@ func main() {
 	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
 	txtReport := flag.Bool(constants.FlagTXT, false, constants.DescTXT)
 	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
+	// JSON report: full machine-readable export (summary + findings + evidence).
+	jsonReport := flag.Bool("json", false, "Generate a JSON report (structured, machine-readable)")
 	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
 	flag.Parse()
 
@@ -41,7 +43,7 @@ func main() {
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *cliPath != "" {
-		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize); err != nil {
+		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize, *jsonReport); err != nil {
 			log.Fatalf("CLI execution failed: %v", err)
 		}
 		os.Exit(0) // Exit immediately. Do not load the GUI.
@@ -55,6 +57,7 @@ func main() {
 		isAnonymize := *anonymize
 		isTxt := *txtReport
 		isHtml := *htmlReport
+		isJSON := *jsonReport
 		hasExplicitFormat := false
 
 		// Manually scan remaining arguments for all our flags
@@ -70,6 +73,10 @@ func main() {
 				isHtml = true
 				hasExplicitFormat = true
 			}
+			if strings.Contains(arg, "-json") || strings.Contains(arg, "--json") {
+				isJSON = true
+				hasExplicitFormat = true
+			}
 		}
 
 		// If they just passed the path and NO format flags, default to both to match previous behavior
@@ -80,7 +87,7 @@ func main() {
 			}
 		}
 
-		if err := runCLI(path, isTxt, isHtml, isAnonymize); err != nil {
+		if err := runCLI(path, isTxt, isHtml, isAnonymize, isJSON); err != nil {
 			log.Fatalf("CLI execution failed: %v", err)
 		}
 		os.Exit(0)

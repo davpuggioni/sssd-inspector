@@ -6,6 +6,26 @@
 
 ## ✨ Features
 
+### Executive Summary & Scoring (Phase 3+)
+- **Health Score (0-100)** — weighted penalty model over all findings (critical ×25, error ×12, problem ×4, warning ×2, log-error ×3)
+- **Dominant root-cause inference** — the most weighted finding category drives the triage headline
+- **Temporal Clusters** — sliding-window (300 s) bursts of the same diagnostic event = retry loops, timeouts, offline flapping
+- **KB Suggestions (TF-IDF)** — log lines that match no known pattern are fuzzy-correlated (cosine similarity) with the Knowledge Base corpus
+- **JSON export** — full machine-readable report (summary + provenance-aware findings + clusters + suggestions)
+
+### Advanced AD/Kerberos/DNS Checks (Phase 2)
+- krb5.conf `allow_weak_crypto` and RC4-only enctypes analysis
+- `ldap_id_use_start_tls` incompatibility with the AD provider
+- `ad_gpo_access_control` value validation
+- `ad_site` + `ad_enable_dns_sites = false` contradiction
+- `ad_machine_account_password_renewal_opts` format validation
+- `ad_hostname` vs system hostname consistency
+- Loopback-only DNS resolver detection
+- Missing `[domain/]` sections, missing `nss`/`pam` responders, overlapping `ldap_idmap` ranges
+
+### Data-Driven Rules (Phase 5)
+- Optional `rules.yaml` / `rules/*.yaml`: add site-specific detectors **without recompiling** (see `rules/example.yaml`)
+
 ### Core Analysis Engine
 - **Single-Pass Log Scanning** — Analyzes all log files (sssd.txt, messages) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously — up to **10× faster** than traditional multi-scan approaches
 - **350+ Pattern Matching** — Comprehensive database of SSSD error patterns mapped to human-readable descriptions, covering:

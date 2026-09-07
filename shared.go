@@ -33,7 +33,7 @@ func init() {
 // runCLI executes the application in command-line mode
 // It handles both directory and archive inputs, performs analysis, and generates reports.
 // Returns an error if any step of the CLI execution fails.
-func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
+func runCLI(path string, genTxt bool, genHtml bool, anonymize bool, genJSON bool) error {
 	fmt.Printf("Running in CLI mode analyzing: %s\n", path)
 	if anonymize {
 		fmt.Println("[!] Anonymization mode enabled. PII will be redacted.")
@@ -85,6 +85,18 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool) error {
 		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
 		writeHTMLReportFile(report, htmlReportFile)
 		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
+	}
+
+	if genJSON {
+		jsonReportFile := baseName + constants.DefaultOutputSuffix + ".json"
+		data, err := buildJSONReport(report)
+		if err != nil {
+			return fmt.Errorf("error serializing JSON report: %w", err)
+		}
+		if err := os.WriteFile(jsonReportFile, data, 0644); err != nil {
+			return fmt.Errorf("error writing JSON report: %w", err)
+		}
+		fmt.Printf("JSON report saved to: %s\n", jsonReportFile)
 	}
 
 	return nil

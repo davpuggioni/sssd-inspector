@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -18,6 +19,14 @@ func buildTextReport(report ReportData) string {
 	sb.WriteString(fmt.Sprintf(" Generated: %s\n", report.Timestamp))
 	if report.SupportCaseID != "" {
 		sb.WriteString(fmt.Sprintf(" Support Case (SR#): %s\n", report.SupportCaseID))
+	}
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	sb.WriteString("                  EXECUTIVE SUMMARY (TRIAGE)\n")
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	for _, line := range summaryLines(report) {
+		sb.WriteString(line + "\n")
 	}
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
 
@@ -134,11 +143,46 @@ func buildTextReport(report ReportData) string {
 		}
 	}
 
+	if len(report.TemporalClusters) > 0 {
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		sb.WriteString("        TEMPORAL CLUSTERS (RETRY LOOPS / FLAPPING)\n")
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		for _, c := range report.TemporalClusters {
+			sb.WriteString(fmt.Sprintf(" [~] %s\n", c.Description))
+			sb.WriteString(fmt.Sprintf("     %d occurrences between %s and %s\n", c.EventCount, c.WindowStart, c.WindowEnd))
+			if c.SampleRawLog != "" {
+				sb.WriteString(fmt.Sprintf("     Sample: %s\n", c.SampleRawLog))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(report.KBSuggestions) > 0 {
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		sb.WriteString("        KB SUGGESTIONS (FUZZY TF-IDF MATCH)\n")
+		sb.WriteString(strings.Repeat("=", 60) + "\n")
+		for _, s := range report.KBSuggestions {
+			sb.WriteString(fmt.Sprintf(" [?] %s: %s (similarity %.0f%%)\n", s.TIDID, s.Title, s.Score*100))
+			sb.WriteString(fmt.Sprintf("      Link: %s\n", s.URL))
+			if s.SampleLine != "" {
+				sb.WriteString(fmt.Sprintf("      Matched log line: %s\n", s.SampleLine))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 
 	return sb.String()
+}
+
+// buildJSONReport serializes the full structured report (including the
+// executive summary and the provenance-aware ConfigFindings) as pretty-printed
+// JSON. This is the machine-readable export for tooling and case management.
+func buildJSONReport(report ReportData) ([]byte, error) {
+	return json.MarshalIndent(report, "", "  ")
 }
 
 func writeHTMLReportFile(report ReportData, filename string) {
@@ -177,12 +221,66 @@ func writeHTMLReportFile(report ReportData, filename string) {
 	
 	.pkg-list { margin: 0; padding-left: 20px; font-family: monospace; font-size: 0.9em; }
 	.footer { margin-top: 40px; text-align: center; font-size: 0.85em; color: #777; border-top: 1px solid #ddd; padding-top: 10px; }
+
+	/* Executive summary (triage) block */
+	.exec-summary { display: flex; flex-wrap: wrap; gap: 15px; align-items: stretch; margin: 20px 0; max-width: 900px; }
+	.exec-score { flex: 0 0 180px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 15px; text-align: center; }
+	.exec-score .score { font-size: 2.6em; font-weight: bold; line-height: 1.1; }
+	.exec-score .score-label { font-size: 0.8em; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+	.exec-score .score-bar { height: 8px; border-radius: 4px; background: #e9ecef; margin-top: 8px; overflow: hidden; }
+	.exec-score .score-fill { height: 100%; border-radius: 4px; }
+	.score-fill.success { background: green; }
+	.score-fill.warn { background: #d39e00; }
+	.score-fill.fail { background: #d9534f; }
+	.exec-headline { flex: 1 1 300px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 15px; }
+	.exec-headline .headline { font-weight: bold; margin-bottom: 10px; }
+	.exec-counts { display: flex; gap: 10px; flex-wrap: wrap; }
+	.exec-count { padding: 6px 12px; border-radius: 6px; color: #fff; font-weight: bold; font-size: 0.9em; }
+	.count-critical { background: #b71c1c; }
+	.count-error { background: #d9534f; }
+	.count-warning { background: #d39e00; }
+	.count-info { background: #17a2b8; }
+
+	/* Findings with provenance drill-down */
+	.finding { margin-bottom: 12px; padding: 10px 12px; border-left: 5px solid #888; background: #fff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+	.finding.critical { border-left-color: #b71c1c; }
+	.finding.error { border-left-color: #d9534f; }
+	.finding.warning { border-left-color: #d39e00; }
+	.finding .finding-meta { font-family: monospace; font-size: 0.8em; color: #666; margin-top: 6px; }
+
+	/* Print/PDF: clean pagination and no shadows */
+	@media print {
+		body { margin: 10mm; background: #fff; }
+		.info-table, .exec-score, .exec-headline, .finding { box-shadow: none; }
+		h1 { font-size: 1.5em; }
+		h2 { page-break-after: avoid; }
+		table, .exec-summary, .finding, .log-block, details { page-break-inside: avoid; }
+		.log-block { white-space: pre-wrap; }
+		a { text-decoration: none; color: inherit; }
+	}
 </style>
 </head>
 <body>
 	<h1>Supportconfig SSSD Analysis Report</h1>
 	<div class="timestamp">Generated on: {{.Timestamp}}</div>
-	
+
+	<div class="exec-summary">
+		<div class="exec-score">
+			<div class="score-label">Health Score</div>
+			<div class="score {{healthScoreClass .Summary.HealthScore}}">{{.Summary.HealthScore}}</div>
+			<div class="score-bar"><div class="score-fill {{healthScoreClass .Summary.HealthScore}}" style="width: {{.Summary.HealthScore}}%;"></div></div>
+		</div>
+		<div class="exec-headline">
+			<div class="headline">{{.Summary.Headline}}</div>
+			<div class="exec-counts">
+				<span class="exec-count count-critical">Critical: {{.Summary.CriticalCount}}</span>
+				<span class="exec-count count-error">Errors: {{.Summary.ErrorCount}}</span>
+				<span class="exec-count count-warning">Warnings: {{.Summary.WarningCount}}</span>
+				<span class="exec-count count-info">Log Patterns: {{.Summary.LogErrorCount}}</span>
+			</div>
+		</div>
+	</div>
+
 	<table class="info-table">
 		<tr><td colspan="2" class="section-title">System & Virtualization Information</td></tr>
 		<tr><th>OS Release</th><td>{{.SLESRlease}}</td></tr>
@@ -247,6 +345,15 @@ func writeHTMLReportFile(report ReportData, filename string) {
 	</table>
 
 	<h2>Actionable Problems Found</h2>
+	{{if .ConfigFindings}}
+		<h2 class="warn-header">Configuration Findings (with provenance)</h2>
+		{{range .ConfigFindings}}
+			<div class="finding {{sevClass .Severity}}">
+				<div class="headline">{{.Message}}</div>
+				<div class="finding-meta">Source: {{.SourcePath}} | Key: {{.SourceKey}} | Line: {{if gt .SourceLine 0}}{{.SourceLine}}{{else}}n/a{{end}}{{if .Evidence}}<br/>Evidence: <code>{{.Evidence}}</code>{{end}}</div>
+			</div>
+		{{end}}
+	{{end}}
 	{{if .Problems}}
 		<ul class="problem-list">
 		{{range .Problems}}
@@ -302,13 +409,53 @@ func writeHTMLReportFile(report ReportData, filename string) {
 </div>
 {{end}}
 
+	{{if .TemporalClusters}}
+	<h2 class="warn-header">Temporal Clusters (Retry Loops / Flapping)</h2>
+	<div style="background-color: #fff8e1; border-left: 5px solid #d39e00; padding: 15px; margin-bottom: 20px;">
+		{{range .TemporalClusters}}
+		<div style="margin-bottom: 12px;">
+			<strong>{{.Description}}</strong>
+			<div style="margin-top: 4px; font-size: 0.95em;">{{.EventCount}} occurrences between {{.WindowStart}} and {{.WindowEnd}}</div>
+			{{if .SampleRawLog}}<div class="log-block" style="margin-top: 6px;">{{.SampleRawLog}}</div>{{end}}
+		</div>
+		{{end}}
+	</div>
+	{{end}}
+
+	{{if .KBSuggestions}}
+	<h2 class="kb-header">KB Suggestions (Fuzzy Match)</h2>
+	<div style="background-color: #e3f2fd; border-left: 5px solid #1565c0; padding: 15px; margin-bottom: 20px;">
+		<p style="margin-top:0; font-size:0.9em; color:#555;">Log lines that no known pattern matched, correlated with similar Knowledge Base articles (TF-IDF similarity):</p>
+		{{range .KBSuggestions}}
+		<div style="margin-bottom: 12px;">
+			<strong><a href="{{.URL}}" target="_blank" style="color: #1565c0;">[{{.TIDID}}] {{.Title}}</a></strong>
+			<span class="warn"> (similarity {{printf "%.0f" (mult .Score 100)}}%)</span>
+			{{if .SampleLine}}<div class="log-block" style="margin-top: 6px;">{{.SampleLine}}</div>{{end}}
+		</div>
+		{{end}}
+	</div>
+	{{end}}
+
 	<div class="footer">
 		sssd-inspector v{{.AppVersion}} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
 	</div>
 </body>
 </html>
 `
-	t, err := template.New("report").Parse(tpl)
+	t, err := template.New("report").Funcs(template.FuncMap{
+		"healthScoreClass": healthScoreClass,
+		"mult":             func(a, b float64) float64 { return a * b },
+		"sevClass": func(s Severity) string {
+			switch s {
+			case SevCritical:
+				return "critical"
+			case SevError:
+				return "error"
+			default:
+				return "warning"
+			}
+		},
+	}).Parse(tpl)
 	if err != nil {
 		log.Printf("Template parsing error: %v", err)
 		return

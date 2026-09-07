@@ -10,6 +10,66 @@ import (
 	"strings"
 )
 
+// normalizeTIDArticle bridges the two supported TID JSON schemas so the rest
+// of the pipeline sees a uniform struct:
+//
+//  1. Curated format (kb_articles/TID-*.json): tid_id + conditions with
+//     hand-crafted log/config patterns.
+//  2. Scraper format (kbscraper TIDs/*.json): kb_id + full article text
+//     (plain_text, situation, resolution, cause, ...), no patterns.
+//
+// For scraped articles it derives TIDID ("TID-<kb_id>") and a Description
+// for rendering (situation → cause → truncated plain_text). Matching
+// patterns are intentionally left empty for scraped articles.
+func normalizeTIDArticle(article *TIDArticle) {
+	// Promote nested "conditions" patterns (alternate curated schema) into
+	// the top-level fields when they are absent.
+	if article.Conditions != nil {
+		if len(article.LogPatterns) == 0 && len(article.Conditions.LogPatterns) > 0 {
+			article.LogPatterns = article.Conditions.LogPatterns
+		}
+		if len(article.ConfigPatterns) == 0 && len(article.Conditions.ConfigPatterns) > 0 {
+			article.ConfigPatterns = article.Conditions.ConfigPatterns
+		}
+	}
+
+	if article.TIDID == "" && article.KbID != "" {
+		article.TIDID = "TID-" + strings.TrimSpace(article.KbID)
+	}
+
+	if article.Description == "" {
+		switch {
+		case strings.TrimSpace(article.Situation) != "":
+			article.Description = firstParagraph(article.Situation)
+		case strings.TrimSpace(article.Cause) != "":
+			article.Description = firstParagraph(article.Cause)
+		case strings.TrimSpace(article.PlainText) != "":
+			article.Description = truncateText(firstParagraph(article.PlainText), 300)
+		}
+	}
+}
+
+// firstParagraph returns the first non-empty paragraph (up to a blank line)
+// of s, with surrounding whitespace trimmed.
+func firstParagraph(s string) string {
+	for _, para := range strings.Split(s, "\n\n") {
+		if p := strings.TrimSpace(para); p != "" {
+			// Collapse newlines inside the paragraph for readability.
+			return strings.Join(strings.Fields(p), " ")
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+// truncateText shortens s to at most max runes, appending an ellipsis.
+func truncateText(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max]) + "…"
+}
+
 // matchKBArticles loads JSON files from kb_articles/ and correlates them with supportconfig data via streaming
 func matchKBArticles(dirPath string, report *ReportData) {
 	exePath, err := os.Executable()
@@ -48,6 +108,7 @@ func matchKBArticles(dirPath string, report *ReportData) {
 			log.Printf("Warning: Invalid JSON in KB article %s: %v", file, err)
 			continue
 		}
+		normalizeTIDArticle(&article)
 
 		isSELinuxArticle := strings.Contains(strings.ToLower(article.Title), "selinux") ||
 			strings.Contains(strings.ToLower(article.Description), "selinux")

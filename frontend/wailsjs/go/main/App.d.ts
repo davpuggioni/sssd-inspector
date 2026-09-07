@@ -6,6 +6,8 @@ export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
 
 export function OpenFileBrowser():Promise<string>;
 
+export function SaveJSON(arg1:main.ReportData):Promise<string>;
+
 export function SavePDF(arg1:string):Promise<string>;
 
 export function SaveTXT(arg1:main.ReportData):Promise<string>;

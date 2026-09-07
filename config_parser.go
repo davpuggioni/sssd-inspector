@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -308,5 +309,62 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 	if v, line, ok := firstOption(sec, "krb5_validate"); ok && strings.EqualFold(v, "false") {
 		msg := "[SECURITY RISK] 'krb5_validate = false' is set. This disables KDC spoofing protection. If used to bypass the AD RC4 bug, remove this and fix the AD operatingSystemVersion attribute or update local crypto policies instead."
 		addConfigFinding(report, SevError, "krb5_validate", msg, "sssd.conf", prefix+"krb5_validate", line, "krb5_validate = "+v)
+	}
+
+	validateADAdvancedOptions(sec, report, prefix)
+}
+
+// validateADAdvancedOptions implements the Phase 2 AD-specific checks that
+// require the section context (GPO, site discovery, machine-account password
+// renewal, StartTLS incompatibility, ad_hostname consistency).
+func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix string) {
+	// ldap_id_use_start_tls is incompatible with the ad provider, which
+	// always uses SASL/GSSAPI over its own connection.
+	if v, line, ok := firstOption(sec, "ldap_id_use_start_tls"); ok && strings.EqualFold(v, "true") {
+		msg := "CONFIGURATION ERROR: 'ldap_id_use_start_tls = true' is set on an 'ad' provider. The AD provider uses SASL/GSSAPI and does not honour StartTLS; this option is ignored at best and rejected at worst."
+		addConfigFinding(report, SevError, "tls", msg, "sssd.conf", prefix+"ldap_id_use_start_tls", line, "ldap_id_use_start_tls = "+v)
+	}
+
+	// ad_gpo_access_control accepts only 'permissive' or 'enforcing'.
+	if v, line, ok := firstOption(sec, "ad_gpo_access_control"); ok && v != "" {
+		lv := strings.ToLower(v)
+		if lv != "permissive" && lv != "enforcing" {
+			msg := fmt.Sprintf("CONFIGURATION ERROR: 'ad_gpo_access_control = %s' is invalid. Allowed values are 'permissive' or 'enforcing'. SSSD may refuse to start or fall back to permissive mode.", v)
+			addConfigFinding(report, SevError, "gpo", msg, "sssd.conf", prefix+"ad_gpo_access_control", line, "ad_gpo_access_control = "+v)
+		}
+	}
+
+	// ad_site only takes effect when DNS site discovery is enabled.
+	if _, _, siteOK := firstOption(sec, "ad_site"); siteOK {
+		if v, line, ok := firstOption(sec, "ad_enable_dns_sites"); ok && strings.EqualFold(v, "false") {
+			msg := "CONFIGURATION WARNING: 'ad_site' is configured together with 'ad_enable_dns_sites = false'. The static site is still used, but automatic DC failover across sites is disabled; on site outage the client cannot locate another DC."
+			addConfigFinding(report, SevWarning, "ad_site", msg, "sssd.conf", prefix+"ad_enable_dns_sites", line, "ad_enable_dns_sites = "+v)
+		}
+	}
+
+	// ad_machine_account_password_renewal_opts must be 'N:M' (days, hours).
+	if v, line, ok := firstOption(sec, "ad_machine_account_password_renewal_opts"); ok && v != "" {
+		parts := strings.Split(v, ":")
+		valid := len(parts) == 2
+		if valid {
+			for _, p := range parts {
+				if _, err := strconv.Atoi(strings.TrimSpace(p)); err != nil {
+					valid = false
+					break
+				}
+			}
+		}
+		if !valid {
+			msg := fmt.Sprintf("CONFIGURATION WARNING: 'ad_machine_account_password_renewal_opts = %s' is malformed. The expected format is '<renewal days>:<renewal hours>' (e.g. '30:4'); SSSD falls back to the defaults.", v)
+			addConfigFinding(report, SevWarning, "machine_account", msg, "sssd.conf", prefix+"ad_machine_account_password_renewal_opts", line, "ad_machine_account_password_renewal_opts = "+v)
+		}
+	}
+
+	// ad_hostname should match the host FQDN recorded in the supportconfig.
+	if v, line, ok := firstOption(sec, "ad_hostname"); ok && v != "" && report.Hostname != "" {
+		if !strings.EqualFold(v, report.Hostname) {
+			msg := fmt.Sprintf("CONFIGURATION WARNING: 'ad_hostname = %s' does not match the system hostname '%s'. SPNs and the machine account keytab are tied to the real hostname; a mismatch causes Kerberos 'Server not found in Kerberos database' errors.", v, report.Hostname)
+			addConfigFinding(report, SevWarning, "ad_hostname", msg, "sssd.conf", prefix+"ad_hostname", line, "ad_hostname = "+v)
+		}
 	}
 }

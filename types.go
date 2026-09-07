@@ -17,13 +17,13 @@ const (
 // sssd.conf/AD configuration validator and the cross-source correlation engine.
 // It carries the offending source line so the UI can render drill-down evidence.
 type ConfigFinding struct {
-	Severity   Severity `json:"severity"`     // SevWarning / SevError / SevCritical
-	Category   string   `json:"category"`     // e.g. "ad_server", "krb5_realm", "dns", "join"
-	Message    string   `json:"message"`      // human-readable, actionable text
-	SourcePath string   `json:"source_path"`  // e.g. "sssd.conf", "krb5.conf", "resolv.conf"
-	SourceKey  string   `json:"source_key"`   // logical key, e.g. "domain/EXAMPLE.COM.ad_server"
-	SourceLine int      `json:"source_line"`  // 1-based line number in SourcePath (0 = unknown)
-	Evidence   string   `json:"evidence"`     // the offending config line text (PII-scrubbable)
+	Severity   Severity `json:"severity"`    // SevWarning / SevError / SevCritical
+	Category   string   `json:"category"`    // e.g. "ad_server", "krb5_realm", "dns", "join"
+	Message    string   `json:"message"`     // human-readable, actionable text
+	SourcePath string   `json:"source_path"` // e.g. "sssd.conf", "krb5.conf", "resolv.conf"
+	SourceKey  string   `json:"source_key"`  // logical key, e.g. "domain/EXAMPLE.COM.ad_server"
+	SourceLine int      `json:"source_line"` // 1-based line number in SourcePath (0 = unknown)
+	Evidence   string   `json:"evidence"`    // the offending config line text (PII-scrubbable)
 }
 
 // SSSDLogError holds the human-readable description and samples of the actual log lines
@@ -41,6 +41,47 @@ type TIDArticle struct {
 	LogPatterns    []string `json:"log_patterns"`
 	ConfigPatterns []string `json:"config_patterns"`
 	Evidence       []string `json:"-"` // Log lines that triggered the match
+
+	// Fields from the kbscraper JSON schema (raw scraped SUSE KB articles).
+	// These are ingestion-only: they carry the article content but do not
+	// participate in pattern matching.
+	KbID           string `json:"kb_id"`
+	PlainText      string `json:"plain_text"`
+	Situation      string `json:"situation"`
+	Resolution     string `json:"resolution"`
+	Cause          string `json:"cause"`
+	Environment    string `json:"environment"`
+	Created        string `json:"created"`
+	Changed        string `json:"changed"`
+	AdditionalInfo string `json:"additional_information"`
+
+	// Conditions is the alternate (nested) curated schema: patterns live
+	// under "conditions" instead of at the top level. normalizeTIDArticle
+	// promotes them into LogPatterns/ConfigPatterns.
+	Conditions *TIDConditions `json:"conditions,omitempty"`
+}
+
+// TIDConditions models the nested "conditions" object of the alternate
+// curated KB schema.
+type TIDConditions struct {
+	LogPatterns    []string `json:"log_patterns"`
+	ConfigPatterns []string `json:"config_patterns"`
+	MinSSSDVersion string   `json:"min_sssd_version"`
+}
+
+// ExecutiveSummary is the triage block rendered at the top of every report:
+// an overall health score, the finding counts per severity, and the inferred
+// dominant root-cause category with a one-line headline.
+type ExecutiveSummary struct {
+	HealthScore     int    `json:"health_score"`    // 0-100 (100 = clean)
+	CriticalCount   int    `json:"critical_count"`  // SevCritical config findings
+	ErrorCount      int    `json:"error_count"`     // SevError config findings
+	WarningCount    int    `json:"warning_count"`   // SevWarning findings + warnings
+	ProblemCount    int    `json:"problem_count"`   // actionable problem strings
+	LogErrorCount   int    `json:"log_error_count"` // distinct log error patterns found
+	TopCategory     string `json:"top_category"`    // dominant finding category, e.g. "krb5_realm"
+	TopCategoryHits int    `json:"top_category_hits"`
+	Headline        string `json:"headline"` // one-line triage statement
 }
 
 // ReportData holds the results of our analysis
@@ -51,6 +92,9 @@ type ReportData struct {
 	KernelVersion string `json:"kernel_version"`
 	SLESRlease    string `json:"sles_release"`
 	SCCStatus     string `json:"scc_status"`
+
+	// Executive summary computed after all analysis phases (see analysis_scoring.go)
+	Summary ExecutiveSummary `json:"summary"`
 
 	// Virtualization & Hardware
 	HardwareManufacturer string `json:"hardware_manufacturer"`
@@ -83,8 +127,8 @@ type ReportData struct {
 	ADProviderMode bool   `json:"ad_provider_mode"`
 	EnumerateIssue bool   `json:"enumerate_issue"`
 	UseFQDNSet     bool   `json:"use_fqdn_set"`
-	AdDomain       string `json:"ad_domain"`   // canonical (lowercased) AD domain from sssd.conf ad_domain
-	Hostname       string `json:"hostname"`    // hostname/FQDN captured from basic-environment.txt
+	AdDomain       string `json:"ad_domain"` // canonical (lowercased) AD domain from sssd.conf ad_domain
+	Hostname       string `json:"hostname"`  // hostname/FQDN captured from basic-environment.txt
 
 	// Structured, provenance-aware configuration findings (AD validator + correlation)
 	ConfigFindings []ConfigFinding `json:"config_findings"`
@@ -98,6 +142,10 @@ type ReportData struct {
 	Warnings    []string        `json:"warnings"`
 	MatchedTIDs []TIDArticle    `json:"matched_tids"`
 	Timeline    []TimelineEvent `json:"timeline"`
+
+	// Phase 3: advanced correlation output
+	TemporalClusters []TemporalCluster `json:"temporal_clusters,omitempty"`
+	KBSuggestions    []KBSuggestion    `json:"kb_suggestions,omitempty"`
 }
 
 // TimelineEvent represents a single chronological log occurrence
@@ -105,4 +153,27 @@ type TimelineEvent struct {
 	Timestamp string `json:"timestamp"`
 	Message   string `json:"message"`
 	RawLog    string `json:"raw_log"`
+}
+
+// TemporalCluster is a burst of the same diagnostic event inside a bounded
+// time window (sliding-window co-occurrence). Repeated occurrences of the
+// same error within seconds are the fingerprint of retry loops, timeouts and
+// fail-over flapping; a single occurrence is usually noise.
+type TemporalCluster struct {
+	Description  string `json:"description"`  // the event description
+	EventCount   int    `json:"event_count"`  // occurrences inside the window
+	WindowStart  string `json:"window_start"` // normalized first occurrence
+	WindowEnd    string `json:"window_end"`   // normalized last occurrence
+	SampleRawLog string `json:"sample_raw_log"`
+}
+
+// KBSuggestion is a fuzzy (TF-IDF cosine similarity) match between an
+// unmatched log line and a Knowledge Base article. Suggestions are ranked
+// and only produced above a confidence threshold.
+type KBSuggestion struct {
+	TIDID      string  `json:"tid_id"`
+	Title      string  `json:"title"`
+	URL        string  `json:"url"`
+	Score      float64 `json:"score"`  // 0..1 cosine similarity
+	SampleLine string  `json:"sample_line"`
 }

@@ -7,12 +7,12 @@ import "time"
 const (
 	// App metadata
 	AppName    = "SSSD Inspector"
-	AppVersion = "0.2.0"
-	
+	AppVersion = "0.2.1"
+
 	// Window dimensions
 	DefaultWindowWidth  = 1024
 	DefaultWindowHeight = 768
-	
+
 	// Background color RGBA
 	BackgroundR = 244
 	BackgroundG = 244
@@ -23,19 +23,19 @@ const (
 // File processing constants
 const (
 	// Size limits
-	DefaultMaxFileSize    = "100MB"
-	DefaultMaxLineLength  = "1MB"
-	DefaultBufferSize     = "64KB"
-	DefaultChunkSize      = "32KB"
-	
+	DefaultMaxFileSize   = "100MB"
+	DefaultMaxLineLength = "1MB"
+	DefaultBufferSize    = "64KB"
+	DefaultChunkSize     = "32KB"
+
 	// Archive formats
-	TXZFormat  = "txz"
+	TXZFormat   = "txz"
 	TarXZFormat = "tar.xz"
 	TarGZFormat = "tar.gz"
-	
+
 	// Analysis timeout
 	DefaultTimeout = "30m"
-	
+
 	// Progress steps
 	DefaultProgressSteps = 10
 )
@@ -53,11 +53,11 @@ const (
 	TXTFormat  = "txt"
 	HTMLFormat = "html"
 	PDFFormat  = "pdf"
-	
+
 	// Output settings
 	DefaultOutputSuffix = "_report"
-	DefaultOutputDir   = "./reports"
-	
+	DefaultOutputDir    = "./reports"
+
 	// Template paths
 	DefaultHTMLTemplate = "./templates/report.html"
 	DefaultTXTTemplate  = "./templates/report.txt"
@@ -66,19 +66,19 @@ const (
 // CLI constants
 const (
 	// CLI flags
-	FlagVersion    = "v"
-	FlagAnalyze    = "analyze"
-	FlagTXT        = "txt"
-	FlagHTML       = "html"
-	FlagAnonymize  = "anonymize"
-	
+	FlagVersion   = "v"
+	FlagAnalyze   = "analyze"
+	FlagTXT       = "txt"
+	FlagHTML      = "html"
+	FlagAnonymize = "anonymize"
+
 	// Flag descriptions
 	DescVersion   = "Print program version"
 	DescAnalyze   = "Path to the supportconfig directory or log file"
 	DescTXT       = "Generate a TXT report"
 	DescHTML      = "Generate an HTML report"
 	DescAnonymize = "Redact PII (IPs, Domains) from the report"
-	
+
 	// Default behavior
 	DefaultGenerateBothFormats = true
 )
@@ -86,19 +86,19 @@ const (
 // Anonymization constants
 const (
 	// PII patterns
-	IPv4Pattern   = `\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`
-	IPv6Pattern   = `(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`
-	MACPattern    = `(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`
-	EmailPattern  = `(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`
-	
+	IPv4Pattern  = `\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`
+	IPv6Pattern  = `(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`
+	MACPattern   = `(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`
+	EmailPattern = `(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`
+
 	// Replacement strings
-	IPv4Replacement    = "XXX.XXX.XXX.XXX"
-	IPv6Replacement    = "XXXX:XXXX::XXXX"
-	MACReplacement     = "XX:XX:XX:XX:XX:XX"
-	EmailReplacement   = "[REDACTED_USER]@example.com"
-	DomainReplacement  = "example.com"
+	IPv4Replacement     = "XXX.XXX.XXX.XXX"
+	IPv6Replacement     = "XXXX:XXXX::XXXX"
+	MACReplacement      = "XX:XX:XX:XX:XX:XX"
+	EmailReplacement    = "[REDACTED_USER]@example.com"
+	DomainReplacement   = "example.com"
 	HardwareReplacement = "[REDACTED]"
-	
+
 	// Anonymization markers
 	RedactedMarker = "[REDACTED]"
 )
@@ -106,37 +106,37 @@ const (
 // File patterns constants
 const (
 	// Relevant files for analysis
-	NSSwitchConf      = "nsswitch.conf"
-	HostsFile         = "hosts"
-	NSCDConf          = "nscd.conf"
-	SSSDConf          = "sssd.conf"
-	SystemdTXT        = "systemd.txt"
-	BasicEnvTXT       = "basic-environment.txt"
-	UpdatesTXT        = "updates.txt"
-	Y2LogTXT          = "y2log.txt"
-	SSSDTXT           = "sssd.txt"
-	RPMTXT            = "rpm.txt"
-	ETCTXT            = "etc.txt"
-	NetworkTXT        = "network.txt"
-	NTPTXT            = "ntp.txt"
-	PAMTXT            = "pam.txt"
-	FSDiskIO_TXT      = "fs-diskio.txt"
-	StorageTXT        = "storage.txt"
+	NSSwitchConf        = "nsswitch.conf"
+	HostsFile           = "hosts"
+	NSCDConf            = "nscd.conf"
+	SSSDConf            = "sssd.conf"
+	SystemdTXT          = "systemd.txt"
+	BasicEnvTXT         = "basic-environment.txt"
+	UpdatesTXT          = "updates.txt"
+	Y2LogTXT            = "y2log.txt"
+	SSSDTXT             = "sssd.txt"
+	RPMTXT              = "rpm.txt"
+	ETCTXT              = "etc.txt"
+	NetworkTXT          = "network.txt"
+	NTPTXT              = "ntp.txt"
+	PAMTXT              = "pam.txt"
+	FSDiskIO_TXT        = "fs-diskio.txt"
+	StorageTXT          = "storage.txt"
 	SecurityAppArmorTXT = "security-apparmor.txt"
-	SecuritySELinuxTXT = "security-selinux.txt"
-	MemoryTXT         = "memory.txt"
-	SARTXT            = "sar.txt"
-	MessagesFile      = "messages"
-	MessagesTXT       = "messages.txt"
-	BootTXT           = "boot.txt"
+	SecuritySELinuxTXT  = "security-selinux.txt"
+	MemoryTXT           = "memory.txt"
+	SARTXT              = "sar.txt"
+	MessagesFile        = "messages"
+	MessagesTXT         = "messages.txt"
+	BootTXT             = "boot.txt"
 )
 
 // Service status constants
 const (
-	StatusNotRunning = "Not Running / Unknown"
+	StatusNotRunning    = "Not Running / Unknown"
 	StatusNotConfigured = "Not configured"
-	StatusUnknown = "Unknown"
-	StatusRedacted = "[REDACTED]"
+	StatusUnknown       = "Unknown"
+	StatusRedacted      = "[REDACTED]"
 )
 
 // Knowledge base constants
@@ -153,18 +153,18 @@ const (
 	LogLevelInfo  = "info"
 	LogLevelWarn  = "warn"
 	LogLevelError = "error"
-	
+
 	// Log formats
 	LogFormatJSON = "json"
 	LogFormatText = "text"
-	
+
 	// Default settings
-	DefaultLogLevel  = LogLevelInfo
-	DefaultLogFormat = LogFormatJSON
-	DefaultLogPath   = "./logs/sssd-inspector.log"
-	DefaultLogMaxSize = "10MB"
+	DefaultLogLevel      = LogLevelInfo
+	DefaultLogFormat     = LogFormatJSON
+	DefaultLogPath       = "./logs/sssd-inspector.log"
+	DefaultLogMaxSize    = "10MB"
 	DefaultLogMaxBackups = 5
-	DefaultLogCompress = true
+	DefaultLogCompress   = true
 )
 
 // File dialog constants
@@ -173,72 +173,74 @@ const (
 	TitleSelectArchive = "Select Supportconfig Archive"
 	TitleSavePDF       = "Save PDF Report"
 	TitleSaveTXT       = "Save TXT Report"
-	
+
 	// File filters
 	FilterSupportconfig = "Supportconfig Archives (*.txz, *.tar.xz)"
 	FilterAllFiles      = "All Files (*.*)"
 	FilterPDF           = "PDF Document (*.pdf)"
 	FilterText          = "Text Document (*.txt)"
-	
+
 	// Filter patterns
 	PatternSupportconfig = "*.txz;*.tar.xz"
 	PatternAllFiles      = "*.*"
 	PatternPDF           = "*.pdf"
 	PatternText          = "*.txt"
-	
+
 	// Default filenames
 	DefaultPDFName = "SSSD_Analysis_Report.pdf"
 	DefaultTXTName = "SSSD_Analysis_Report.txt"
+	// DefaultJSONName is the default file name for the machine-readable JSON report.
+	DefaultJSONName = "SSSD_Analysis_Report.json"
 )
 
 // Event constants
 const (
 	// Event names
 	EventAnalyzeProgress = "analyze-progress"
-	
+
 	// Event messages
-	MsgInitializing      = "Initializing streaming engine..."
-	MsgScanningHardware  = "Scanning Hardware & OS Data..."
-	MsgAnalyzingNetwork  = "Analyzing Network & Kerberos state..."
-	MsgEvaluatingConfig  = "Evaluating SSSD Configurations..."
-	MsgStreamingLogs      = "Streaming and Parsing SSSD Logs..."
-	MsgMatchingKB         = "Matching Knowledge Base Articles..."
-	MsgSanitizingPII      = "Sanitizing PII data..."
-	MsgAnalysisComplete   = "Analysis Complete!"
+	MsgInitializing     = "Initializing streaming engine..."
+	MsgScanningHardware = "Scanning Hardware & OS Data..."
+	MsgAnalyzingNetwork = "Analyzing Network & Kerberos state..."
+	MsgEvaluatingConfig = "Evaluating SSSD Configurations..."
+	MsgStreamingLogs    = "Streaming and Parsing SSSD Logs..."
+	MsgMatchingKB       = "Matching Knowledge Base Articles..."
+	MsgSanitizingPII    = "Sanitizing PII data..."
+	MsgAnalysisComplete = "Analysis Complete!"
 )
 
 // Progress percentage constants
 const (
-	ProgressStart        = 0
-	ProgressHardware     = 10
-	ProgressNetwork      = 25
-	ProgressConfig       = 40
-	ProgressLogs         = 60
-	ProgressKB           = 85
-	ProgressSanitizing   = 95
-	ProgressComplete     = 100
+	ProgressStart      = 0
+	ProgressHardware   = 10
+	ProgressNetwork    = 25
+	ProgressConfig     = 40
+	ProgressLogs       = 60
+	ProgressKB         = 85
+	ProgressSanitizing = 95
+	ProgressComplete   = 100
 )
 
 // Time format constants
 const (
 	// Timestamp formats
 	TimestampFormat = "02:01:2006 15:04:05"
-	
+
 	// Default timeout duration
 	DefaultTimeoutDuration = 30 * time.Minute
 )
 
 // Error messages
 const (
-	ErrConfigNotFound     = "configuration file not found, using defaults"
-	ErrInvalidConfig      = "invalid configuration"
-	ErrFileAccess         = "file access error"
-	ErrInvalidFormat      = "invalid file format"
-	ErrPermissionDenied   = "permission denied"
-	ErrParseError         = "parse error"
-	ErrMemoryError        = "memory error"
-	ErrTimeoutExceeded    = "timeout exceeded"
-	ErrCancelled          = "operation cancelled"
+	ErrConfigNotFound   = "configuration file not found, using defaults"
+	ErrInvalidConfig    = "invalid configuration"
+	ErrFileAccess       = "file access error"
+	ErrInvalidFormat    = "invalid file format"
+	ErrPermissionDenied = "permission denied"
+	ErrParseError       = "parse error"
+	ErrMemoryError      = "memory error"
+	ErrTimeoutExceeded  = "timeout exceeded"
+	ErrCancelled        = "operation cancelled"
 )
 
 // RelevantFiles returns the complete list of relevant files for analysis

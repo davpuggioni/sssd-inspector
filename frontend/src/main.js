@@ -4,7 +4,7 @@ import './styles/layout.css';
 import './styles/components.css';
 import './styles/report.css';
 
-import { Analyze, OpenFileBrowser, SaveTXT, SavePDF } from '../wailsjs/go/main/App';
+import { Analyze, OpenFileBrowser, SaveTXT, SavePDF, SaveJSON } from '../wailsjs/go/main/App';
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 import { UI, CSS_CLASSES, COLORS, ZOOM, FILES } from './config/constants.js';
 import { FileValidator } from './utils/validators.js';
@@ -28,8 +28,26 @@ function escapeHtml(text) {
 // ==========================================================================
 
 function renderReportHTML(report) {
+    const s = report.summary || { health_score: 0, critical_count: 0, error_count: 0, warning_count: 0, log_error_count: 0, headline: '' };
+    const scoreClass = s.health_score >= 80 ? 'success' : s.health_score >= 50 ? 'warn' : 'fail';
     let html = `<h1>Analysis Report</h1>`;
     html += `
+    <div class="exec-summary">
+        <div class="exec-score">
+            <div class="score-label">Health Score</div>
+            <div class="score ${scoreClass}">${s.health_score}</div>
+            <div class="score-bar"><div class="score-fill ${scoreClass}" style="width: ${s.health_score}%;"></div></div>
+        </div>
+        <div class="exec-headline">
+            <div class="headline">${escapeHtml(s.headline)}</div>
+            <div class="exec-counts">
+                <span class="exec-count count-critical">Critical: ${s.critical_count}</span>
+                <span class="exec-count count-error">Errors: ${s.error_count}</span>
+                <span class="exec-count count-warning">Warnings: ${s.warning_count}</span>
+                <span class="exec-count count-info">Log Patterns: ${s.log_error_count}</span>
+            </div>
+        </div>
+    </div>
     <div class="report-meta">
         <strong>Analysis Date:</strong> ${report.timestamp}<br/>
         ${report.support_case_id ? `<strong>Support Case (SR#):</strong> ${report.support_case_id}` : ''}
@@ -75,6 +93,14 @@ function renderReportHTML(report) {
         </td></tr>
     </table>`;
 
+    if (report.config_findings && report.config_findings.length > 0) {
+        html += `<h2 class="warn-header">Configuration Findings (with provenance)</h2>`;
+        report.config_findings.forEach(f => {
+            const cls = f.severity === 2 ? 'critical' : f.severity === 1 ? 'error' : 'warning';
+            const line = f.source_line && f.source_line > 0 ? f.source_line : 'n/a';
+            html += `<div class="finding ${cls}"><div class="headline">${escapeHtml(f.message)}</div><div class="finding-meta">Source: ${escapeHtml(f.source_path)} | Key: ${escapeHtml(f.source_key)} | Line: ${line}${f.evidence ? `<br/>Evidence: ${escapeHtml(f.evidence)}` : ''}</div></div>`;
+        });
+    }
     if (report.problems && report.problems.length > 0) {
         html += `<h2>Critical Problems Detected</h2><ul class="problem-list">${listItems(report.problems)}</ul>`;
     }
@@ -101,6 +127,18 @@ function renderReportHTML(report) {
         html += `<h2 class="kb-header">Relevant Knowledge Base Articles</h2>`;
         report.matched_tids.forEach(tid => {
             html += `<div class="kb-article"><h4><a href="${escapeHtml(tid.url)}" target="_blank" class="tid-link">${escapeHtml(tid.title)}</a></h4><p class="tid-id">TID: ${escapeHtml(tid.tid_id)}</p><p class="kb-description">${escapeHtml(tid.description)}</p>${tid.evidence && tid.evidence.length > 0 ? `<details><summary>Evidence Found</summary><div class="kb-evidence">${tid.evidence.map(ex => escapeHtml(ex)).join('<br>')}</div></details>` : ''}</div>`;
+        });
+    }
+    if (report.temporal_clusters && report.temporal_clusters.length > 0) {
+        html += `<h2 class="warn-header">Temporal Clusters (Retry Loops / Flapping)</h2>`;
+        report.temporal_clusters.forEach(c => {
+            html += `<div class="finding warning"><div class="headline">${escapeHtml(c.description)}</div><div class="finding-meta">${c.event_count} occurrences between ${escapeHtml(c.window_start)} and ${escapeHtml(c.window_end)}</div>${c.sample_raw_log ? `<div class="log-block">${escapeHtml(c.sample_raw_log)}</div>` : ''}</div>`;
+        });
+    }
+    if (report.kb_suggestions && report.kb_suggestions.length > 0) {
+        html += `<h2 class="kb-header">KB Suggestions (Fuzzy Match)</h2><p class="kb-description">Log lines that no known pattern matched, correlated with similar Knowledge Base articles (TF-IDF similarity):</p>`;
+        report.kb_suggestions.forEach(s => {
+            html += `<div class="kb-article"><h4><a href="${escapeHtml(s.url)}" target="_blank" class="tid-link">${escapeHtml(s.tid_id)}: ${escapeHtml(s.title)}</a></h4><p class="tid-id">Similarity: ${(s.score * 100).toFixed(0)}%</p>${s.sample_line ? `<div class="log-block">${escapeHtml(s.sample_line)}</div>` : ''}</div>`;
         });
     }
     return html;
@@ -133,6 +171,7 @@ document.querySelector('#app').innerHTML = `
             <button id="analyzeBtn" class="btn btn-primary">${UI.BUTTONS.ANALYZE}</button>
             <button id="exportPdfBtn" class="btn btn-success" style="display:none">${UI.BUTTONS.EXPORT_PDF || 'Export PDF'}</button>
             <button id="exportTxtBtn" class="btn btn-info" style="display:none">${UI.BUTTONS.EXPORT_TXT || 'Export TXT'}</button>
+            <button id="exportJsonBtn" class="btn btn-secondary" style="display:none" title="Export structured, machine-readable JSON report">Export JSON</button>
             <div id="zoomControls" class="zoom-controls" style="display:none">
                 <button id="zoomOutBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_OUT}</button>
                 <button id="zoomInBtn" class="zoom-btn">${UI.BUTTONS.ZOOM_IN}</button>
@@ -171,6 +210,7 @@ const analyzeBtn = document.querySelector('#analyzeBtn');
 const anonymizeCheck = document.querySelector('#anonymizeCheck');
 const exportPdfBtn = document.querySelector('#exportPdfBtn');
 const exportTxtBtn = document.querySelector('#exportTxtBtn');
+const exportJsonBtn = document.querySelector('#exportJsonBtn');
 const zoomInBtn = document.querySelector('#zoomInBtn');
 const zoomOutBtn = document.querySelector('#zoomOutBtn');
 const resultBox = document.querySelector('#resultBox');
@@ -260,6 +300,7 @@ analyzeBtn.addEventListener('click', async () => {
         applyZoom();
         exportPdfBtn.style.display = 'inline-block';
         exportTxtBtn.style.display = 'inline-block';
+        exportJsonBtn.style.display = 'inline-block';
         zoomControls.style.display = 'inline-flex';
         showStatus('Analysis completed successfully', 'success');
     } catch (error) {
@@ -297,6 +338,21 @@ exportTxtBtn.addEventListener('click', async () => {
         }
     } catch (error) {
         showStatus('Failed to export text: ' + error, 'error');
+    }
+});
+
+exportJsonBtn.addEventListener('click', async () => {
+    if (!currentReport) return;
+    showStatus('Exporting JSON report...', 'info');
+    try {
+        const result = await SaveJSON(currentReport);
+        if (result !== 'cancelled') {
+            showStatus('JSON report saved to: ' + result, 'success');
+        } else {
+            showStatus('Export cancelled', 'info');
+        }
+    } catch (error) {
+        showStatus('Failed to export JSON: ' + error, 'error');
     }
 });
 
@@ -363,6 +419,7 @@ document.addEventListener('keydown', (e) => {
             case 'Enter': e.preventDefault(); if (filePathInput.value.trim()) analyzeBtn.click(); break;
             case 'p': e.preventDefault(); if (exportPdfBtn.style.display !== 'none') exportPdfBtn.click(); break;
             case 's': e.preventDefault(); if (exportTxtBtn.style.display !== 'none') exportTxtBtn.click(); break;
+            case 'j': e.preventDefault(); if (exportJsonBtn.style.display !== 'none') exportJsonBtn.click(); break;
         }
     }
 });

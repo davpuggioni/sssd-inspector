@@ -142,8 +142,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		// Phase A: real INI parser + typed AD option validator (replaces the fragile
 		// substring-based legacy scanning in analyzeSSSDConfig.
 		cfg := parseSssdConfig(sssdConfContent)
-		validateDuplicateKeys(cfg, &report) // duplicate keys apply to the whole config
-		validateADConfig(cfg, &report)          // AD-specific typed-option checks
+		validateDuplicateKeys(cfg, &report)   // duplicate keys apply to the whole config
+		validateADConfig(cfg, &report)        // AD-specific typed-option checks
+		validateConfigStructure(cfg, &report) // Phase 2: domains + responders
+		validateIDMapRanges(cfg, &report)     // Phase 2: idmap range overlaps
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}
@@ -166,10 +168,31 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	// Match KB using single-pass evidence and config-only patterns
 	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence)
 
+	// ---- Phase 6b: Advanced correlation (temporal bursts + fuzzy KB) ----
+	if progressFunc != nil {
+		progressFunc("Running advanced correlation analysis...", 85)
+	}
+	// Sliding-window bursts: repeated occurrences of the same diagnostic
+	// event within a bounded window (retry loops, timeouts, flapping).
+	report.TemporalClusters = analyzeTemporalClusters(report.Timeline)
+	// TF-IDF fuzzy suggestions for log lines the deterministic engines
+	// could not classify, against the loaded KB corpus.
+	report.KBSuggestions = analyzeKBSuggestions(report.Timeline, kbArticles, report.MatchedTIDs)
+
+	// ---- Phase 6c: data-driven YAML rules (optional, additive) ----
+	if customRules := loadAnalysisRules(); len(customRules) > 0 {
+		applyAnalysisRules(dirPath, &report, customRules)
+	}
+
 	// ---- Phase 7: Final checks ----
 	// Clean up duplicate entries mapped during distributed analysis
 	report.Problems = deduplicateProblems(report.Problems)
 	report.Warnings = deduplicateProblems(report.Warnings)
+
+	// Executive summary: aggregate all signals into a health score and a
+	// dominant root-cause headline (computed after dedup so the counts are
+	// final, and before anonymization so the headline can be scrubbed too).
+	computeExecutiveSummary(&report)
 
 	// Final check: Validate if debug_level=9 was set during problems
 	if len(report.Problems) > 0 || len(report.SSSDLogErrors) > 0 {
@@ -234,6 +257,20 @@ func anonymizeReport(r *ReportData) {
 	for i, ns := range r.Nameservers {
 		r.Nameservers[i] = maskString(ns)
 	}
+	// Configuration findings embed the offending config lines (domains, IPs):
+	// scrub message and evidence BEFORE r.SearchDomain is overwritten with
+	// the placeholder, so the original domain can still be matched.
+	for i := range r.ConfigFindings {
+		r.ConfigFindings[i].Message = maskString(r.ConfigFindings[i].Message)
+		r.ConfigFindings[i].Evidence = maskString(r.ConfigFindings[i].Evidence)
+	}
+
+	// The executive-summary headline embeds finding text (domains, realms):
+	// scrub it BEFORE r.SearchDomain is overwritten with the placeholder,
+	// otherwise the original domain could no longer be matched.
+	// (Same ordering constraint as the Problems/Warnings scrubbing above.)
+	r.Summary.Headline = maskString(r.Summary.Headline)
+
 	r.SearchDomain = maskString(r.SearchDomain)
 	r.KerberosRealm = maskString(r.KerberosRealm)
 

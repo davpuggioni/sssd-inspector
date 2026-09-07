@@ -36,6 +36,12 @@ func analyzeDNS(dirPath string, report *ReportData) {
 				parts := strings.Fields(line)
 				if len(parts) >= 2 {
 					ip := parts[1]
+					// Phase 2: a loopback-only resolver is a classic SSSD
+					// breaker on joined hosts (systemd-resolved or a local
+					// dnsmasq may not forward AD SRV lookups correctly).
+					if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+						report.Warnings = append(report.Warnings, fmt.Sprintf("[DNS] Nameserver %s is the loopback interface. Local-only resolvers often fail to forward AD service-location (SRV) lookups for domain controllers; verify it forwards to the AD DNS servers.", ip))
+					}
 					statusStr := "Unknown/Not Tested"
 					if status, ok := dnsStatusMap[ip]; ok {
 						statusStr = status

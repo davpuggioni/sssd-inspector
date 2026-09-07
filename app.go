@@ -157,6 +157,35 @@ func (a *App) SavePDF(b64 string) (string, error) {
 	return filePath, nil
 }
 
+// SaveJSON saves a JSON-structured report to a user-selected location.
+// Unlike the TXT/PDF exports it contains the full machine-readable data:
+// executive summary, config findings with provenance, timeline and KB
+// evidence — suitable for tooling and long-term case archiving.
+func (a *App) SaveJSON(report ReportData) (string, error) {
+	options := runtime.SaveDialogOptions{
+		DefaultFilename: constants.DefaultJSONName,
+		Title:           "Save JSON Report",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "JSON Report", Pattern: "*.json"},
+		},
+	}
+	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return constants.ErrCancelled, nil
+	}
+	data, err := buildJSONReport(report)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize JSON report: %w", err)
+	}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+	return filePath, nil
+}
+
 // SaveTXT saves a text report based on the provided ReportData structure.
 // This method converts the analysis results to a formatted text report and
 // provides a native save dialog for the user to choose the output location.

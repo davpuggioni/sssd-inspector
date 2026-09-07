@@ -10,6 +10,10 @@ export function OpenFileBrowser() {
   return window['go']['main']['App']['OpenFileBrowser']();
 }
 
+export function SaveJSON(arg1) {
+  return window['go']['main']['App']['SaveJSON'](arg1);
+}
+
 export function SavePDF(arg1) {
   return window['go']['main']['App']['SavePDF'](arg1);
 }

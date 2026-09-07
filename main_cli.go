@@ -20,6 +20,8 @@ func main() {
 	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
 	txtReport := flag.Bool(constants.FlagTXT, false, constants.DescTXT)
 	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
+	// JSON report: full machine-readable export (summary + findings + evidence).
+	jsonReport := flag.Bool("json", false, "Generate a JSON report (structured, machine-readable)")
 	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
 	flag.Parse()
 
@@ -30,7 +32,7 @@ func main() {
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *cliPath != "" {
-		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize); err != nil {
+		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize, *jsonReport); err != nil {
 			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -42,6 +44,7 @@ func main() {
 		path := flag.Arg(0)
 		genTxt := *txtReport
 		genHtml := *htmlReport
+		genJSON := *jsonReport
 		genAnonymize := *anonymize
 
 		// Manual flag scanning for format flags
@@ -52,18 +55,21 @@ func main() {
 			if arg == "-html" || arg == "--html" {
 				genHtml = true
 			}
+			if arg == "-json" || arg == "--json" {
+				genJSON = true
+			}
 			if arg == "-anonymize" || arg == "--anonymize" {
 				genAnonymize = true
 			}
 		}
 
 		// Apply defaults from configuration if no format specified
-		if !genTxt && !genHtml && appConfig != nil && appConfig.CLI.DefaultGenerateBothFormats {
+		if !genTxt && !genHtml && !genJSON && appConfig != nil && appConfig.CLI.DefaultGenerateBothFormats {
 			genTxt = true
 			genHtml = true
 		}
 
-		if err := runCLI(path, genTxt, genHtml, genAnonymize); err != nil {
+		if err := runCLI(path, genTxt, genHtml, genAnonymize, genJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -78,6 +84,7 @@ func main() {
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagAnalyze, "analyze", constants.DescAnalyze)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagTXT, "txt", constants.DescTXT)
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagHTML, "html", constants.DescHTML)
+	fmt.Println("  -json, --json\tGenerate a JSON report (structured, machine-readable)")
 	fmt.Printf("  -%s, --%s\t%s\n", constants.FlagAnonymize, "anonymize", constants.DescAnonymize)
 	fmt.Println("\nExamples:")
 	fmt.Println("  sssd-inspector -analyze /path/to/supportconfig.txz")
