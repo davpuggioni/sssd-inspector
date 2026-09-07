@@ -6,6 +6,12 @@
 
 ## ✨ Features
 
+### Correlation Graph & Diff Mode (Phase 4)
+- **Interactive SVG force-directed graph** — entities (domain/realm/hostname/DNS) → findings → evidence, rendered client-side with zero external dependencies
+- **Hover/click interactivity** — highlight connected nodes, drill-down panel with source path + line + evidence, severity filters, draggable nodes
+- **Diff mode (`-compare A B`)** — delta between two supportconfig: common findings, only-in-A, only-in-B, health-score delta; JSON export for tooling
+- **PII-safe** — graph labels, values, and evidence are anonymized alongside the rest of the report
+
 ### Executive Summary & Scoring (Phase 3+)
 - **Health Score (0-100)** — weighted penalty model over all findings (critical ×25, error ×12, problem ×4, warning ×2, log-error ×3)
 - **Dominant root-cause inference** — the most weighted finding category drives the triage headline
@@ -135,8 +141,10 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 |------|-------------|
 | `-v, --version` | Print program version |
 | `-analyze <path>` | Path to supportconfig directory or archive |
+| `-compare <A> <B>` | Differential analysis between two supportconfigs (JSON output) |
 | `-txt` | Generate a TXT report (default: both formats) |
 | `-html` | Generate an HTML report (default: both formats) |
+| `-json` | Generate a structured JSON report (full findings + graph + clusters) |
 | `-anonymize` | Redact PII (IPs, domains, emails) from the report |
 
 ### Examples
@@ -144,6 +152,12 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 ```bash
 # Full analysis with PII redaction and all report formats
 sssd-inspector /tmp/supportconfig-abc123.txz -txt -html -anonymize
+
+# Export structured JSON (includes findings, graph, clusters, suggestions)
+sssd-inspector /tmp/supportconfig-abc123.txz -json -anonymize
+
+# Diff two supportconfig (before/after fix) — JSON delta to stdout
+sssd-inspector -compare /tmp/sc-before /tmp/sc-after -anonymize
 
 # Quick analysis with default TXT output
 sssd-inspector /var/log/supportconfig/

@@ -65,6 +65,23 @@ func (a *App) OpenFileBrowser() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, options)
 }
 
+// extractIfArchive returns the path to a supportconfig directory.
+// If path points to a directory it is returned unchanged; if it points to
+// an archive it is extracted to a temporary directory (whose path is
+// returned). The caller is responsible for cleaning up the temp dir.
+func extractIfArchive(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return path, nil
+	}
+	// Archive: extract to temp (progress callback is a no-op; the
+	// higher-level caller drives its own progress reporting).
+	return extractArchiveToTemp(path, func(msg string, pct int) {})
+}
+
 // Analyze handles the secure extraction, routing, and cleanup of the target logs.
 // This is the main analysis method that orchestrates the entire diagnostic process.
 // It supports both directory and archive file inputs, provides real-time progress

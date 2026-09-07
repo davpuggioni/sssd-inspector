@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"sssd-inspector/constants"
 )
 
 // deduplicateProblems removes duplicate strings from a slice efficiently
@@ -215,6 +217,12 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		}
 	}
 
+	// ---- Phase 5: build correlation graph (after summary, before anonymization) ----
+	// The graph is built on the raw (non-anonymized) report so that entity
+	// extraction can see the real domain/realm/hostname values; anonymizeReport
+	// will scrub the graph's Label/Value/LineText fields afterwards.
+	report.Graph = buildCorrelationGraph(&report)
+
 	if anonymize {
 		if progressFunc != nil {
 			progressFunc("Sanitizing PII data...", 95)
@@ -295,4 +303,122 @@ func anonymizeReport(r *ReportData) {
 		}
 	}
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+
+	// Scrub the correlation graph's entity labels/values and source line text
+	// so the frontend never sees raw PII (domains, IPs, hostnames).
+	// AdDomain and Hostname are not covered by maskString (which only handles
+	// SearchDomain/KerberosRealm), so we explicitly replace them here.
+	for i := range r.Graph.Entities {
+		r.Graph.Entities[i].Label = maskString(r.Graph.Entities[i].Label)
+		r.Graph.Entities[i].Value = maskString(r.Graph.Entities[i].Value)
+		if r.AdDomain != "" {
+			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, r.AdDomain, "example.com")
+			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, r.AdDomain, "example.com")
+		}
+		if r.Hostname != "" {
+			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, r.Hostname, "redacted-host")
+			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, r.Hostname, "redacted-host")
+		}
+	}
+	for i := range r.Graph.Findings {
+		r.Graph.Findings[i].Message = maskString(r.Graph.Findings[i].Message)
+		r.Graph.Findings[i].Evidence = maskString(r.Graph.Findings[i].Evidence)
+		if r.AdDomain != "" {
+			r.Graph.Findings[i].Evidence = strings.ReplaceAll(r.Graph.Findings[i].Evidence, r.AdDomain, "example.com")
+		}
+		if r.Hostname != "" {
+			r.Graph.Findings[i].Evidence = strings.ReplaceAll(r.Graph.Findings[i].Evidence, r.Hostname, "redacted-host")
+		}
+	}
+	for i := range r.Graph.Sources {
+		r.Graph.Sources[i].LineText = maskString(r.Graph.Sources[i].LineText)
+		if r.AdDomain != "" {
+			r.Graph.Sources[i].LineText = strings.ReplaceAll(r.Graph.Sources[i].LineText, r.AdDomain, "example.com")
+		}
+		if r.Hostname != "" {
+			r.Graph.Sources[i].LineText = strings.ReplaceAll(r.Graph.Sources[i].LineText, r.Hostname, "redacted-host")
+		}
+	}
+}
+
+// CompareConfigs runs the full analysis pipeline on two supportconfig
+// directories and returns a ComparisonReport describing the delta between
+// them: which findings are common, which are unique to A or B, and the
+// health-score difference (A − B). A positive delta means B is healthier.
+//
+// Both sides are analyzed with anonymization enabled so the caller can
+// freely forward the report to a UI or external system.
+func CompareConfigs(dirA, dirB string, progressFunc func(string, int)) ComparisonReport {
+	progressFunc(constants.MsgInitializing, constants.ProgressStart)
+
+	progressFunc("Analyzing first supportconfig…", 10)
+	reportA := analyzeData(dirA, true, func(msg string, pct int) {
+		// Map the sub-analysis progress 0..100 onto the global 10..45 band.
+		scaled := 10 + int(float64(pct)*0.35)
+		progressFunc(msg, scaled)
+	})
+
+	progressFunc("Analyzing second supportconfig…", 50)
+	reportB := analyzeData(dirB, true, func(msg string, pct int) {
+		scaled := 50 + int(float64(pct)*0.35)
+		progressFunc(msg, scaled)
+	})
+
+	progressFunc("Computing delta…", 90)
+
+	keySet := func(r ReportData) map[string]int {
+		m := make(map[string]int)
+		for _, f := range r.ConfigFindings {
+			k := f.Category + "||" + f.Message
+			m[k]++
+		}
+		for _, c := range r.TemporalClusters {
+			k := "cluster||" + c.Description
+			m[k] += c.EventCount
+		}
+		return m
+	}
+
+	setA := keySet(reportA)
+	setB := keySet(reportB)
+
+	var common, onlyInA, onlyInB []string
+	for k := range setA {
+		if _, ok := setB[k]; ok {
+			common = append(common, k)
+		} else {
+			onlyInA = append(onlyInA, k)
+		}
+	}
+	for k := range setB {
+		if _, ok := setA[k]; !ok {
+			onlyInB = append(onlyInB, k)
+		}
+	}
+
+	progressFunc(constants.MsgAnalysisComplete, constants.ProgressComplete)
+
+	return ComparisonReport{
+		A:          reportA,
+		B:          reportB,
+		Common:     common,
+		OnlyInA:    onlyInA,
+		OnlyInB:    onlyInB,
+		ScoreDelta: reportB.Summary.HealthScore - reportA.Summary.HealthScore,
+	}
+}
+
+// findingKeys extracts a canonical "category|message" key from every ConfigFinding.
+func findingKeys(r *ReportData) []string {
+	seen := make(map[string]struct{})
+	var keys []string
+	for _, f := range r.ConfigFindings {
+		key := f.Category + "|" + f.Message
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	return keys
 }

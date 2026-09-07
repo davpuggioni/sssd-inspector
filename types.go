@@ -146,6 +146,9 @@ type ReportData struct {
 	// Phase 3: advanced correlation output
 	TemporalClusters []TemporalCluster `json:"temporal_clusters,omitempty"`
 	KBSuggestions    []KBSuggestion    `json:"kb_suggestions,omitempty"`
+
+	// Phase 4: interactive correlation graph (built after PII scrubbing)
+	Graph CorrelationGraph `json:"graph"`
 }
 
 // TimelineEvent represents a single chronological log occurrence
@@ -176,4 +179,80 @@ type KBSuggestion struct {
 	URL        string  `json:"url"`
 	Score      float64 `json:"score"`  // 0..1 cosine similarity
 	SampleLine string  `json:"sample_line"`
+}
+
+// ============================================================================
+// Correlation Graph Types (P5 / P9)
+// ============================================================================
+
+// GraphNodeKind distinguishes the three layers of the correlation graph.
+type GraphNodeKind string
+
+const (
+	KindEntity  GraphNodeKind = "entity"
+	KindFinding GraphNodeKind = "finding"
+	KindSource  GraphNodeKind = "source"
+)
+
+// GraphEntity represents an extracted identity/state value from the report
+// (AD domain, Kerberos realm, hostname, DNS search domain, ad_server,
+// keytab principal, GPO) — the "nouns" of the diagnosis.
+type GraphEntity struct {
+	ID        string   `json:"id"`        // "entity:domain:example.com"
+	Kind      string   `json:"kind"`      // "domain"|"realm"|"hostname"|"dns"|"ad_server"|"keytab"|"gpo"
+	Label     string   `json:"label"`     // human-readable (PII-scrubbed)
+	Value     string   `json:"value,omitempty"`
+	Severity  Severity `json:"severity"` // max severity of any finding touching this entity
+	SourcePath string  `json:"source_path,omitempty"`
+}
+
+// GraphFindingNode is a diagnostic node: either a structured ConfigFinding
+// or a temporal cluster / log-error summary. Findings are the "verbs" that
+// connect entities to their evidence.
+type GraphFindingNode struct {
+	ID         string   `json:"id"`         // "finding:<hash>"
+	Category   string   `json:"category"`
+	Message    string   `json:"message"`
+	Severity   Severity `json:"severity"`
+	SourcePath string   `json:"source_path,omitempty"`
+	SourceKey  string   `json:"source_key,omitempty"`
+	SourceLine int      `json:"source_line,omitempty"`
+	Evidence   string   `json:"evidence,omitempty"`
+	EventCount int      `json:"event_count,omitempty"`
+}
+
+// GraphSourceNode pins a finding to the physical evidence in the supportconfig:
+// the offending file path, line number and the raw line text.
+type GraphSourceNode struct {
+	ID         string `json:"id"`         // "source:sssd.conf:42"
+	SourcePath string `json:"source_path"`
+	SourceLine int    `json:"source_line"`
+	LineText   string `json:"line_text"`
+}
+
+// GraphEdge is a directed relationship between two graph nodes.
+type GraphEdge struct {
+	From string `json:"from"` // source node ID
+	To   string `json:"to"`   // target node ID
+	Kind string `json:"kind"` // "entity_to_finding"|"finding_to_source"
+}
+
+// CorrelationGraph is the serializable graph structure consumed by the
+// interactive SVG renderer in the frontend. Built once per analysis by
+// buildCorrelationGraph after PII anonymization.
+type CorrelationGraph struct {
+	Entities []GraphEntity      `json:"entities"`
+	Findings []GraphFindingNode `json:"findings"`
+	Sources  []GraphSourceNode  `json:"sources"`
+	Edges    []GraphEdge        `json:"edges"`
+}
+
+// ComparisonReport holds the delta between two analyses (P5 — Diff Mode).
+type ComparisonReport struct {
+	A          ReportData `json:"a"`
+	B          ReportData `json:"b"`
+	Common     []string   `json:"common"`      // category+message keys present in both
+	OnlyInA    []string   `json:"only_in_a"`   // keys unique to A
+	OnlyInB    []string   `json:"only_in_b"`   // keys unique to B
+	ScoreDelta int        `json:"score_delta"` // health_A - health_B
 }

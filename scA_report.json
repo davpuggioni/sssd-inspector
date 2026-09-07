@@ -1,0 +1,121 @@
+{
+  "app_version": "0.2.1",
+  "timestamp": "07:09:2026 15:46:05",
+  "support_case_id": "",
+  "kernel_version": "",
+  "sles_release": "",
+  "scc_status": "Not Registered or Unknown",
+  "summary": {
+    "health_score": 56,
+    "critical_count": 0,
+    "error_count": 1,
+    "warning_count": 2,
+    "problem_count": 7,
+    "log_error_count": 0,
+    "top_category": "ad_server",
+    "top_category_hits": 1,
+    "headline": "[ERROR] AD Domain Controller configuration issue: GSSAPI/Kerberos requires hostnames, not IPs."
+  },
+  "hardware_manufacturer": "Unknown",
+  "hardware_model": "Unknown",
+  "hypervisor": "Unknown",
+  "virtual_identity": "Unknown",
+  "mac_type": "Unknown/None",
+  "sssd_installed": false,
+  "sssd_config_found": true,
+  "sssd_service": "Not Running / Unknown",
+  "winbind_service": "Not Running / Disabled",
+  "nscd_status": "Disabled / Stopped",
+  "nscd_caching": null,
+  "sssd_packages": null,
+  "nsswitch_valid": false,
+  "pam_sss_installed": false,
+  "pam_gdpr_restricted": false,
+  "hosts_issues": [
+    "Missing 127.0.0.1 loopback entry"
+  ],
+  "nameservers": null,
+  "search_domain": "",
+  "time_service": "Not Running / Unknown",
+  "kerberos_realm": "Not configured",
+  "keytab_found": false,
+  "ad_provider_mode": true,
+  "enumerate_issue": false,
+  "use_fqdn_set": false,
+  "ad_domain": "",
+  "hostname": "",
+  "config_findings": [
+    {
+      "severity": 1,
+      "category": "ad_server",
+      "message": "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+      "source_path": "sssd.conf",
+      "source_key": "domain/example.com.ad_server",
+      "source_line": 6,
+      "evidence": "ad_server = 192.168.1.10"
+    }
+  ],
+  "sssd_log_errors": null,
+  "sssd_config_snippet": "[sssd]\ndomains = example.com\n\n[domain/example.com]\nid_provider = ad\nad_server = 192.168.1.10\nkrb5_realm = OTHER.NET\nldap_uri = ldap://dc.other.net",
+  "mac_denial_examples": null,
+  "problems": [
+    "No nameservers found in /etc/resolv.conf. DNS resolution will fail.",
+    "No active Time Synchronization service found. Kerberos/AD requires synchronized time.",
+    "PAM configuration does not include pam_sss.so. SSSD authentication will not be triggered.",
+    "Malformed /etc/hosts file.",
+    "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.",
+    "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+    "sssd.service is not actively running."
+  ],
+  "warnings": [
+    "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'.",
+    "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections.",
+    "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig."
+  ],
+  "matched_tids": null,
+  "timeline": [],
+  "graph": {
+    "entities": [
+      {
+        "id": "entity:ad_server:192.168.1.10",
+        "kind": "ad_server",
+        "label": "AD Server",
+        "value": "192.168.1.10",
+        "severity": 1,
+        "source_path": "sssd.conf"
+      }
+    ],
+    "findings": [
+      {
+        "id": "finding:2f5fefc7",
+        "category": "ad_server",
+        "message": "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+        "severity": 1,
+        "source_path": "sssd.conf",
+        "source_key": "domain/example.com.ad_server",
+        "source_line": 6,
+        "evidence": "ad_server = 192.168.1.10"
+      }
+    ],
+    "sources": [
+      {
+        "id": "source:sssd.conf:6",
+        "source_path": "sssd.conf",
+        "source_line": 6,
+        "line_text": "ad_server = 192.168.1.10"
+      }
+    ],
+    "edges": [
+      {
+        "from": "entity:ad_server:192.168.1.10",
+        "to": "finding:2f5fefc7",
+        "kind": "entity_to_finding"
+      },
+      {
+        "from": "finding:2f5fefc7",
+        "to": "source:sssd.conf:6",
+        "kind": "finding_to_source"
+      }
+    ]
+  }
+}

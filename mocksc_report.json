@@ -1,0 +1,225 @@
+{
+  "app_version": "0.2.1",
+  "timestamp": "07:09:2026 13:17:02",
+  "support_case_id": "",
+  "kernel_version": "",
+  "sles_release": "\\\"SLES 15 SP6\\",
+  "scc_status": "Not Registered or Unknown",
+  "summary": {
+    "health_score": 20,
+    "critical_count": 1,
+    "error_count": 1,
+    "warning_count": 3,
+    "problem_count": 7,
+    "log_error_count": 3,
+    "top_category": "join",
+    "top_category_hits": 1,
+    "headline": "[CRITICAL] The host appears not to be joined to Active Directory (no default_realm / keytab)."
+  },
+  "hardware_manufacturer": "Unknown",
+  "hardware_model": "Unknown",
+  "hypervisor": "Unknown",
+  "virtual_identity": "Unknown",
+  "mac_type": "Unknown/None",
+  "sssd_installed": false,
+  "sssd_config_found": true,
+  "sssd_service": "Not Running / Unknown",
+  "winbind_service": "Not Running / Disabled",
+  "nscd_status": "Disabled / Stopped",
+  "nscd_caching": null,
+  "sssd_packages": null,
+  "nsswitch_valid": false,
+  "pam_sss_installed": false,
+  "pam_gdpr_restricted": false,
+  "hosts_issues": [
+    "Missing 127.0.0.1 loopback entry"
+  ],
+  "nameservers": [
+    "10.0.0.1 (Unknown/Not Tested)"
+  ],
+  "search_domain": "other.net",
+  "time_service": "Not Running / Unknown",
+  "kerberos_realm": "Not configured",
+  "keytab_found": false,
+  "ad_provider_mode": true,
+  "enumerate_issue": false,
+  "use_fqdn_set": false,
+  "ad_domain": "",
+  "hostname": "host01",
+  "config_findings": [
+    {
+      "severity": 1,
+      "category": "ad_server",
+      "message": "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+      "source_path": "sssd.conf",
+      "source_key": "domain/example.com.ad_server",
+      "source_line": 6,
+      "evidence": "ad_server = 192.168.1.10"
+    },
+    {
+      "severity": 2,
+      "category": "join",
+      "message": "[CRITICAL] An AD provider is configured but /etc/krb5.conf has no 'default_realm' for the domain 'OTHER.NET'. The host may not be joined to Active Directory (realm join / adcli join missing).",
+      "source_path": "krb5.conf",
+      "source_key": "[libdefaults].default_realm",
+      "source_line": 0,
+      "evidence": ""
+    }
+  ],
+  "sssd_log_errors": [
+    {
+      "description": "IFP Attribute Filter: An application requested an LDAP/AD attribute that is not whitelisted. Add it to 'user_attributes' in the [ifp] section.",
+      "examples": [
+        "(2026-01-01 10:00:05) [sssd[ifp]] Attribute manager not allowed for user"
+      ]
+    },
+    {
+      "description": "Kerberos: KDC has no support for encryption type (Crypto policy mismatch)",
+      "examples": [
+        "(2026-01-01 10:01:00) [sssd[krb5]] KDC has no support for encryption type"
+      ]
+    },
+    {
+      "description": "Kerberos: Preauthentication failed (Bad keytab or password mismatch)",
+      "examples": [
+        "(2026-01-01 10:00:00) [sssd[be[example.com]]] [KRB5] Preauthentication failed"
+      ]
+    }
+  ],
+  "sssd_config_snippet": "[sssd]\ndomains = example.com\n\n[domain/example.com]\nid_provider = ad\nad_server = 192.168.1.10\nkrb5_realm = WRONG.COM",
+  "mac_denial_examples": null,
+  "problems": [
+    "No active Time Synchronization service found. Kerberos/AD requires synchronized time.",
+    "PAM configuration does not include pam_sss.so. SSSD authentication will not be triggered.",
+    "Malformed /etc/hosts file.",
+    "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.",
+    "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+    "sssd.service is not actively running.",
+    "[CRITICAL] An AD provider is configured but /etc/krb5.conf has no 'default_realm' for the domain 'OTHER.NET'. The host may not be joined to Active Directory (realm join / adcli join missing)."
+  ],
+  "warnings": [
+    "[NETWORK] System is using a short hostname instead of an FQDN. Active Directory heavily relies on fully qualified domain names.",
+    "[TUNING] If AD users authenticate but fail authorization (missing groups), consider setting 'ldap_use_tokengroups = False'.",
+    "[TUNING] No LDAP timeout specified. Adding 'timeout = 30' can help stabilize slow Active Directory connections.",
+    "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig."
+  ],
+  "matched_tids": null,
+  "timeline": [
+    {
+      "timestamp": "2026-01-01 10:00:00",
+      "message": "Kerberos: Preauthentication failed (Bad keytab or password mismatch)",
+      "raw_log": "(2026-01-01 10:00:00) [sssd[be[example.com]]] [KRB5] Preauthentication failed"
+    },
+    {
+      "timestamp": "2026-01-01 10:00:05",
+      "message": "IFP Attribute Filter: An application requested an LDAP/AD attribute that is not whitelisted. Add it to 'user_attributes' in the [ifp] section.",
+      "raw_log": "(2026-01-01 10:00:05) [sssd[ifp]] Attribute manager not allowed for user"
+    },
+    {
+      "timestamp": "2026-01-01 10:01:00",
+      "message": "Kerberos: KDC has no support for encryption type (Crypto policy mismatch)",
+      "raw_log": "(2026-01-01 10:01:00) [sssd[krb5]] KDC has no support for encryption type"
+    }
+  ],
+  "kb_suggestions": [
+    {
+      "tid_id": "TID-000022304",
+      "title": "Missing Secondary Group Memberships in SSSD with Active Directory | SUSE | Support Center",
+      "url": "https://support.scc.suse.com/s/kb/Missing-Secondary-Group-Memberships-in-SSSD-with-Active-Directory?language=en_US",
+      "score": 0.17690444442653588,
+      "sample_line": "(2026-01-01 10:00:05) [sssd[ifp]] Attribute manager not allowed for user"
+    }
+  ],
+  "graph": {
+    "entities": [
+      {
+        "id": "entity:hostname:host01",
+        "kind": "hostname",
+        "label": "Hostname",
+        "value": "host01",
+        "severity": 0
+      },
+      {
+        "id": "entity:dns:other.net",
+        "kind": "dns",
+        "label": "DNS Search Domain",
+        "value": "other.net",
+        "severity": 0,
+        "source_path": "resolv.conf"
+      },
+      {
+        "id": "entity:ad_server:192.168.1.10",
+        "kind": "ad_server",
+        "label": "AD Server",
+        "value": "192.168.1.10",
+        "severity": 1,
+        "source_path": "sssd.conf"
+      }
+    ],
+    "findings": [
+      {
+        "id": "finding:2f5fefc7",
+        "category": "ad_server",
+        "message": "Kerberos SPN Risk: 'ad_server = 192.168.1.10' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.",
+        "severity": 1,
+        "source_path": "sssd.conf",
+        "source_key": "domain/example.com.ad_server",
+        "source_line": 6,
+        "evidence": "ad_server = 192.168.1.10"
+      },
+      {
+        "id": "finding:c5223650",
+        "category": "join",
+        "message": "[CRITICAL] An AD provider is configured but /etc/krb5.conf has no 'default_realm' for the domain 'OTHER.NET'. The host may not be joined to Active Directory (realm join / adcli join missing).",
+        "severity": 2,
+        "source_path": "krb5.conf",
+        "source_key": "[libdefaults].default_realm"
+      },
+      {
+        "id": "finding:40b7a334",
+        "category": "log_error",
+        "message": "IFP Attribute Filter: An application requested an LDAP/AD attribute that is not whitelisted. Add it to 'user_attributes' in the [ifp] section.",
+        "severity": 0
+      },
+      {
+        "id": "finding:45b857eb",
+        "category": "log_error",
+        "message": "Kerberos: KDC has no support for encryption type (Crypto policy mismatch)",
+        "severity": 0
+      },
+      {
+        "id": "finding:06396c8f",
+        "category": "log_error",
+        "message": "Kerberos: Preauthentication failed (Bad keytab or password mismatch)",
+        "severity": 0
+      },
+      {
+        "id": "finding:20c9e29a",
+        "category": "kb_suggestion",
+        "message": "KB suggestion: Missing Secondary Group Memberships in SSSD with Active Directory | SUSE | Support Center (18%)",
+        "severity": 0,
+        "evidence": "(2026-01-01 10:00:05) [sssd[ifp]] Attribute manager not allowed for user"
+      }
+    ],
+    "sources": [
+      {
+        "id": "source:sssd.conf:6",
+        "source_path": "sssd.conf",
+        "source_line": 6,
+        "line_text": "ad_server = 192.168.1.10"
+      }
+    ],
+    "edges": [
+      {
+        "from": "entity:ad_server:192.168.1.10",
+        "to": "finding:2f5fefc7",
+        "kind": "entity_to_finding"
+      },
+      {
+        "from": "finding:2f5fefc7",
+        "to": "source:sssd.conf:6",
+        "kind": "finding_to_source"
+      }
+    ]
+  }
+}

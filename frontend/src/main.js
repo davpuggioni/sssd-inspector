@@ -8,7 +8,7 @@ import { Analyze, OpenFileBrowser, SaveTXT, SavePDF, SaveJSON } from '../wailsjs
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 import { UI, CSS_CLASSES, COLORS, ZOOM, FILES } from './config/constants.js';
 import { FileValidator } from './utils/validators.js';
-import { ProgressBar, StatusMessage } from './components/UIComponents.js';
+import { renderCorrelationGraph } from './components/CorrelationGraph.js';
 
 // ==========================================================================
 // Helper Functions
@@ -141,6 +141,9 @@ function renderReportHTML(report) {
             html += `<div class="kb-article"><h4><a href="${escapeHtml(s.url)}" target="_blank" class="tid-link">${escapeHtml(s.tid_id)}: ${escapeHtml(s.title)}</a></h4><p class="tid-id">Similarity: ${(s.score * 100).toFixed(0)}%</p>${s.sample_line ? `<div class="log-block">${escapeHtml(s.sample_line)}</div>` : ''}</div>`;
         });
     }
+    // Correlation graph container (rendered after DOM insertion by renderCorrelationGraph)
+    html += `<details class="corr-graph-section"><summary><h2 class="corr-graph-heading">Correlation Graph</h2></summary><div class="corr-graph-host" id="corrGraphHost"></div></details>`;
+
     return html;
 }
 
@@ -296,6 +299,8 @@ analyzeBtn.addEventListener('click', async () => {
         const report = await Analyze(filePath, anonymizeCheck.checked);
         currentReport = report;
         resultBox.innerHTML = renderReportHTML(report);
+        const corrHost = document.getElementById('corrGraphHost');
+        if (corrHost) renderCorrelationGraph(corrHost, report);
         currentZoom = 1.0;
         applyZoom();
         exportPdfBtn.style.display = 'inline-block';
