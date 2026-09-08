@@ -70,11 +70,11 @@ func buildErrorPatterns(macType string) map[string]string {
 		"Server not found in Kerberos database":  "Kerberos: Server not found in database (SPN missing)",
 		"terminated by own WATCHDOG":             "SSSD Watchdog: Process blocked for too long (Slow DNS, slow AD, or heavy load)",
 		"sdap_async_sys_connect request failed":  "LDAP Network Error: Connection to AD/LDAP timed out",
-		"krb5_child_timeout":                     "Kerberos Timeout: krb5_child_timeout reached (KDC slow, distant, or firewalled)",
+		"krb5_child_timeout":                     "KRB5 Child Timeout: The krb5_child helper did not respond within the configured timeout. Often a symptom of a hung KDC or clock skew.",
 		"tsig verify failure":                    "DNS Update Failed: TSIG verify failure (Dynamic DNS update rejected)",
 		"SSSD is offline":                        "SSSD Offline: Provider forced offline (Network loss, DNS failure, or firewall)",
 		"ldap_extended_operation failed":         "LDAP/IPA Error: Extended operation failed (Directory server busy or unreachable)",
-		"ldap_install_tls failed":                "TLS Handshake Failed: ldap_install_tls failed (Certificate mismatch or bad CA)",
+		"ldap_install_tls failed":                "TLS Library Failure: libldap could not install the TLS/SSL layer (often a libldap/libssl mismatch or incompatible cipher).",
 		"ldap_sasl_interactive_bind_s failed":    "LDAP SASL Bind Failed: Could not negotiate SASL bind (Crypto mismatch or unreachable KDC)",
 		"database disk image is malformed":       "SSSD Cache Corrupt: LDB database image is malformed (Recommend running: rm -f /var/lib/sss/db/* && systemctl restart sssd)",
 		"Machine account password expired":       "Kerberos: Machine account password expired (AD dropped trust, needs rejoin)",
@@ -137,7 +137,7 @@ func buildErrorPatterns(macType string) map[string]string {
 		"The last password change time is in the future":                       "Time Skew Bug: The LDAP server's clock and the local client's clock are out of sync, causing the password age calculation to break.",
 		"Cannot determine the Kerberos realm, aborting":                        "Missing Kerberos Realm: SSSD requires a Kerberos realm for GSSAPI auth, but none was defined in sssd.conf or /etc/krb5.conf.",
 		"LDAP sizelimit was exceeded, returning incomplete data":               "LDAP Size Limit Hit: The LDAP server refused to send all requested data because the query exceeded the server's hard size limit. Check LDAP paging settings.",
-		"seems slow, took more than 80% of timeout":                           "[DIAGNOSTIC HINT] LDAP Latency: An LDAP operation nearly timed out. The Domain Controller is overloaded, network latency is high, or an unindexed search was performed.",
+		"seems slow, took more than 80% of timeout":                            "[DIAGNOSTIC HINT] LDAP Latency: An LDAP operation nearly timed out. The Domain Controller is overloaded, network latency is high, or an unindexed search was performed.",
 		"The user account is disabled on the AD server":                        "AD Account Disabled: Active Directory's 'userAccountControl' attribute indicates this account is explicitly disabled.",
 		"The user account is expired on the AD server":                         "AD Account Expired: Active Directory's 'accountExpires' timestamp is in the past. The user must be renewed in AD.",
 		"Conflicting values for options":                                       "Configuration Conflict: Your sssd.conf has conflicting cache expiration settings (e.g., keeping offline credentials forever while strictly expiring the account cache).",
@@ -333,6 +333,28 @@ func buildErrorPatterns(macType string) map[string]string {
 		"Failed to convert SID to UID/GID":    "ID Mapping Error: SSSD could not translate a Windows SID to a Linux ID. This will cause file permission issues on CIFS/Samba shares.",
 		"Invalid SID format":                  "Directory Data Error: SSSD encountered a malformed Windows SID in the directory. The object cannot be mapped to a Unix identity.",
 		"ID mapping out of range":             "Range Conflict: An AD user's calculated ID falls outside the 'min_id' or 'max_id' limits. The user will be unable to log in or own files.",
+
+		// --- Connection, SRV & Failover Patterns (from src/providers/fail_over.c, sdap_async_connection.c, dp_interface_failover.c) ---
+		"Unable to establish connection":                         "Network Error: SSSD could not establish a TCP connection to the backend server. Check firewall, port reachability (389/636/88), and whether the DC is online. This precedes offline transitions.",
+		"Failed to resolve host":                                 "DNS Resolution Error: SSSD could not resolve a server hostname via DNS. Verify resolv.conf and that the AD DNS server returns A/AAAA for DCs.",
+		"Could not get server host name":                         "Hostname Resolution Error: SSSD could not determine the hostname of a configured server. This is typical of ad_server set to an IP or unresolvable FQDN.",
+		"Service resolving timeout reached":                      "DNS SRV Timeout: Service (SRV) record resolution timed out. The Domain Controller discovery is failing; check DNS forwarding and UDP 53 reachability.",
+		"Unable to resolve SRV":                                  "SRV Lookup Failure: LDAP/Kerberos service records (_ldap._tcp, _kerberos._tcp) could not be resolved. DNS is the most common culprit.",
+		"LDAP connection error":                                  "LDAP Connection Error: libldap reported a connection-level failure on a bind or operation. Inspect the errno/code that usually accompanies this line.",
+		"Failed to reconnect":                                    "Connection Reconnect Failure: A previously-established LDAP/Kerberos connection was lost and the reconnect attempt failed. Indicates an unstable network or a backend restart.",
+		"Going offline!":                                         "Backend Offline: SSSD marked the data provider backend as OFFLINE after exhausting retries. Subsequent auth falls back to cached credentials (if any).",
+		"Offline authentication failed":                          "Offline Auth Failure: A login attempted against cached credentials failed offline. Cached entry is stale/expired or offline_credentials_expiration elapsed.",
+		"SSSD is unable to complete the full connection request": "Backend Connection Failure: The data provider could not complete the full connection request (internal failover state PORT_NOT_WORKING). The next retry will reset the port status.",
+		"Unable to sort primary servers by DNS":                  "Site Discovery Warning: SSSD could not sort AD site servers via DNS, so DC failover across sites may behave unpredictably. Check ad_site/ad_enable_dns_sites.",
+		"Unable to sort backup servers by DNS":                   "Site Discovery Warning: SSSD could not sort backup AD site servers via DNS. DC failover across sites may behave unpredictably.",
+		// --- TLS / SASL connection-level diagnostics (from sdap_async_connection.c) ---
+		"ldap_start_tls failed":                  "TLS Handshake Failure: STARTTLS negotiation to the LDAP server failed. Verify ldap_tls_cacertdir/ldap_tls_cacert and the server certificate chain.",
+		"Failed to set LDAP SASL nocanon option": "SASL Canonicalization Warning: The LDAP SASL nocanonicalize option could not be set. Hostnames may be canonicalized by the DC, causing SPN mismatch with Kerberos.",
+		"Failed to set LDAP MIN SSF option":      "LDAP SSF Mismatch: The minimum SSF (security strength factor) could not be applied. The negotiated protection level may be lower than required.",
+		"Failed to set LDAP MAX SSF option":      "LDAP SSF Mismatch: The maximum SSF could not be applied. Inspect ldap_sasl_maxssf.",
+		// --- Responder / cache & machine-account renewal patterns ---
+		"Failed to renew machine account":       "Machine Account Password Renewal Failure: SSSD could not renew the AD machine account password (adcli/kinit). The trust will expire; check time sync and AD permissions.",
+		"could not get list of trusted domains": "Trust Enumeration Error: SSSD could not retrieve the list of trusted domains from AD. Cross-forest lookups and subdomain logins will fail.",
 	}
 
 	if macType != "SELinux" {
@@ -344,6 +366,136 @@ func buildErrorPatterns(macType string) map[string]string {
 	}
 
 	return errorPatterns
+}
+
+// logPatternCategory maps a pattern description (unique per pattern) to a root
+// cause category. These categories ground two later phases:
+//   - correlateSequences (Phase 6d): sequence-based cause→effect attribution.
+//   - computeExecutiveSummary: dominantCategory weight is now seeded from the
+//     category of detected log errors (not only config findings).
+//
+// Categories mirror the high-level SSSD/AD failure domains surfaced in SUSE KB:
+// dns|srv|net|time|join|keytab|krb5|crypto|tls|sasl|gpo|idmap|db|cache|enum|access|offline
+var logPatternCategory = map[string]string{
+	// Kerberos / AD join
+	"Kerberos:":                        "krb5",
+	"Machine account password renewal": "krb5",
+	"Machine account password expired": "join",
+	"Missing Kerberos Realm":           "join",
+	"Kerberos Locator Error":           "krb5",
+	"Kerberos SPN Risk":                "join",
+	"Keytab Principal Missing":         "keytab",
+	"Offline Auth Failure":             "offline",
+
+	// DNS / SRV / network / failover
+	"DNS Resolution Error":         "dns",
+	"Hostname Resolution Error":    "dns",
+	"DNS SRV Timeout":              "srv",
+	"SRV Lookup Failure":           "srv",
+	"Network Error":                "net",
+	"Backend Connection Failure":   "net",
+	"Connection Reconnect Failure": "net",
+	"Backend Offline":              "offline",
+	"Site Discovery Warning":       "dns",
+
+	// TLS / SASL / crypto
+	"TLS Handshake Failure":         "tls",
+	"TLS Library Failure":           "tls",
+	"SASL Canonicalization Warning": "sasl",
+	"LDAP SSF Mismatch":             "tls",
+	"LDAP Connection Error":         "tls",
+	"Insecure Auth Blocked":         "tls",
+	"AD CRYPTO BUG":                 "crypto",
+	"AD Crypto":                     "crypto",
+
+	// LDAP / idmap / data provider
+	"LDAP Size Limit Hit":      "ldap",
+	"LDAP Latency":             "ldap",
+	"ID Mapping Error":         "idmap",
+	"Range Conflict":           "idmap",
+	"ID Out of Bounds":         "idmap",
+	"ID Map Persistence Error": "idmap",
+	"Backend Unreachable":      "ldap",
+	"Cache Corrupt":            "db",
+	"Database":                 "db",
+
+	// GPO / HBAC / access
+	"GPO Permission Denied":   "gpo",
+	"GPO Configuration Error": "gpo",
+	"GPO Permissive Mode":     "gpo",
+	"AD Account Disabled":     "access",
+	"AD Account Expired":      "access",
+	"Fail Closed":             "access",
+	"Access Denied":           "access",
+
+	// Enumeration / tuning
+	"Shells Limit Exceeded": "enum",
+	"Packet Overload":       "enum",
+	"TUNING":                "enum",
+}
+
+// exclusionPatterns are case-insensitive substrings. When a log line contains
+// ANY of these, it is skipped by the scanner entirely to avoid false positives
+// from unrelated daemons that happen to share a word. This replaces the old
+// hard-coded "winbindd" check in scanAndCollectErrors, making the suppression
+// list explicit and extensible (driven by the SSSD responder/module boundary).
+var exclusionPatterns = []string{
+	"winbindd", // winbind logs share 'sssd'/samba terminology but are unrelated
+	"nscd",     // nscd daemon noise (SSSD is the replacement; nscd logs are noise here)
+}
+
+// categoryFor returns the coarse root-cause category for a pattern description.
+// Runs a case-insensitive prefix match against the registered keys (the keys in
+// logPatternCategory are the descriptive prefix of the full findings produced by
+// buildErrorPatterns), then falls back to a keyword scan so new patterns that
+// forget to register keep working (defensive default).
+func categoryFor(description string) string {
+	l := strings.ToLower(description)
+	for key, cat := range logPatternCategory {
+		if strings.HasPrefix(l, strings.ToLower(key)) {
+			return cat
+		}
+	}
+	switch {
+	case strings.Contains(l, "dns") || strings.Contains(l, "resolv") || strings.Contains(l, "site") || strings.Contains(l, "host"):
+		return "dns"
+	case strings.Contains(l, "kerberos") || strings.Contains(l, "preauth") || strings.Contains(l, "clock") || strings.Contains(l, "ticket") || strings.Contains(l, "tgt"):
+		return "krb5"
+	case strings.Contains(l, "tls") || strings.Contains(l, "tls") || strings.Contains(l, "sasl"):
+		return "tls"
+	case strings.Contains(l, "offline") || strings.Contains(l, "backend offline"):
+		return "offline"
+	case strings.Contains(l, "keytab") || strings.Contains(l, "principal"):
+		return "keytab"
+	case strings.Contains(l, "srv") || strings.Contains(l, "service record"):
+		return "srv"
+	case strings.Contains(l, "ldap") || strings.Contains(l, "size limit") || strings.Contains(l, "data provider"):
+		return "ldap"
+	case strings.Contains(l, "gpo") || strings.Contains(l, "policy"):
+		return "gpo"
+	case strings.Contains(l, "id") || strings.Contains(l, "range") || strings.Contains(l, "mapping") || strings.Contains(l, "sid"):
+		return "idmap"
+	case strings.Contains(l, "cache") || strings.Contains(l, "database") || strings.Contains(l, "disk"):
+		return "db"
+	case strings.Contains(l, "access") || strings.Contains(l, "denied") || strings.Contains(l, "disabled") || strings.Contains(l, "expired"):
+		return "access"
+	case strings.Contains(l, "encrypt") || strings.Contains(l, "crypto") || strings.Contains(l, "rc4"):
+		return "crypto"
+	default:
+		return "general"
+	}
+}
+
+// isExcluded returns true when the line should be ignored by the scanner
+// (unrelated daemons / known noise that share SSSD keyword vocabulary).
+func isExcluded(line string) bool {
+	l := strings.ToLower(line)
+	for _, ex := range exclusionPatterns {
+		if strings.Contains(l, ex) {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeTimestamp converts a timestamp string from any supported format
@@ -425,8 +577,9 @@ func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[
 	scanFiles(dirPath, logFileNames, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 
-		// Ignore logs from winbindd to prevent false positives in /var/log/messages
-		if strings.Contains(strings.ToLower(lineTrimmed), "winbindd") {
+		// Context guards: drop lines from unrelated daemons that merely share
+		// SSSD keyword vocabulary (replaces the old hard-coded "winbindd" check).
+		if isExcluded(lineTrimmed) {
 			return
 		}
 
@@ -501,4 +654,3 @@ func buildSortedLogErrors(detectedLogErrors map[string][]string) []SSSDLogError 
 	})
 	return errors
 }
-

@@ -186,6 +186,16 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		applyAnalysisRules(dirPath, &report, customRules)
 	}
 
+	// ---- Phase 6d: Sequence-based root-cause correlation ----
+	// Collapses characteristic cause->effect chains in the timeline (DNS/SRV
+	// failover, Kerberos realm+clock skew, watchdog/overload, backend offline)
+	// into consolidated root-cause ConfigFindings, so the report stops listing
+	// N separate symptoms of M underlying failures.
+	if progressFunc != nil {
+		progressFunc("Correlating root-cause sequences...", 88)
+	}
+	correlateSequences(report.Timeline, &report)
+
 	// ---- Phase 7: Final checks ----
 	// Clean up duplicate entries mapped during distributed analysis
 	report.Problems = deduplicateProblems(report.Problems)

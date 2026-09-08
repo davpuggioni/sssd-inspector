@@ -59,6 +59,19 @@ func computeExecutiveSummary(r *ReportData) {
 	s.ProblemCount = len(r.Problems)
 	s.LogErrorCount = len(r.SSSDLogErrors)
 
+	// Weight log-error *categories* into the dominant root-cause so a burst of,
+	// say, DNS/SRV failover failures is surfaced as the dominant category, not
+	// drowned out by a long tail of config hints.
+	logCat := logCategoryHistogram(r)
+	weightedLog := make(map[string]int)
+	for cat, n := range logCat {
+		if sev, ok := logCategorySeverity[cat]; ok {
+			weightedLog[cat] = n * sev
+		} else {
+			weightedLog[cat] = n
+		}
+	}
+
 	// Weighted linear penalty model, floored at 0.
 	score := 100
 	score -= penaltyCritical * s.CriticalCount
@@ -71,14 +84,15 @@ func computeExecutiveSummary(r *ReportData) {
 	}
 	s.HealthScore = score
 
-	s.TopCategory, s.TopCategoryHits = dominantCategory(r)
-	s.Headline = buildHeadline(r, s)
+	s.TopCategory, s.TopCategoryHits = dominantCategory(r, weightedLog)
+	s.Headline = buildHeadline(r, s, weightedLog)
 }
 
-// dominantCategory returns the most frequent finding category, breaking ties
-// in favour of the higher severity. Returns "" when there is nothing to
-// attribute.
-func dominantCategory(r *ReportData) (string, int) {
+// dominantCategory returns the most weighted finding category, breaking ties in
+// favour of the higher severity. The weightedLog histogram (from log-error
+// categories) is merged into the config-finding weights so the dominant root
+// cause reflects both config and symptom signals.
+func dominantCategory(r *ReportData, weightedLog map[string]int) (string, int) {
 	hits := make(map[string]int)
 	weight := make(map[string]int)
 	for _, f := range r.ConfigFindings {
@@ -92,6 +106,10 @@ func dominantCategory(r *ReportData) (string, int) {
 			weight[f.Category]++
 		}
 	}
+	for cat, w := range weightedLog {
+		weight[cat] += w
+		hits[cat] += w
+	}
 	best, bestW := "", -1
 	for cat, w := range weight {
 		if w > bestW {
@@ -103,8 +121,16 @@ func dominantCategory(r *ReportData) (string, int) {
 
 // buildHeadline produces the one-line triage statement shown at the top of
 // the report. It prefers an explicit root cause from the category map, then
-// falls back to symptom-driven headlines.
-func buildHeadline(r *ReportData, s *ExecutiveSummary) string {
+// falls back to symptom-driven headlines. The optional rootCauseLabel (e.g. from
+// a detected sequence) is appended when present to explain the dominant cause.
+func buildHeadline(r *ReportData, s *ExecutiveSummary, weightedLog map[string]int) string {
+	// A detected sequence finding overrides the generic headline so the triage
+	// immediately explains the cause->effect chain.
+	for _, f := range r.ConfigFindings {
+		if strings.HasPrefix(f.Message, "[CORRELATED ROOT CAUSE]") {
+			return "[ROOT CAUSE] " + strings.TrimPrefix(f.Message, "[CORRELATED ROOT CAUSE] ")
+		}
+	}
 	if s.CriticalCount > 0 {
 		if h, ok := categoryHeadlines[s.TopCategory]; ok {
 			return "[CRITICAL] " + h
@@ -155,4 +181,27 @@ func summaryLines(r ReportData) []string {
 		lines = append(lines, " Triage:              "+strings.TrimSpace(s.Headline))
 	}
 	return lines
+}
+
+// logCategorySeverity assigns an ordinal "severity credit" to each coarse log
+// category so the dominant root-cause selection weights severe classes higher.
+var logCategorySeverity = map[string]int{
+	"offline": 3, "krb5": 3, "tls": 3, "keytab": 3, "crypto": 3,
+	"dns": 2, "srv": 2, "net": 2, "gpo": 2, "idmap": 2, "access": 2,
+	"join": 3,
+}
+
+// logCategoryHistogram buckets every detected SSSD log error into its coarse
+// category (dns/net/time/...). Used by computeExecutiveSummary to bias the
+// dominant-category toward the root cause behind the symptom cluster.
+func logCategoryHistogram(r *ReportData) map[string]int {
+	out := make(map[string]int)
+	for _, e := range r.SSSDLogErrors {
+		out[categoryFor(e.Description)]++
+	}
+	// Temporal-cluster descriptions also carry a category signal.
+	for _, c := range r.TemporalClusters {
+		out[categoryFor(c.Description)]++
+	}
+	return out
 }
