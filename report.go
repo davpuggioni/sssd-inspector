@@ -30,6 +30,14 @@ func buildTextReport(report ReportData) string {
 	}
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
 
+	// Root-cause breakdown (P4a): group config + log signals per coarse cause.
+	sb.WriteString("             ROOT-CAUSE BREAKDOWN (GROUPED)\n")
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+	for _, line := range buildRootCauseBreakdownLines(report) {
+		sb.WriteString(line + "\n")
+	}
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
+
 	sb.WriteString(fmt.Sprintf("[+] OS Release:        %s\n", report.SLESRlease))
 	sb.WriteString(fmt.Sprintf("[+] Kernel:            %s\n", report.KernelVersion))
 	sb.WriteString(fmt.Sprintf("[+] SCC Status:        %s\n", report.SCCStatus))
@@ -281,6 +289,33 @@ func writeHTMLReportFile(report ReportData, filename string) {
 		</div>
 	</div>
 
+	{{$rows := rootBreakdown .}}
+	{{if $rows}}
+	<h2>Root-Cause Breakdown</h2>
+	<div style="margin-bottom: 20px; max-width: 900px;">
+		<p style="font-size:0.9em; color:#555; margin-top:2px;">Signals grouped under the coarse root cause they point to (config + log), ranked by weighted strength. This is the "one root cause, many symptoms" view.</p>
+		{{range $rows}}
+		<details class="finding {{if lt .Severity 2}}warning{{else}}error{{end}}">
+			<summary>[{{.Category}}] — {{len .ConfigSignals}} config signal(s), {{len .LogSignals}} log signal(s)</summary>
+			<div style="margin-top:8px; padding-left:6px;">
+				{{if .ConfigSignals}}
+				<div style="font-weight:bold; font-size:0.85em; color:#555;">Config / correlation signals</div>
+				<ul style="margin:4px 0 10px 0; padding-left:20px;">
+					{{range .ConfigSignals}}<li style="margin-bottom:4px;">{{.}}</li>{{end}}
+				</ul>
+				{{end}}
+				{{if .LogSignals}}
+				<div style="font-weight:bold; font-size:0.85em; color:#555;">Log signals</div>
+				<ul style="margin:4px 0 0 0; padding-left:20px;">
+					{{range .LogSignals}}<li style="margin-bottom:4px;">{{.}}</li>{{end}}
+				</ul>
+				{{end}}
+			</div>
+		</details>
+		{{end}}
+	</div>
+	{{end}}
+
 	<table class="info-table">
 		<tr><td colspan="2" class="section-title">System & Virtualization Information</td></tr>
 		<tr><th>OS Release</th><td>{{.SLESRlease}}</td></tr>
@@ -439,6 +474,64 @@ func writeHTMLReportFile(report ReportData, filename string) {
 	<div class="footer">
 		sssd-inspector v{{.AppVersion}} - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.
 	</div>
+
+	<script>
+	// Vanilla-JS report interactivity (no external runtime): severity filter,
+	// live text search over the DOM. The report is fully usable and printable
+	// without JavaScript.
+	(function () {
+		var activeSev = "all", searchText = "";
+		var sevBtns = {};
+
+		function applyFilters() {
+			var items = document.querySelectorAll(".finding");
+			Array.prototype.forEach.call(items, function (it) {
+				var cls = it.className || "";
+				var sevOk = activeSev === "all" || cls.indexOf(activeSev) !== -1;
+				var txt = (it.textContent || "").toLowerCase();
+				var searchOk = searchText === "" || txt.indexOf(searchText) !== -1;
+				it.style.display = (sevOk && searchOk) ? "" : "none";
+			});
+		}
+
+		// Toolbar with a search box and severity filter buttons.
+		var bar = document.createElement("div");
+		bar.style.cssText = "max-width:900px; margin:12px 0; padding:10px; background:#fff; border-radius:6px; box-shadow:0 0 6px rgba(0,0,0,0.08); font-size:0.9em; display:flex; align-items:center; gap:8px; flex-wrap:wrap;";
+		var inp = document.createElement("input");
+		inp.type = "text";
+		inp.placeholder = "Search findings & root causes...";
+		inp.style.cssText = "flex:1 1 220px; min-width:200px; padding:6px; border:1px solid #ccc; border-radius:4px;";
+		inp.addEventListener("input", function () {
+			searchText = (inp.value || "").toLowerCase();
+			applyFilters();
+		});
+		bar.appendChild(inp);
+
+		var label = document.createElement("span");
+		label.textContent = "Severity:";
+		label.style.color = "#333";
+		bar.appendChild(label);
+		["all", "critical", "error", "warning"].forEach(function (sev) {
+			var b = document.createElement("button");
+			b.type = "button";
+			b.textContent = sev.charAt(0).toUpperCase() + sev.slice(1);
+			b.style.cssText = "padding:5px 10px; border:1px solid #aaa; border-radius:4px; cursor:pointer; background:#e9ecef; color:#000;";
+			sevBtns[sev] = b;
+			b.addEventListener("click", function () {
+				activeSev = sev;
+				for (var k in sevBtns) {
+					var on = (k === sev);
+					sevBtns[k].style.background = on ? "#0056b3" : "#e9ecef";
+					sevBtns[k].style.color = on ? "#fff" : "#000";
+				}
+				applyFilters();
+			});
+			bar.appendChild(b);
+		});
+		document.body.insertBefore(bar, document.body.firstChild);
+		applyFilters();
+	})();
+</script>
 </body>
 </html>
 `
@@ -455,6 +548,7 @@ func writeHTMLReportFile(report ReportData, filename string) {
 				return "warning"
 			}
 		},
+		"rootBreakdown": rootCauseBreakdown,
 	}).Parse(tpl)
 	if err != nil {
 		log.Printf("Template parsing error: %v", err)

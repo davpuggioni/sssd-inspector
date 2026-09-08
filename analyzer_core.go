@@ -145,6 +145,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		// substring-based legacy scanning in analyzeSSSDConfig.
 		cfg := parseSssdConfig(sssdConfContent)
 		validateDuplicateKeys(cfg, &report)   // duplicate keys apply to the whole config
+		validateDomainStructure(cfg, &report) // mandatory id_provider + no inherit_from in domains
 		validateADConfig(cfg, &report)        // AD-specific typed-option checks
 		validateConfigStructure(cfg, &report) // Phase 2: domains + responders
 		validateIDMapRanges(cfg, &report)     // Phase 2: idmap range overlaps

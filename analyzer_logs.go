@@ -46,6 +46,7 @@ func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
 
 		cfg := parseSssdConfig(sssdConfContent)
 		validateDuplicateKeys(cfg, report)
+		validateDomainStructure(cfg, report)
 		validateADConfig(cfg, report)
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")

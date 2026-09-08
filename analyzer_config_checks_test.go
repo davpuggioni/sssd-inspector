@@ -92,3 +92,58 @@ func TestValidateIDMapRanges_DisabledMappingIgnored(t *testing.T) {
 		t.Errorf("disabled id_mapping should not produce findings: %+v", report.ConfigFindings)
 	}
 }
+
+// TestValidateDomainStructure_MissingIDProvider mirrors SSSD's
+// check_domain_id_provider: a domain without the mandatory id_provider is
+// flagged as a configuration error (validated from src/util/sss_ini.c).
+func TestValidateDomainStructure_MissingIDProvider(t *testing.T) {
+	cfg := parseSssdConfig("[sssd]\nservices = nss, pam\n\n[domain/example.com]\nkrb5_realm = EXAMPLE.COM\n")
+	var report ReportData
+	validateDomainStructure(cfg, &report)
+
+	found := false
+	for _, f := range report.ConfigFindings {
+		if strings.Contains(f.Message, "missing the mandatory 'id_provider'") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("domain missing id_provider was not flagged")
+	}
+}
+
+// TestValidateDomainStructure_InvalidProvider flags an unsupported provider.
+func TestValidateDomainStructure_InvalidProvider(t *testing.T) {
+	cfg := parseSssdConfig("[sssd]\n\n[domain/x]\nid_provider = bogus\n")
+	var report ReportData
+	validateDomainStructure(cfg, &report)
+
+	found := false
+	for _, f := range report.ConfigFindings {
+		if strings.Contains(f.Message, "has invalid id_provider") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("invalid id_provider value was not flagged")
+	}
+}
+
+// TestValidateDomainStructure_InheritFrom mirrors SSSD's
+// check_domain_inherit_from: inherit_from inside a [domain/*] section is not
+// permitted.
+func TestValidateDomainStructure_InheritFrom(t *testing.T) {
+	cfg := parseSssdConfig("[domain/example.com]\nid_provider = ad\ninherit_from = default\n")
+	var report ReportData
+	validateDomainStructure(cfg, &report)
+
+	found := false
+	for _, f := range report.ConfigFindings {
+		if strings.Contains(f.Message, "inherit_from") && strings.Contains(f.Message, "not permitted") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("inherit_from inside a domain was not flagged")
+	}
+}

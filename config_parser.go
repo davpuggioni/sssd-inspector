@@ -28,11 +28,11 @@ type SssdSection struct {
 
 // ParsedConfig is the in-memory representation of an sssd.conf file.
 type ParsedConfig struct {
-	Raw        []string        // original lines (trimmed) for evidence rendering
+	Raw        []string // original lines (trimmed) for evidence rendering
 	Sections   map[string]*SssdSection
-	Order      []string        // section header order (stable iteration)
-	HasAD      bool            // true if at least one domain uses id_provider = ad
-	AdSections []*SssdSection  // the AD provider sections
+	Order      []string       // section header order (stable iteration)
+	HasAD      bool           // true if at least one domain uses id_provider = ad
+	AdSections []*SssdSection // the AD provider sections
 }
 
 // parseSssdConfig parses the INI-format content of sssd.conf.
@@ -119,6 +119,42 @@ func sectionKind(name string) string {
 		return name
 	}
 }
+
+// validateDomainStructure applies the domain-level structural checks that
+// mirror SSSD's own sss_ini.c custom validators (verified in the C source:
+// check_domain_id_provider, check_domain_inherit_from):
+//   - id_provider is mandatory and must be one of ad|ipa|ldap|proxy|simple.
+//   - inherit_from is NOT permitted inside a [domain/*] section (SSSD rejects
+//     it there; it is only valid under the [sssd] section to reuse defaults).
+//
+// These checks run for every provider type, not just AD, so a misconfigured
+// LDAP/IPA/proxy domain is flagged before log analysis.
+func validateDomainStructure(cfg *ParsedConfig, report *ReportData) {
+	allowedProviders := map[string]bool{"ad": true, "ipa": true, "ldap": true, "proxy": true, "simple": true}
+	for _, name := range cfg.Order {
+		sec := cfg.Sections[name]
+		if sec.Kind != "domain" {
+			continue
+		}
+		// id_provider must be present and valid.
+		if vals := sec.Options["id_provider"]; len(vals) == 0 {
+			msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' is missing the mandatory 'id_provider' option. SSSD will not start this domain until a provider (ad, ipa, ldap, proxy, simple) is set.", strings.TrimPrefix(name, "domain/"))
+			addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", 0, "")
+		} else {
+			prov := strings.ToLower(strings.TrimSpace(strings.Split(vals[0].Value, ",")[0]))
+			if !allowedProviders[prov] {
+				msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' has invalid id_provider '%s'. Valid values are: ad, ipa, ldap, proxy, simple.", strings.TrimPrefix(name, "domain/"), vals[0].Value)
+				addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", vals[0].Line, "id_provider = "+vals[0].Value)
+			}
+		}
+		// inherit_from is not allowed in per-domain sections.
+		if v, line, ok := firstOption(sec, "inherit_from"); ok && v != "" {
+			msg := fmt.Sprintf("CONFIGURATION ERROR: 'inherit_from' is not permitted inside a [domain/*] section (domain '%s'). It is only valid under [sssd] to reuse a domain template. Move the setting or remove it.", strings.TrimPrefix(name, "domain/"))
+			addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".inherit_from", line, "inherit_from = "+v)
+		}
+	}
+}
+
 // validateADConfig runs the typed AD option validator against a parsed config.
 // It centralizes the AD checks that were previously scattered (and buggy) in
 // analyzeSSSDConfig.

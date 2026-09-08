@@ -37,8 +37,48 @@ var kbStopwords = map[string]struct{}{
 	"unable": {}, "could": {},
 }
 
+// kbSynonyms maps domain-specific token variants to a single canonical token so
+// that the lexical (TF-IDF/BM25) matching treats "kdc"/"krb5", "nsupdate"/"ddns",
+// "skew"/"clock" etc. as one concept. Without this, a KB article that only says
+// "KDC unreachable" gets a low similarity against a log line that says
+// "krb5_child timeout", even though they describe the same root cause. This is
+// a cheap, model-free recall booster driven purely by the SSSD/AD lexicon
+// (mirrors the cn= the logPatternCategory classification buckets).
+var kbSynonyms = map[string]string{
+	"krb5":         "kerberos",
+	"krb":          "kerberos",
+	"kdc":          "kerberos",
+	"keytab":       "kerberos",
+	"tgt":          "ticket",
+	"ntlm":         "kerberos",
+	"preauth":      "preauth",
+	"nsupdate":     "dns",
+	"ddns":         "dns",
+	"skew":         "clock",
+	"timeout":      "timeout",
+	"connect":      "connect",
+	"reconnect":    "connect",
+	"srv":          "srv",
+	"offline":      "offline",
+	"disconnected": "disconnected",
+	"starttls":     "tls",
+	"ssl":          "tls",
+	"ldaps":        "tls",
+}
+
+// normalizeKBTerm maps a token to its canonical form via kbSynonyms; tokens
+// without a registered synonym are returned unchanged.
+func normalizeKBTerm(term string) string {
+	if syn, ok := kbSynonyms[term]; ok {
+		return syn
+	}
+	return term
+}
+
 // tokenizeKB lowercases and splits text into normalized alphanumeric tokens,
-// dropping stopwords and tokens shorter than 3 characters.
+// dropping stopwords and tokens shorter than 3 characters. Each kept token is
+// passed through the domain synonym dictionary so equivalent vocabulary from
+// the SSSD world maps to a single term before TF-IDF/BM25 scoring.
 func tokenizeKB(text string) []string {
 	var tokens []string
 	cur := strings.Builder{}
@@ -46,7 +86,7 @@ func tokenizeKB(text string) []string {
 		if cur.Len() >= 3 {
 			t := cur.String()
 			if _, stop := kbStopwords[t]; !stop {
-				tokens = append(tokens, t)
+				tokens = append(tokens, normalizeKBTerm(t))
 			}
 		}
 		cur.Reset()
@@ -114,6 +154,49 @@ func cosineSimilarity(a, b map[string]float64) float64 {
 	return dot / (math.Sqrt(na) * math.Sqrt(nb))
 }
 
+// BM25 ranking parameters: k1 controls term-frequency saturation (>0, usually
+// 1.2) and b the document-length normalisation (0=off, 1=full). Values chosen
+// for short SSSD log lines against longer KB articles.
+const (
+	bm25K1 = 1.2
+	bm25B  = 0.75
+)
+
+// kbBM25 scores a document against a query using the Okapi BM25 ranking
+// function. query and doc are raw term-frequency vectors (see kbVector). It
+// improves on raw TF-IDF cosine for ranking: it applies document-length
+// normalisation and saturates raw term frequency, so a verbose KB article is
+// not unfairly downgraded because it is long.
+func kbBM25(query, doc map[string]float64, docLen, avgDocLen, corpusN int, df map[string]int) float64 {
+	if len(query) == 0 || len(doc) == 0 {
+		return 0
+	}
+	if avgDocLen <= 0 {
+		avgDocLen = 1
+	}
+	var score float64
+	for term := range query {
+		n, inCorpus := df[term]
+		if !inCorpus {
+			continue
+		}
+		idf := math.Log(1 + (float64(corpusN)-float64(n)+0.5)/(float64(n)+0.5))
+		if idf <= 0 {
+			continue
+		}
+		f, ok := doc[term]
+		if !ok {
+			continue
+		}
+		denom := f + bm25K1*(1-bm25B+bm25B*float64(docLen)/float64(avgDocLen))
+		if denom == 0 {
+			continue
+		}
+		score += idf * f * (bm25K1 + 1) / denom
+	}
+	return score
+}
+
 // kbDocumentTokens returns the token list of an article's document.
 func kbDocumentTokens(a *TIDArticle) []string {
 	text := a.Title + "\n" + a.Description + "\n" + a.Situation + "\n" + a.Cause + "\n" + a.PlainText
@@ -154,8 +237,18 @@ func analyzeKBSuggestions(timeline []TimelineEvent, kbArticles []TIDArticle, mat
 	docs, df := buildKBCorpus(kbArticles)
 	corpusSize := len(docs)
 	docVectors := make([]map[string]float64, corpusSize)
+	docLen := make([]int, corpusSize)
+	var totalLen int
+	rawVectors := make([]map[string]float64, corpusSize)
 	for i, toks := range docs {
 		docVectors[i] = kbTfIdf(toks, df, corpusSize, false)
+		rawVectors[i] = kbVector(toks)
+		docLen[i] = len(toks)
+		totalLen += len(toks)
+	}
+	avgDocLen := 0
+	if corpusSize > 0 {
+		avgDocLen = totalLen / corpusSize
 	}
 
 	// Collect unique raw log lines (bounded).
@@ -177,16 +270,19 @@ func analyzeKBSuggestions(timeline []TimelineEvent, kbArticles []TIDArticle, mat
 	}
 
 	type agg struct {
-		score float64
+		score float64 // TF-IDF cosine similarity (kept for 0..1 report compat)
+		bm25  float64 // Okapi BM25 score (superior lexical ranking signal)
 		line  string
 	}
 	best := make(map[string]*agg)
 
 	for _, q := range queries {
-		qv := kbTfIdf(tokenizeKB(q), df, corpusSize, true)
+		qt := tokenizeKB(q)
+		qv := kbTfIdf(qt, df, corpusSize, true)
 		if len(qv) == 0 {
 			continue
 		}
+		queryVec := kbVector(qt)
 		for i := range kbArticles {
 			if _, skip := matched[kbArticles[i].TIDID]; skip {
 				continue
@@ -195,36 +291,54 @@ func analyzeKBSuggestions(timeline []TimelineEvent, kbArticles []TIDArticle, mat
 			if score < kbSuggestionMinScore {
 				continue
 			}
+			bm := kbBM25(queryVec, rawVectors[i], docLen[i], avgDocLen, corpusSize, df)
 			cur := best[kbArticles[i].TIDID]
-			if cur == nil || score > cur.score {
-				best[kbArticles[i].TIDID] = &agg{score: score, line: q}
+			if cur == nil || (bm > cur.bm25 || (bm == cur.bm25 && score > cur.score)) {
+				best[kbArticles[i].TIDID] = &agg{score: score, bm25: bm, line: q}
 			}
 		}
 	}
 
-	suggestions := make([]KBSuggestion, 0, len(best))
+	// Build suggestion candidates, carrying both similarity scores.
+	type candidate struct {
+		tid, title, url, line string
+		score, bm25           float64
+	}
+	cands := make([]candidate, 0, len(best))
 	for tid, a := range best {
 		for i := range kbArticles {
 			if kbArticles[i].TIDID == tid {
-				suggestions = append(suggestions, KBSuggestion{
-					TIDID:      tid,
-					Title:      kbArticles[i].Title,
-					URL:        kbArticles[i].URL,
-					Score:      a.score,
-					SampleLine: a.line,
+				cands = append(cands, candidate{
+					tid: tid, title: kbArticles[i].Title, url: kbArticles[i].URL,
+					line: a.line, score: a.score, bm25: a.bm25,
 				})
 				break
 			}
 		}
 	}
-	sort.SliceStable(suggestions, func(i, j int) bool {
-		if suggestions[i].Score != suggestions[j].Score {
-			return suggestions[i].Score > suggestions[j].Score
+	// Rank primarily by BM25 (document-length-aware, frequency-saturating),
+	// breaking ties by the comparable cosine similarity.
+	sort.SliceStable(cands, func(i, j int) bool {
+		if cands[i].bm25 != cands[j].bm25 {
+			return cands[i].bm25 > cands[j].bm25
 		}
-		return suggestions[i].TIDID < suggestions[j].TIDID
+		if cands[i].score != cands[j].score {
+			return cands[i].score > cands[j].score
+		}
+		return cands[i].tid < cands[j].tid
 	})
-	if len(suggestions) > kbSuggestionMax {
-		suggestions = suggestions[:kbSuggestionMax]
+	if len(cands) > kbSuggestionMax {
+		cands = cands[:kbSuggestionMax]
+	}
+	suggestions := make([]KBSuggestion, 0, len(cands))
+	for _, c := range cands {
+		suggestions = append(suggestions, KBSuggestion{
+			TIDID:      c.tid,
+			Title:      c.title,
+			URL:        c.url,
+			Score:      c.score, // cosine similarity in 0..1 for report display
+			SampleLine: c.line,
+		})
 	}
 	return suggestions
 }
