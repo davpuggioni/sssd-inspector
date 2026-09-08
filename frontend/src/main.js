@@ -26,6 +26,35 @@ function escapeHtml(text) {
 // ==========================================================================
 // Report Rendering
 // ==========================================================================
+// Lightweight INI syntax highlighter for sssd.conf (no external deps).
+// Escapes HTML first, then wraps tokens in spans: sections, comments,
+// keys and values. Line-based so whitespace/indentation is preserved.
+// NOTE: kept at module scope (outside template literals) — nested
+// backticks inside a template literal break the Vite/esbuild parser.
+const highlightIni = (text) => {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const KEY_RE = /^([A-Za-z_][A-Za-z0-9_.-]*)(\s*=\s*)(.*)$/;
+  return String(text).split('\n').map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) {
+      return `<span class="ini-comment">${esc(line)}</span>`;
+    }
+    const sec = trimmed.match(/^\[([^\]]*)\]$/);
+    if (sec) {
+      // Highlight only the section header part; keep surrounding whitespace verbatim.
+      const start = line.indexOf('[');
+      const end = line.lastIndexOf(']');
+      const before = line.slice(0, start);
+      const after = line.slice(end + 1);
+      return `${esc(before)}<span class="ini-section">[${esc(sec[1])}]</span>${esc(after)}`;
+    }
+    const kv = line.match(KEY_RE);
+    if (kv) {
+      return `<span class="ini-key">${esc(kv[1])}</span><span class="ini-op">${esc(kv[2])}</span><span class="ini-value">${esc(kv[3])}</span>`;
+    }
+    return esc(line);
+  }).join('\n');
+};
 
 function renderReportHTML(report) {
     const s = report.summary || { health_score: 0, critical_count: 0, error_count: 0, warning_count: 0, log_error_count: 0, headline: '' };
@@ -81,35 +110,6 @@ function renderReportHTML(report) {
         <tr><td colspan="2" class="section-title">Advanced SSSD Configuration</td></tr>
         <tr><th>AD Provider Mode</th><td>${yesNo(report.ad_provider_mode)}</td></tr>
         <tr><th>Enumerate Issue</th><td>${yesNo(report.enumerate_issue)}</td></tr>
-  // Lightweight INI syntax highlighter for sssd.conf (no external deps).
-  // Escapes HTML first, then wraps tokens in spans: sections, comments,
-  // keys and values. Line-based so whitespace/indentation is preserved.
-  const highlightIni = (text) => {
-    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const KEY_RE = /^([A-Za-z_][A-Za-z0-9_.-]*)(\s*=\s*)(.*)$/;
-    return String(text).split('\n').map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) {
-        return `<span class="ini-comment">${esc(line)}</span>`;
-      }
-      const sec = trimmed.match(/^\[([^\]]*)\]$/);
-      if (sec) {
-        // Highlight only the section header part; keep surrounding whitespace verbatim.
-        const start = line.indexOf('[');
-        const end = line.lastIndexOf(']');
-        const before = line.slice(0, start);
-        const after = line.slice(end + 1);
-        return `${esc(before)}<span class="ini-section">[${esc(sec[1])}]</span>${esc(after)}`;
-      }
-      const kv = line.match(KEY_RE);
-      if (kv) {
-        return `<span class="ini-key">${esc(kv[1])}</span><span class="ini-op">${esc(kv[2])}</span><span class="ini-value">${esc(kv[3])}</span>`;
-      }
-      return esc(line);
-    }).join('\n');
-  };
-
-
         <tr><th>Use FQDN Set</th><td>${yesNo(report.use_fqdn_set)}</td></tr>
         
         <tr><td colspan="2" class="section-title">Configuration Files</td></tr>
