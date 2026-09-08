@@ -1008,3 +1008,54 @@
 @media print {
   .corr-zoombar { display: none; }
 }
+
+/* ── Collapsible report sections ── */
+.report-section {
+  margin: 0.9em 0;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+.report-section > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.55em 0.9em;
+  background: #26262e;
+  user-select: none;
+}
+.report-section > summary::-webkit-details-marker { display: none; }
+.report-section > summary::before {
+  content: '\25B8'; /* ▸ */
+  display: inline-block;
+  margin-right: 0.45em;
+  color: #888;
+  transition: transform 0.15s ease;
+}
+.report-section[open] > summary::before { transform: rotate(90deg); }
+.report-section > summary:hover { background: #2e2e38; }
+.report-section > summary h2 {
+  display: inline;
+  margin: 0;
+  font-size: 1.05em;
+  border: none;
+}
+.section-count {
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0.05em 0.55em;
+  border-radius: 999px;
+  background: #3a3a46;
+  color: #ccc;
+  font-size: 0.72em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.report-section > .section-body { padding: 0.4em 0.9em 0.7em; }
+.dark-mode .report-section { border-color: #2a2a2a; }
+.dark-mode .report-section > summary { background: #1a1a20; }
+.dark-mode .report-section > summary:hover { background: #22222a; }
+@media print {
+  .report-section { border: none; }
+  .report-section:not([open]) > .section-body { display: block; }
+}

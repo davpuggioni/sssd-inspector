@@ -93,56 +93,69 @@ function renderReportHTML(report) {
         </td></tr>
     </table>`;
 
+    // Collapsible section helper: same pattern as the Correlation Graph
+    // section — native <details>/<summary>, zero JS needed.
+    const collapsible = (title, cls, body, open = true, count = null) => {
+      const badge = count !== null ? ` <span class="section-count">${count}</span>` : '';
+      return `<details class="report-section"${open ? ' open' : ''}><summary><h2 class="${cls || ''}">${title}${badge}</h2></summary><div class="section-body">${body}</div></details>`;
+    };
+
     if (report.config_findings && report.config_findings.length > 0) {
-        html += `<h2 class="warn-header">Configuration Findings (with provenance)</h2>`;
+        let body = '';
         report.config_findings.forEach(f => {
             const cls = f.severity === 2 ? 'critical' : f.severity === 1 ? 'error' : 'warning';
             const line = f.source_line && f.source_line > 0 ? f.source_line : 'n/a';
-            html += `<div class="finding ${cls}"><div class="headline">${escapeHtml(f.message)}</div><div class="finding-meta">Source: ${escapeHtml(f.source_path)} | Key: ${escapeHtml(f.source_key)} | Line: ${line}${f.evidence ? `<br/>Evidence: ${escapeHtml(f.evidence)}` : ''}</div></div>`;
+            body += `<div class="finding ${cls}"><div class="headline">${escapeHtml(f.message)}</div><div class="finding-meta">Source: ${escapeHtml(f.source_path)} | Key: ${escapeHtml(f.source_key)} | Line: ${line}${f.evidence ? `<br/>Evidence: ${escapeHtml(f.evidence)}` : ''}</div></div>`;
         });
+        html += collapsible('Configuration Findings (with provenance)', 'warn-header', body, true, report.config_findings.length);
     }
     if (report.problems && report.problems.length > 0) {
-        html += `<h2>Critical Problems Detected</h2><ul class="problem-list">${listItems(report.problems)}</ul>`;
+        html += collapsible('Critical Problems Detected', '', `<ul class="problem-list">${listItems(report.problems)}</ul>`, true, report.problems.length);
     }
     if (report.warnings && report.warnings.length > 0) {
-        html += `<h2 class="warn-header">Warnings & Recommendations</h2><ul class="warn-list">${listItems(report.warnings)}</ul>`;
+        html += collapsible('Warnings & Recommendations', 'warn-header', `<ul class="warn-list">${listItems(report.warnings)}</ul>`, true, report.warnings.length);
     }
     if (report.sssd_log_errors && report.sssd_log_errors.length > 0) {
-        html += `<h2>SSSD Log Errors</h2>`;
+        let body = '';
         report.sssd_log_errors.forEach(error => {
-            html += `<div class="error-item"><h3 class="error-title">${escapeHtml(error.description)}</h3>${error.examples && error.examples.length > 0 ? `<div class="log-block">${error.examples.map(ex => escapeHtml(ex)).join('<br>')}</div>` : ''}</div>`;
+            body += `<div class="error-item"><h3 class="error-title">${escapeHtml(error.description)}</h3>${error.examples && error.examples.length > 0 ? `<div class="log-block">${error.examples.map(ex => escapeHtml(ex)).join('<br>')}</div>` : ''}</div>`;
         });
+        html += collapsible('SSSD Log Errors', '', body, true, report.sssd_log_errors.length);
     }
     if (report.mac_denial_examples && report.mac_denial_examples.length > 0) {
-        html += `<h2>MAC Security Denials</h2><div class="mac-block">${report.mac_denial_examples.map(ex => escapeHtml(ex)).join('<br>')}</div>`;
+        html += collapsible('MAC Security Denials', '', `<div class="mac-block">${report.mac_denial_examples.map(ex => escapeHtml(ex)).join('<br>')}</div>`, true, report.mac_denial_examples.length);
     }
     if (report.timeline && report.timeline.length > 0) {
-        html += `<h2>Event Timeline</h2><div class="timeline">`;
+        let body = '<div class="timeline">';
         report.timeline.forEach(event => {
-            html += `<div class="timeline-event"><div class="timeline-time">${event.timestamp}</div><div class="timeline-msg">${escapeHtml(event.message)}</div>${event.raw_log ? `<div class="timeline-raw">${escapeHtml(event.raw_log)}</div>` : ''}</div>`;
+            body += `<div class="timeline-event"><div class="timeline-time">${event.timestamp}</div><div class="timeline-msg">${escapeHtml(event.message)}</div>${event.raw_log ? `<div class="timeline-raw">${escapeHtml(event.raw_log)}</div>` : ''}</div>`;
         });
-        html += `</div>`;
+        body += '</div>';
+        html += collapsible('Event Timeline', '', body, true, report.timeline.length);
     }
     if (report.matched_tids && report.matched_tids.length > 0) {
-        html += `<h2 class="kb-header">Relevant Knowledge Base Articles</h2>`;
+        let body = '';
         report.matched_tids.forEach(tid => {
-            html += `<div class="kb-article"><h4><a href="${escapeHtml(tid.url)}" target="_blank" class="tid-link">${escapeHtml(tid.title)}</a></h4><p class="tid-id">TID: ${escapeHtml(tid.tid_id)}</p><p class="kb-description">${escapeHtml(tid.description)}</p>${tid.evidence && tid.evidence.length > 0 ? `<details><summary>Evidence Found</summary><div class="kb-evidence">${tid.evidence.map(ex => escapeHtml(ex)).join('<br>')}</div></details>` : ''}</div>`;
+            body += `<div class="kb-article"><h4><a href="${escapeHtml(tid.url)}" target="_blank" class="tid-link">${escapeHtml(tid.title)}</a></h4><p class="tid-id">TID: ${escapeHtml(tid.tid_id)}</p><p class="kb-description">${escapeHtml(tid.description)}</p>${tid.evidence && tid.evidence.length > 0 ? `<details><summary>Evidence Found</summary><div class="kb-evidence">${tid.evidence.map(ex => escapeHtml(ex)).join('<br>')}</div></details>` : ''}</div>`;
         });
+        html += collapsible('Relevant Knowledge Base Articles', 'kb-header', body, true, report.matched_tids.length);
     }
     if (report.temporal_clusters && report.temporal_clusters.length > 0) {
-        html += `<h2 class="warn-header">Temporal Clusters (Retry Loops / Flapping)</h2>`;
+        let body = '';
         report.temporal_clusters.forEach(c => {
-            html += `<div class="finding warning"><div class="headline">${escapeHtml(c.description)}</div><div class="finding-meta">${c.event_count} occurrences between ${escapeHtml(c.window_start)} and ${escapeHtml(c.window_end)}</div>${c.sample_raw_log ? `<div class="log-block">${escapeHtml(c.sample_raw_log)}</div>` : ''}</div>`;
+            body += `<div class="finding warning"><div class="headline">${escapeHtml(c.description)}</div><div class="finding-meta">${c.event_count} occurrences between ${escapeHtml(c.window_start)} and ${escapeHtml(c.window_end)}</div>${c.sample_raw_log ? `<div class="log-block">${escapeHtml(c.sample_raw_log)}</div>` : ''}</div>`;
         });
+        html += collapsible('Temporal Clusters (Retry Loops / Flapping)', 'warn-header', body, true, report.temporal_clusters.length);
     }
     if (report.kb_suggestions && report.kb_suggestions.length > 0) {
-        html += `<h2 class="kb-header">KB Suggestions (Fuzzy Match)</h2><p class="kb-description">Log lines that no known pattern matched, correlated with similar Knowledge Base articles (TF-IDF similarity):</p>`;
+        let body = `<p class="kb-description">Log lines that no known pattern matched, correlated with similar Knowledge Base articles (TF-IDF similarity):</p>`;
         report.kb_suggestions.forEach(s => {
-            html += `<div class="kb-article"><h4><a href="${escapeHtml(s.url)}" target="_blank" class="tid-link">${escapeHtml(s.tid_id)}: ${escapeHtml(s.title)}</a></h4><p class="tid-id">Similarity: ${(s.score * 100).toFixed(0)}%</p>${s.sample_line ? `<div class="log-block">${escapeHtml(s.sample_line)}</div>` : ''}</div>`;
+            body += `<div class="kb-article"><h4><a href="${escapeHtml(s.url)}" target="_blank" class="tid-link">${escapeHtml(s.tid_id)}: ${escapeHtml(s.title)}</a></h4><p class="tid-id">Similarity: ${(s.score * 100).toFixed(0)}%</p>${s.sample_line ? `<div class="log-block">${escapeHtml(s.sample_line)}</div>` : ''}</div>`;
         });
+        html += collapsible('KB Suggestions (Fuzzy Match)', 'kb-header', body, true, report.kb_suggestions.length);
     }
     // Correlation graph container (rendered after DOM insertion by renderCorrelationGraph)
-    html += `<details class="corr-graph-section"><summary><h2 class="corr-graph-heading">Correlation Graph</h2></summary><div class="corr-graph-host" id="corrGraphHost"></div></details>`;
+    html += `<details class="corr-graph-section report-section"><summary><h2 class="corr-graph-heading">Correlation Graph</h2></summary><div class="corr-graph-host" id="corrGraphHost"></div></details>`;
 
     return html;
 }
