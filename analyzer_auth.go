@@ -304,7 +304,11 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 
 	if major > 2 || (major == 2 && minor >= 10) {
 		if isSles15SP7 {
-			expectedConfOwner, expectedConfGroup, expectedConfPerms = "root", "root", "-rw-------"
+			// SLES 15 SP7: the official SUSE documentation specifies
+			// root:sssd ownership with 0640 permissions for
+			// /etc/sssd/sssd.conf. Some updated SP7 builds reverted to
+			// root:root with 0600, so BOTH variants are accepted here to
+			// avoid false positives on correctly configured hosts.
 			expectedVarOwner, expectedVarGroup = "root", "root"
 		} else {
 			expectedConfOwner, expectedConfGroup, expectedConfPerms = "root", "sssd", "-rw-r-----"
@@ -326,18 +330,27 @@ func analyzeSSSDFilePermissions(dirPath string, report *ReportData) {
 			fields := strings.Fields(lineTrimmed)
 			if len(fields) >= 8 {
 				perms, owner, group := fields[0], fields[2], fields[3]
-				if owner != expectedConfOwner || group != expectedConfGroup {
-					if isSles15SP7 {
-						report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but SLES 15 SP7 expects '%s:%s'. Please change the permissions.", owner, group, expectedConfOwner, expectedConfGroup))
-						if isBuggySssdBuild {
+
+				if isSles15SP7 {
+					// SLES 15 SP7 accepts BOTH documented variants:
+					//   - root:sssd with 0640 (official SUSE docs)
+					//   - root:root with 0600 (updated SP7 builds)
+					// Report an error ONLY when neither variant matches, so a
+					// correctly configured host never sees this message.
+					ownerOK := owner == "root" && (group == "sssd" || group == "root")
+					permsOK := perms == "-rw-r-----" || perms == "-rw-------"
+					if !ownerOK || !permsOK {
+						report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s' with permissions '%s'. On SLES 15 SP7 SSSD expects either 'root:sssd' with '-rw-r-----' (0640, official SUSE documentation) or 'root:root' with '-rw-------' (0600, updated builds). Please change the permissions.", owner, group, perms))
+						if isBuggySssdBuild && !ownerOK {
 							report.Problems = append(report.Problems, "sssd 2.10.2-150700.9.17.1 is installed, please update sssd to the most recent package.")
 						}
-					} else {
-						report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but installed SSSD version %d.%d strictly requires '%s:%s'. The service will fail to start.", owner, group, major, minor, expectedConfOwner, expectedConfGroup))
+						foundConfErr = true
 					}
+				} else if owner != expectedConfOwner || group != expectedConfGroup {
+					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf is owned by '%s:%s', but installed SSSD version %d.%d strictly requires '%s:%s'. The service will fail to start.", owner, group, major, minor, expectedConfOwner, expectedConfGroup))
 					foundConfErr = true
 				}
-				if !foundConfErr && perms != expectedConfPerms {
+				if !foundConfErr && !isSles15SP7 && perms != expectedConfPerms {
 					report.Problems = append(report.Problems, fmt.Sprintf("CONFIGURATION ERROR: sssd.conf has incorrect permissions '%s'. SSSD version %d.%d requires exactly '%s' or it will refuse to start.", perms, major, minor, expectedConfPerms))
 					foundConfErr = true
 				}

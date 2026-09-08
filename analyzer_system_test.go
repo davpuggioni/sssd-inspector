@@ -217,13 +217,37 @@ total 33900
 	}
 }
 
-// Test: Verify SLES15 SP7 sssd.conf ownership message (buggy build) suggests changing
-// permissions AND updating sssd when the 2.10.2-150700.9.17.1 package is installed.
-func TestAnalyzePermissions_SLES15SP7_ConfOwnership_BuggyBuild(t *testing.T) {
+// Test: Verify SLES15 SP7 with the OFFICIAL SUSE documented ownership
+// (root:sssd, 0640) is treated as VALID and emits no permission error.
+func TestAnalyzePermissions_SLES15SP7_OfficialRootSssd_Valid(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
 		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
 		"sssd.txt":              "-rw-r----- 1 root sssd 1024 Mar 10 10:00 sssd.conf\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeOSAndHardware(dir, &report)
+	analyzePackages(dir, &report)
+	analyzeSSSDFilePermissions(dir, &report)
+
+	if containsString(report.Problems, "Please change the permissions.") {
+		t.Errorf("root:sssd with 0640 is the official SUSE-documented configuration and must NOT raise a permission error; got: %v", report.Problems)
+	}
+	if containsString(report.Problems, "sssd.conf") {
+		t.Errorf("no sssd.conf permission problem expected for root:sssd 0640 on SP7; got: %v", report.Problems)
+	}
+}
+
+// Test: Verify SLES15 SP7 sssd.conf ownership message (buggy build) suggests changing
+// permissions AND updating sssd when the 2.10.2-150700.9.17.1 package is installed
+// and the ownership is truly invalid (sssd:sssd).
+func TestAnalyzePermissions_SLES15SP7_ConfOwnership_BuggyBuild(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
+		"rpm.txt":               "sssd-2.10.2-150700.9.17.1.x86_64\n",
+		"sssd.txt":              "-rw-r----- 1 sssd sssd 1024 Mar 10 10:00 sssd.conf\n",
 	})
 	defer os.RemoveAll(dir)
 
@@ -241,12 +265,13 @@ func TestAnalyzePermissions_SLES15SP7_ConfOwnership_BuggyBuild(t *testing.T) {
 }
 
 // Test: Verify SLES15 SP7 sssd.conf ownership message (non-buggy build) only suggests
-// changing permissions, without the update-sssd notification.
+// changing permissions, without the update-sssd notification. The truly invalid
+// case is sssd:sssd ownership.
 func TestAnalyzePermissions_SLES15SP7_ConfOwnership_NonBuggyBuild(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"basic-environment.txt": "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP7\"\n",
 		"rpm.txt":               "sssd-2.10.2-150700.4.1.x86_64\n",
-		"sssd.txt":              "-rw-r----- 1 root sssd 1024 Mar 10 10:00 sssd.conf\n",
+		"sssd.txt":              "-rw-r----- 1 sssd sssd 1024 Mar 10 10:00 sssd.conf\n",
 	})
 	defer os.RemoveAll(dir)
 
@@ -262,4 +287,3 @@ func TestAnalyzePermissions_SLES15SP7_ConfOwnership_NonBuggyBuild(t *testing.T) 
 		t.Errorf("Non-buggy SLES15 SP7 build should not emit the update-sssd notification.")
 	}
 }
-
