@@ -1059,3 +1059,19 @@
   .report-section { border: none; }
   .report-section:not([open]) > .section-body { display: block; }
 }
+
+/* --- sssd.conf syntax highlighting --- */
+.ini-snippet { line-height: 1.45; }
+.ini-comment { color: #6a737d; font-style: italic; }
+.ini-section { color: #b35000; font-weight: bold; }
+.ini-key { color: #0550ae; }
+.ini-op { color: #888; }
+.ini-value { color: #116329; }
+
+@media (prefers-color-scheme: dark) {
+	.ini-comment { color: #8b949e; }
+	.ini-section { color: #ffa657; }
+	.ini-key { color: #79c0ff; }
+	.ini-value { color: #7ee787; }
+	.ini-op { color: #8b949e; }
+}

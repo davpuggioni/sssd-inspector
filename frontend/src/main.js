@@ -81,14 +81,43 @@ function renderReportHTML(report) {
         <tr><td colspan="2" class="section-title">Advanced SSSD Configuration</td></tr>
         <tr><th>AD Provider Mode</th><td>${yesNo(report.ad_provider_mode)}</td></tr>
         <tr><th>Enumerate Issue</th><td>${yesNo(report.enumerate_issue)}</td></tr>
+  // Lightweight INI syntax highlighter for sssd.conf (no external deps).
+  // Escapes HTML first, then wraps tokens in spans: sections, comments,
+  // keys and values. Line-based so whitespace/indentation is preserved.
+  const highlightIni = (text) => {
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const KEY_RE = /^([A-Za-z_][A-Za-z0-9_.-]*)(\s*=\s*)(.*)$/;
+    return String(text).split('\n').map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) {
+        return `<span class="ini-comment">${esc(line)}</span>`;
+      }
+      const sec = trimmed.match(/^\[([^\]]*)\]$/);
+      if (sec) {
+        // Highlight only the section header part; keep surrounding whitespace verbatim.
+        const start = line.indexOf('[');
+        const end = line.lastIndexOf(']');
+        const before = line.slice(0, start);
+        const after = line.slice(end + 1);
+        return `${esc(before)}<span class="ini-section">[${esc(sec[1])}]</span>${esc(after)}`;
+      }
+      const kv = line.match(KEY_RE);
+      if (kv) {
+        return `<span class="ini-key">${esc(kv[1])}</span><span class="ini-op">${esc(kv[2])}</span><span class="ini-value">${esc(kv[3])}</span>`;
+      }
+      return esc(line);
+    }).join('\n');
+  };
+
+
         <tr><th>Use FQDN Set</th><td>${yesNo(report.use_fqdn_set)}</td></tr>
         
         <tr><td colspan="2" class="section-title">Configuration Files</td></tr>
         <tr><td colspan="2">
             ${report.sssd_config_snippet ? `
-            <details>
+            <details open>
                 <summary style="cursor: pointer; font-weight: bold; padding: 5px 0;">View sssd.conf</summary>
-                <pre class="log-block" style="white-space: pre-wrap; margin-top: 10px;">${escapeHtml(report.sssd_config_snippet)}</pre>
+                <pre class="log-block ini-snippet" style="white-space: pre-wrap; margin-top: 10px;">${highlightIni(report.sssd_config_snippet)}</pre>
             </details>` : 'sssd.conf not found / not readable'}
         </td></tr>
     </table>`;
