@@ -985,3 +985,26 @@
 .dark-mode .corr-canvas { background: #121212; border-color: #333; }
 .dark-mode .corr-detail { background: #1e1e1e; border-color: #333; }
 
+
+/* ── Correlation graph: zoom/pan toolbar & label readability ── */
+.corr-zoombar { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+.corr-zoom-btn {
+  background: #2a2a32; color: #ddd; border: 1px solid #444; border-radius: 6px;
+  min-width: 2rem; height: 1.8rem; font-size: 0.95rem; cursor: pointer; line-height: 1;
+}
+.corr-zoom-btn:hover { background: #3a3a44; border-color: #666; }
+.corr-zoom-hint { font-size: 0.75rem; color: #888; margin-left: 0.5rem; }
+.corr-node-label {
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: #1e1e24;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.dark-mode .corr-node-label { stroke: #121218; }
+.corr-canvas { cursor: grab; outline: none; }
+.corr-canvas:active { cursor: grabbing; }
+.corr-node { cursor: move; }
+@media print {
+  .corr-zoombar { display: none; }
+}
