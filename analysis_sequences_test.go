@@ -111,6 +111,33 @@ func TestCorrelateSequences_DNSChain(t *testing.T) {
 	}
 }
 
+// TestCorrelateSequences_AdditiveChains verifies that a timeline carrying
+// BOTH a DNS failover cascade AND a Kerberos clock-skew burst yields BOTH
+// consolidated root causes (P2: no first-wins early return).
+func TestCorrelateSequences_AdditiveChains(t *testing.T) {
+	timeline := []TimelineEvent{
+		{Timestamp: "2024-01-01 00:00:01", Message: "DNS SRV Timeout: Service (SRV) record resolution timed out.", RawLog: "sssd: Service resolving timeout reached: _kerberos._tcp.example.com"},
+		{Timestamp: "2024-01-01 00:00:05", Message: "SRV Lookup Failure: _ldap._tcp could not be resolved.", RawLog: "sssd: Unable to resolve SRV [10]: Name or service not known"},
+		{Timestamp: "2024-01-01 00:00:09", Message: "Network Error: SSSD could not establish a TCP connection to the backend server.", RawLog: "sssd: Unable to establish connection [10.0.0.1]: Connection refused"},
+		{Timestamp: "2024-01-01 00:00:20", Message: "Backend Offline: SSSD marked the data provider backend as OFFLINE.", RawLog: "sssd: Going offline!"},
+		{Timestamp: "2024-01-01 00:01:01", Message: "Clock skew too great on request", RawLog: "sssd: krb5_child: Clock skew too great"},
+		{Timestamp: "2024-01-01 00:01:05", Message: "Kerberos: Preauthentication failed for user@AD.EXAMPLE.COM.", RawLog: "sssd: krb5_child: Preauthentication failed"},
+	}
+	var report ReportData
+	correlateSequences(timeline, &report)
+
+	cats := map[string]bool{}
+	for _, f := range report.ConfigFindings {
+		cats[f.Category] = true
+	}
+	if !cats["dns"] {
+		t.Errorf("expected consolidated DNS root cause, got categories %v", cats)
+	}
+	if !cats["krb5"] {
+		t.Errorf("expected consolidated Kerberos root cause alongside DNS, got categories %v", cats)
+	}
+}
+
 // TestCorrelateSequences_sparse verifies that a too-sparse timeline (below the
 // minTimelineEvents floor) never produces a root-cause finding (no false pos).
 func TestCorrelateSequences_sparse(t *testing.T) {

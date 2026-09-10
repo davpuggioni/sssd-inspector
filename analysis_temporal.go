@@ -70,6 +70,12 @@ func analyzeTemporalClusters(timeline []TimelineEvent) []TemporalCluster {
 		if !ok {
 			continue
 		}
+		// Aggregated rows carry the repeat volume in Occurrences (P7): a
+		// burst collapsed into one row must still count as N occurrences.
+		n := ev.Occurrences
+		if n < 1 {
+			n = 1
+		}
 		appended := false
 		// Extend the last cluster of this description if within the gap.
 		for i := len(clusters) - 1; i >= 0; i-- {
@@ -79,7 +85,7 @@ func analyzeTemporalClusters(timeline []TimelineEvent) []TemporalCluster {
 			}
 			if secs-c.end <= clusterGapSeconds {
 				c.end = secs
-				c.count++
+				c.count += n
 				c.last = normalizeTimestamp(ev.Timestamp)
 				appended = true
 			}
@@ -90,7 +96,7 @@ func analyzeTemporalClusters(timeline []TimelineEvent) []TemporalCluster {
 				desc:   ev.Message,
 				start:  secs,
 				end:    secs,
-				count:  1,
+				count:  n,
 				first:  normalizeTimestamp(ev.Timestamp),
 				last:   normalizeTimestamp(ev.Timestamp),
 				sample: ev.RawLog,

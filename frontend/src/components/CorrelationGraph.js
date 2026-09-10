@@ -142,16 +142,23 @@ function layoutGraph(graph, width, height) {
 // Returns a controller with destroy() and filterBySeverity(minSev), or null.
 export function renderCorrelationGraph(container, report) {
   const graph = report.graph;
-  if (!graph || (!graph.entities.length && !graph.findings.length && !graph.sources.length)) {
+  // Defensive: the graph may be absent entirely, or a consumer may receive a
+  // report from an older/newer bridge where one array is missing (null). Never
+  // assume entities/findings/sources/edges are always arrays.
+  const entities = (graph && graph.entities) || [];
+  const findings = (graph && graph.findings) || [];
+  const sources = (graph && graph.sources) || [];
+  const edges = (graph && graph.edges) || [];
+  if (!entities.length && !findings.length && !sources.length) {
     container.innerHTML = '';
     return null;
   }
 
   // Canvas scales gently with node count so dense graphs have room to spread.
-  const nNodes = graph.entities.length + graph.findings.length + graph.sources.length;
+  const nNodes = entities.length + findings.length + sources.length;
   const W = Math.min(2000, Math.max(720, nNodes * 36));
   const H = Math.min(1400, Math.max(480, nNodes * 24));
-  const laid = layoutGraph(graph, W, H);
+  const laid = layoutGraph({ entities, findings, sources, edges }, W, H);
   const byId = new Map(laid.nodes.map(n => [n.id, n]));
   const adj = new Map(laid.nodes.map(n => [n.id, []]));
   for (const e of laid.edges) { adj.get(e.from).push(e.to); adj.get(e.to).push(e.from); }

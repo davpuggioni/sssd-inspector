@@ -557,10 +557,12 @@ func normalizeTimestamp(ts string) string {
 }
 
 // scanAndCollectErrors scans the log files for known SSSD error patterns,
-// deduplicates matches (max 3 examples per pattern), and builds a timeline of events.
+// deduplicates matches (max 3 examples per pattern), and builds a BOUNDED
+// timeline of events (repeats of the same diagnostic event collapse into
+// one row with an Occurrences count instead of one row per match).
 func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[string][]string, []TimelineEvent) {
 	detectedLogErrors := make(map[string][]string)
-	var timelineEvents []TimelineEvent
+	tlAgg := newTimelineAggregator()
 
 	// Build the fast O(1) lookup and the compiled regex for scanning
 	var errorKeys []string
@@ -614,32 +616,15 @@ func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[
 						ts = tsMatch[3] // ISO 8601 format
 					}
 
-					timelineEvents = append(timelineEvents, TimelineEvent{
-						Timestamp: ts,
-						Message:   description,
-						RawLog:    lineTrimmed,
-					})
+					tlAgg.add(ts, description, lineTrimmed)
 				}
 			}
 		}
 	})
 
 	// Sort the timeline chronologically using normalized timestamps
-	sort.SliceStable(timelineEvents, func(i, j int) bool {
-		ti := normalizeTimestamp(timelineEvents[i].Timestamp)
-		tj := normalizeTimestamp(timelineEvents[j].Timestamp)
-		// Empty (unparseable) timestamps sort last
-		if ti == "" && tj == "" {
-			return false
-		}
-		if ti == "" {
-			return false
-		}
-		if tj == "" {
-			return true
-		}
-		return ti < tj
-	})
+	timelineEvents := tlAgg.events
+	sortTimelineChronological(timelineEvents)
 
 	return detectedLogErrors, timelineEvents
 }

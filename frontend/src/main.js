@@ -8,6 +8,7 @@ import { Analyze, OpenFileBrowser, SaveTXT, SavePDF, SaveJSON } from '../wailsjs
 import { OnFileDrop, EventsOn } from '../wailsjs/runtime/runtime';
 import { UI, CSS_CLASSES, COLORS, ZOOM, FILES } from './config/constants.js';
 import { FileValidator } from './utils/validators.js';
+import { StatusMessage } from './components/UIComponents.js';
 import { renderCorrelationGraph } from './components/CorrelationGraph.js';
 
 // ==========================================================================

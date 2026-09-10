@@ -216,7 +216,33 @@ func TestBuildCorrelationGraph_PIIRedaction(t *testing.T) {
 	}
 }
 
-// ─── CompareConfigs ─────────────────────────────────────────────────────────
+// TestBuildCorrelationGraph_NoNullSlices guards against a frontend regression
+// where an empty Sources slice serialized to JSON "sources": null, crashing
+// the SVG renderer ("null is not an object evaluating 'n.sources.length'").
+// Findings without source lines are exactly the case that used to leave
+// Sources nil.
+func TestBuildCorrelationGraph_NoNullSlices(t *testing.T) {
+	r := &ReportData{
+		ConfigFindings: []ConfigFinding{
+			{
+				Severity: SevWarning, Category: "dns",
+				Message:    "no source line", SourcePath: "",
+				SourceLine: 0, Evidence: "",
+			},
+		},
+	}
+	g := buildCorrelationGraph(r)
+
+	if len(g.Findings) == 0 {
+		t.Fatalf("expected at least one finding even without a source line")
+	}
+	if g.Sources == nil {
+		t.Error("Sources must be a non-nil slice (serializes to JSON []) even when empty")
+	}
+	if g.Entities == nil || g.Edges == nil || g.Findings == nil {
+		t.Error("Entities/Findings/Edges must be non-nil slices")
+	}
+}
 
 func TestCompareConfigs_NoChanges(t *testing.T) {
 	dir := t.TempDir()

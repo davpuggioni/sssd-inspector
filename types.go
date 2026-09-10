@@ -151,11 +151,20 @@ type ReportData struct {
 	Graph CorrelationGraph `json:"graph"`
 }
 
-// TimelineEvent represents a single chronological log occurrence
+// TimelineEvent represents a single chronological log occurrence.
+//
+// Occurrences is the number of times this diagnostic event was observed
+// (bounded timeline aggregation, see analysis_timeline.go): the row keeps
+// the FIRST timestamp/sample plus a count instead of one row per repeat, so
+// huge retry-loop logs stay cheap while burst consumers can still weight
+// by volume. Samples holds up to maxTimelineSamples distinct raw-log lines
+// for drill-down (the first sample duplicates RawLog).
 type TimelineEvent struct {
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
-	RawLog    string `json:"raw_log"`
+	Timestamp   string   `json:"timestamp"`
+	Message     string   `json:"message"`
+	RawLog      string   `json:"raw_log"`
+	Occurrences int      `json:"occurrences,omitempty"`
+	Samples     []string `json:"samples,omitempty"`
 }
 
 // TemporalCluster is a burst of the same diagnostic event inside a bounded
@@ -177,7 +186,7 @@ type KBSuggestion struct {
 	TIDID      string  `json:"tid_id"`
 	Title      string  `json:"title"`
 	URL        string  `json:"url"`
-	Score      float64 `json:"score"`  // 0..1 cosine similarity
+	Score      float64 `json:"score"` // 0..1 cosine similarity
 	SampleLine string  `json:"sample_line"`
 }
 
@@ -198,19 +207,19 @@ const (
 // (AD domain, Kerberos realm, hostname, DNS search domain, ad_server,
 // keytab principal, GPO) — the "nouns" of the diagnosis.
 type GraphEntity struct {
-	ID        string   `json:"id"`        // "entity:domain:example.com"
-	Kind      string   `json:"kind"`      // "domain"|"realm"|"hostname"|"dns"|"ad_server"|"keytab"|"gpo"
-	Label     string   `json:"label"`     // human-readable (PII-scrubbed)
-	Value     string   `json:"value,omitempty"`
-	Severity  Severity `json:"severity"` // max severity of any finding touching this entity
-	SourcePath string  `json:"source_path,omitempty"`
+	ID         string   `json:"id"`    // "entity:domain:example.com"
+	Kind       string   `json:"kind"`  // "domain"|"realm"|"hostname"|"dns"|"ad_server"|"keytab"|"gpo"
+	Label      string   `json:"label"` // human-readable (PII-scrubbed)
+	Value      string   `json:"value,omitempty"`
+	Severity   Severity `json:"severity"` // max severity of any finding touching this entity
+	SourcePath string   `json:"source_path,omitempty"`
 }
 
 // GraphFindingNode is a diagnostic node: either a structured ConfigFinding
 // or a temporal cluster / log-error summary. Findings are the "verbs" that
 // connect entities to their evidence.
 type GraphFindingNode struct {
-	ID         string   `json:"id"`         // "finding:<hash>"
+	ID         string   `json:"id"` // "finding:<hash>"
 	Category   string   `json:"category"`
 	Message    string   `json:"message"`
 	Severity   Severity `json:"severity"`
@@ -224,7 +233,7 @@ type GraphFindingNode struct {
 // GraphSourceNode pins a finding to the physical evidence in the supportconfig:
 // the offending file path, line number and the raw line text.
 type GraphSourceNode struct {
-	ID         string `json:"id"`         // "source:sssd.conf:42"
+	ID         string `json:"id"` // "source:sssd.conf:42"
 	SourcePath string `json:"source_path"`
 	SourceLine int    `json:"source_line"`
 	LineText   string `json:"line_text"`

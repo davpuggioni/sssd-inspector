@@ -220,6 +220,8 @@ export namespace main {
 	    timestamp: string;
 	    message: string;
 	    raw_log: string;
+	    occurrences?: number;
+	    samples?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TimelineEvent(source);
@@ -230,6 +232,8 @@ export namespace main {
 	        this.timestamp = source["timestamp"];
 	        this.message = source["message"];
 	        this.raw_log = source["raw_log"];
+	        this.occurrences = source["occurrences"];
+	        this.samples = source["samples"];
 	    }
 	}
 	export class TIDConditions {

@@ -105,7 +105,10 @@ func chainable(a, b seqLink) bool {
 
 // correlateSequences inspects the sorted timeline and, for characteristic
 // failure chains observed in the SSSD C source, emits a consolidated root
-// cause finding. Additive and conservative (>=2 chain links required).
+// cause finding per chain. Additive across chains (>=2 chain links required
+// per chain): a supportconfig carrying both a DNS failover cascade and a
+// Kerberos clock-skew burst reports BOTH root causes instead of only the
+// first one.
 func correlateSequences(timeline []TimelineEvent, report *ReportData) {
 	if len(timeline) < minTimelineEvents {
 		return
@@ -121,19 +124,14 @@ func correlateSequences(timeline []TimelineEvent, report *ReportData) {
 	emitted := make(map[string]bool)
 
 	// R1: DNS/SRV failover chain (fail_over.c, sdap_async_connection.c)
-	if emitDNSChain(links, report, emitted) {
-		return
-	}
+	emittedAny := emitDNSChain(links, report, emitted)
 	// R3: Kerberos realm/clock failure chain (krb5_child.c switch over AP_ERR/SKEW)
-	if emitKrb5Chain(links, report, emitted) {
-		return
-	}
+	emittedAny = emitKrb5Chain(links, report, emitted) || emittedAny
 	// R2: watchdog/overload chain
-	if emitOverloadChain(links, report, emitted) {
-		return
-	}
+	emittedAny = emitOverloadChain(links, report, emitted) || emittedAny
 	// R4: offline burst
 	emitOfflineChain(links, report, emitted)
+	_ = emittedAny
 }
 
 // emitDNSChain detects the DNS/SRV-to-connect-to-offline cascade.

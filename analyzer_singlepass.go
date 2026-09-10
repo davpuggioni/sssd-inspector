@@ -211,20 +211,16 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	// Per-description error example storage (max 3 per description)
 	errorExamples := make(map[string][]string)
 
+	// Bounded timeline aggregation (P7): collapse repeats of the same
+	// diagnostic event into one row with a count instead of one row per
+	// match (retry-loop logs would otherwise grow the timeline unbounded).
+	tlAgg := newTimelineAggregator()
+
 	// Context with timeout for safety
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
 	defer cancel()
 
-	// Pre-allocate timeline with reasonable capacity to reduce reallocations
-	// Most supportconfig files have < 1000 error lines
-	timelineCapacity := 1000
-	if len(errorPatterns) > 0 {
-		timelineCapacity = len(errorPatterns) * 2 // upper bound estimate
-		if timelineCapacity > 5000 {
-			timelineCapacity = 5000
-		}
-	}
-	result.Timeline = make([]TimelineEvent, 0, timelineCapacity)
+	// (Capacity is managed by the timeline aggregator itself.)
 
 	// STEP 3: SINGLE PASS through all log files
 	logFileNames := []string{"sssd.txt", "messages", "messages.txt"}
@@ -283,13 +279,9 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 						errorExamples[info.description] = append(examples, lineTrimmed)
 					}
 				}
-				// Build timeline event
+				// Build timeline event (aggregated: repeats bump a counter).
 				ts := extractTimestamp(lineTrimmed, timeRegex)
-				result.Timeline = append(result.Timeline, TimelineEvent{
-					Timestamp: ts,
-					Message:   info.description,
-					RawLog:    lineTrimmed,
-				})
+				tlAgg.add(ts, info.description, lineTrimmed)
 
 			case mcKeytabPrincipal:
 				result.KeytabFound = true
@@ -355,20 +347,12 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 	}
 
 	// Sort timeline chronologically
-	sort.SliceStable(result.Timeline, func(i, j int) bool {
-		ti := normalizeTimestamp(result.Timeline[i].Timestamp)
-		tj := normalizeTimestamp(result.Timeline[j].Timestamp)
-		if ti == "" && tj == "" {
-			return false
-		}
-		if ti == "" {
-			return false
-		}
-		if tj == "" {
-			return true
-		}
-		return ti < tj
-	})
+	result.Timeline = tlAgg.events
+	if tlAgg.dropped > 0 {
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("[TIMELINE] Timeline truncated: %d distinct event(s) beyond the %d-row cap were dropped (counts preserved for retained rows).", tlAgg.dropped, maxTimelineEvents))
+	}
+	sortTimelineChronological(result.Timeline)
 
 	// Build problem/warning strings from quick pattern results
 	if result.AccountExpired {

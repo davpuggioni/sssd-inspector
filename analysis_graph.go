@@ -42,6 +42,13 @@ var entityValueRegex = regexp.MustCompile(`(?i)^\s*([a-z0-9_.\-]+)\s*=\s*(.+?)\s
 // assembles a CorrelationGraph. Called AFTER anonymizeReport.
 func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 	var g CorrelationGraph
+	// Initialize every slice explicitly so an empty graph serializes to [] in
+	// JSON instead of null. The frontend consumes graph.{entities,findings,
+	// sources,edges}.length directly; a null slice would crash it.
+	g.Entities = make([]GraphEntity, 0)
+	g.Findings = make([]GraphFindingNode, 0)
+	g.Sources = make([]GraphSourceNode, 0)
+	g.Edges = make([]GraphEdge, 0)
 	entityIndex := make(map[string]int)
 	sourceIndex := make(map[string]int)
 	findingIndex := make(map[string]int)

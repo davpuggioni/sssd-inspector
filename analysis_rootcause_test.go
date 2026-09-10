@@ -99,6 +99,47 @@ func TestWriteHTMLReportFile_RootBreakdown(t *testing.T) {
 	}
 }
 
+// TestWriteHTMLReportFile_P6Sections verifies the P6 report upgrades:
+// table of contents, incident cards, and the bounded event-timeline table
+// render alongside the legacy sections.
+func TestWriteHTMLReportFile_P6Sections(t *testing.T) {
+	dir := t.TempDir()
+	fname := filepath.Join(dir, "report.html")
+	r := ReportData{
+		AppVersion: "test",
+		ConfigFindings: []ConfigFinding{
+			{Severity: SevError, Category: "dns", Message: "resolv.conf broken"},
+		},
+		Timeline: []TimelineEvent{
+			{Timestamp: "2024-01-01 00:00:01", Message: "Backend Offline: marked OFFLINE.", RawLog: "sssd: Going offline!", Occurrences: 7},
+		},
+		TemporalClusters: []TemporalCluster{
+			{Description: "Backend Offline: marked OFFLINE.", EventCount: 7, WindowStart: "2024-01-01 00:00:01", WindowEnd: "2024-01-01 00:05:00"},
+		},
+	}
+	writeHTMLReportFile(r, fname)
+	data, err := os.ReadFile(fname)
+	if err != nil {
+		t.Fatalf("failed to read generated HTML: %v", err)
+	}
+	html := string(data)
+	for _, frag := range []string{
+		"Contents",
+		"Root-Cause Incidents",
+		"Root-Cause Breakdown",
+		"Event Timeline",
+		"7 total occurrence(s)",
+		"Temporal Clusters",
+		"id=\"triage\"",
+		"id=\"incidents\"",
+		"id=\"timeline\"",
+	} {
+		if !strings.Contains(html, frag) {
+			t.Errorf("generated HTML missing %q", frag)
+		}
+	}
+}
+
 // TestAnalyzeData_EndToEnd_RootCause is a full-pipeline regression test: it
 // feeds a mock supportconfig (sssd.conf + a messages log carrying a DNS/SRV
 // failover cascade) through analyzeData and asserts the correlated root-cause
