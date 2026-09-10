@@ -89,7 +89,7 @@
 
 ### Option 1: Download Pre-built Binary
 
-Download the latest release from the [Releases](https://github.com/your-repo/sssd-inspector/releases) page:
+Download the latest release from the [Releases](https://github.com/davpuggioni/sssd-inspector/releases) page:
 
 ```bash
 # CLI version
@@ -105,7 +105,7 @@ chmod +x sssd-inspector-gui
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/sssd-inspector.git
+git clone https://github.com/davpuggioni/sssd-inspector.git
 cd sssd-inspector
 
 # Install dependencies
@@ -181,7 +181,7 @@ The CLI produces:
 
 ```bash
 # Build the GUI
-wails build -platform linux/amd64
+wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean 2>&1
 
 # Run (or launch the binary)
 ./sssd-inspector
