@@ -251,19 +251,49 @@ func anonymizeReport(r *ReportData) {
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
 	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
 
+	// Snapshot the original domain/realm BEFORE any field is overwritten with
+	// its placeholder. maskString must be able to match the real values even
+	// after SearchDomain/KerberosRealm themselves are mutated below, otherwise
+	// any string scrubbed later (SSSDConfigSnippet, Problems, Warnings, ...)
+	// would no longer match the original domain.
+	origDomain := r.SearchDomain
+	origRealm := r.KerberosRealm
+
 	maskString := func(s string) string {
 		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
 		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
 		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
 		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
-		if r.SearchDomain != "" && r.SearchDomain != "None" {
-			s = strings.ReplaceAll(s, r.SearchDomain, "example.com")
-			s = strings.ReplaceAll(s, strings.ToUpper(r.SearchDomain), "EXAMPLE.COM")
+		if origDomain != "" && origDomain != "None" {
+			s = strings.ReplaceAll(s, origDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(origDomain), "EXAMPLE.COM")
 		}
-		if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
-			s = strings.ReplaceAll(s, r.KerberosRealm, "EXAMPLE.COM")
-			s = strings.ReplaceAll(s, strings.ToLower(r.KerberosRealm), "example.com")
+		if origRealm != "" && origRealm != "Not configured" {
+			s = strings.ReplaceAll(s, origRealm, "EXAMPLE.COM")
+			s = strings.ReplaceAll(s, strings.ToLower(origRealm), "example.com")
+		}
+		// AdDomain (ad_domain from sssd.conf) and Hostname are not covered by
+		// the SearchDomain/KerberosRealm handling above, so replace them here to
+		// guarantee the domain and server name never leak into any field.
+		if r.AdDomain != "" {
+			s = strings.ReplaceAll(s, r.AdDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(r.AdDomain), "EXAMPLE.COM")
+		}
+		if r.Hostname != "" {
+			s = strings.ReplaceAll(s, r.Hostname, "redacted-host")
+		}
+		// uname -a starts with "Linux <nodename> <release> <machine> ... <os>".
+		// The nodename is often a SHORT name (e.g. "srv123") that differs from
+		// report.Hostname (e.g. the FQDN "srv123.example.com"), so the exact
+		// r.Hostname substitution above cannot match it. Redact the nodename
+		// token directly (the second whitespace-separated field) to harden the
+		// kernel version (and any copied uname line) against hostname leaks.
+		if strings.HasPrefix(s, "Linux ") {
+			parts := strings.Fields(s)
+			if len(parts) > 2 {
+				s = "Linux redacted-host " + strings.Join(parts[2:], " ")
+			}
 		}
 		return s
 	}
@@ -272,6 +302,12 @@ func anonymizeReport(r *ReportData) {
 	r.HardwareModel = "[REDACTED]"
 	r.VirtualIdentity = "[REDACTED]"
 	r.SCCStatus = "[REDACTED]"
+
+	// The kernel version is the uname -a line, which embeds the server's
+	// hostname (e.g. "Linux prod-server-01 5.14.21-...#1 SMP ... x86_64").
+	// maskString now redacts the hostname/domain/IP parts while preserving the
+	// actual kernel-release information.
+	r.KernelVersion = maskString(r.KernelVersion)
 
 	for i, ns := range r.Nameservers {
 		r.Nameservers[i] = maskString(ns)

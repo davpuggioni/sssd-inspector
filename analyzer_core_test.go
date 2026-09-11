@@ -74,3 +74,55 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 		t.Errorf("Failed to mask internal domain to example.com")
 	}
 }
+
+// Test: Verify the kernel version (uname -a) does not leak the server hostname.
+// The uname nodename is a SHORT name that differs from report.Hostname (FQDN),
+// so redaction must not rely on the exact r.Hostname substitution.
+func TestAnonymizeReport_KernelVersionHostname(t *testing.T) {
+	report := ReportData{
+		KernelVersion: "Linux srv123 5.14.21-150400.24.44-default #1 SMP PREEMPT_DYNAMIC Tue Apr 23 09:44:02 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux",
+		SearchDomain:  "example.org",
+		KerberosRealm: "EXAMPLE.ORG",
+		Hostname:      "srv123.example.org",
+	}
+
+	anonymizeReport(&report)
+
+	if strings.Contains(report.KernelVersion, "srv123") {
+		t.Errorf("Kernel version still leaks the server hostname: %q", report.KernelVersion)
+	}
+	if !strings.Contains(report.KernelVersion, "5.14.21") {
+		t.Errorf("Kernel release info was lost during redaction: %q", report.KernelVersion)
+	}
+	if !strings.Contains(report.KernelVersion, "redacted-host") {
+		t.Errorf("Expected hostname to be replaced with redacted-host, got: %q", report.KernelVersion)
+	}
+}
+
+// Test: Verify the sssd.conf snippet (and problems) redact the AD domain even
+// though SearchDomain is overwritten with its placeholder during scrubbing.
+func TestAnonymizeReport_SSSDConfigSnippetDomain(t *testing.T) {
+	report := ReportData{
+		SearchDomain:      "corp.example.org",
+		KerberosRealm:     "CORP.EXAMPLE.ORG",
+		AdDomain:          "corp.example.org",
+		Hostname:          "domain-controller",
+		SSSDConfigSnippet: "domains = corp.example.org\n[domain/corp.example.org]\nad_domain = corp.example.org\n",
+		Problems:          []string{"[AD] Search domain corp.example.org did not match."},
+	}
+
+	anonymizeReport(&report)
+
+	if strings.Contains(report.SSSDConfigSnippet, "corp.example.org") {
+		t.Errorf("sssd.conf snippet still leaks the AD domain: %q", report.SSSDConfigSnippet)
+	}
+	if !strings.Contains(report.SSSDConfigSnippet, "example.com") {
+		t.Errorf("Expected sssd.conf ad_domain to be replaced with example.com, got: %q", report.SSSDConfigSnippet)
+	}
+	if strings.Contains(report.Problems[0], "corp.example.org") {
+		t.Errorf("Problem string still leaks the AD domain: %q", report.Problems[0])
+	}
+	if report.SearchDomain != "example.com" {
+		t.Errorf("Expected SearchDomain redacted to example.com, got: %q", report.SearchDomain)
+	}
+}
