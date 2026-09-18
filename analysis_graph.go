@@ -182,6 +182,3 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 
 	return g
 }
-
-
-

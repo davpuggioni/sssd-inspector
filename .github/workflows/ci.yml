@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "development", "new1", "fix-pii", "logdir"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Install hybrid (GUI) build dependencies
+        # The hybrid binary links GTK + WebKit via Wails; the static CLI
+        # binary (build tag cli) needs no system libraries.
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: gofmt check
+        run: |
+          bad=$(gofmt -l . | grep -v '^node_modules' | grep -v '/frontend/' || true)
+          if [ -n "$bad" ]; then echo "not gofmt-clean: $bad"; exit 1; fi
+
+      - name: go vet (both build modes)
+        run: |
+          go vet ./...
+          go vet -tags cli ./...
+
+      - name: Build both binaries
+        run: |
+          go build -o /tmp/sssd-inspector-hybrid .
+          go build -tags cli -o /tmp/sssd-inspector-cli .
+
+      - name: Unit tests (default build)
+        run: go test ./...
+
+      - name: Unit tests (cli build tag)
+        # Guards the static CLI binary: integration_test.go is GUI-only and
+        # carries //go:build !cli, so this matrix must stay green.
+        run: go test -tags cli ./...
+
+      - name: Race detector
+        run: |
+          go test -race ./...
+          go test -race -tags cli ./...
+
+      - name: CLI smoke test (flag surface + end-to-end analyze)
+        run: |
+          /tmp/sssd-inspector-cli -analyze ./kb_articles -json >/tmp/smoke.json 2>/dev/null || true
+          /tmp/sssd-inspector-cli -v | grep -q "version"
+          test -s /tmp/smoke.json

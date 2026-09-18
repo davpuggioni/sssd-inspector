@@ -17,30 +17,24 @@ import (
 // main is the application entry point for CLI mode
 // It handles command-line argument parsing and executes CLI-only operations
 func main() {
-	// Setup CLI Flags using configuration constants
-	versionShort := flag.Bool(constants.FlagVersion, false, constants.DescVersion)
-	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
-	txtReport := flag.Bool(constants.FlagTXT, false, constants.DescTXT)
-	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
-	// JSON report: full machine-readable export (summary + findings + evidence).
-	jsonReport := flag.Bool("json", false, "Generate a JSON report (structured, machine-readable)")
-	compareFlag := flag.String("compare", "", "Compare two supportconfig paths (format: pathA:pathB)")
-	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
+	// Setup CLI Flags from the shared registry (cli_flags.go). The static CLI
+	// binary is the only one advertising differential analysis (-compare).
+	opts := registerCLIFlags(flag.CommandLine, true)
 	flag.Parse()
 
-	if *versionShort {
+	if *opts.Version {
 		fmt.Printf("%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
 		os.Exit(0)
 	}
 
 	// Compare mode: differential analysis between two supportconfigs
-	if *compareFlag != "" {
-		parts := strings.SplitN(*compareFlag, ":", 2)
+	if *opts.Compare != "" {
+		parts := strings.SplitN(*opts.Compare, ":", 2)
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 			fmt.Fprintln(os.Stderr, "Error: -compare requires two paths separated by ':' (e.g., -compare /path/A:/path/B)")
 			os.Exit(1)
 		}
-		if err := runCompare(parts[0], parts[1], *anonymize, *jsonReport); err != nil {
+		if err := runCompare(parts[0], parts[1], *opts.Anonymize, *opts.JSON); err != nil {
 			fmt.Fprintf(os.Stderr, "Compare execution failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -48,8 +42,8 @@ func main() {
 	}
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
-	if *cliPath != "" {
-		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize, *jsonReport); err != nil {
+	if *opts.Analyze != "" {
+		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
 			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -59,10 +53,10 @@ func main() {
 	// Fallback logic for positional arguments
 	if flag.NArg() > 0 {
 		path := flag.Arg(0)
-		genTxt := *txtReport
-		genHtml := *htmlReport
-		genJSON := *jsonReport
-		genAnonymize := *anonymize
+		genTxt := *opts.TXT
+		genHtml := *opts.HTML
+		genJSON := *opts.JSON
+		genAnonymize := *opts.Anonymize
 
 		// Manual flag scanning for format flags
 		for _, arg := range os.Args[1:] {

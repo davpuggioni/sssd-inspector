@@ -166,6 +166,26 @@ sssd-inspector /var/log/supportconfig/
 sssd-inspector -v
 ```
 
+### Development: tests and regression guards
+
+```bash
+# Run the full test suite (default/hybrid build)
+go test ./...
+
+# Run the suite for the static CLI binary build
+go test -tags cli ./...
+
+# Race detector (both build modes) and vet
+go test -race ./... && go test -race -tags cli ./...
+go vet ./... && go vet -tags cli ./...
+```
+
+The CLI surface is guarded against silent flag loss: every user-visible
+flag is registered once in `cli_flags.go` (`registerCLIFlags`), pinned by a
+hardcoded contract in `cli_flags_test.go`, and cross-checked against the
+Options table above — removing a documented flag without updating the code,
+the tests, this table and `docs/CHANGES.md` fails the suite.
+
 ### Output
 
 The CLI produces:

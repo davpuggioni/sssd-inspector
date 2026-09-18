@@ -32,21 +32,21 @@ func TestBuildCorrelationGraph_EmptyReport(t *testing.T) {
 
 func TestBuildCorrelationGraph_BasicStructure(t *testing.T) {
 	r := &ReportData{
-		AdDomain:       "example.com",
-		KerberosRealm:  "OTHER.NET",
-		Hostname:       "host01",
-		SearchDomain:   "other.net",
+		AdDomain:      "example.com",
+		KerberosRealm: "OTHER.NET",
+		Hostname:      "host01",
+		SearchDomain:  "other.net",
 		ConfigFindings: []ConfigFinding{
 			{
 				Severity: SevCritical, Category: "krb5_realm",
-				Message:      "Kerberos default_realm mismatch",
-				SourcePath:   "krb5.conf", SourceKey: "[libdefaults].default_realm",
+				Message:    "Kerberos default_realm mismatch",
+				SourcePath: "krb5.conf", SourceKey: "[libdefaults].default_realm",
 				SourceLine: 5, Evidence: "default_realm = OTHER.NET",
 			},
 			{
 				Severity: SevError, Category: "dns",
-				Message:      "DNS search domain mismatch",
-				SourcePath:   "sssd.conf", SourceKey: "ldap_uri",
+				Message:    "DNS search domain mismatch",
+				SourcePath: "sssd.conf", SourceKey: "ldap_uri",
 				SourceLine: 12, Evidence: "ldap_uri = ld://dc.other.net",
 			},
 		},
@@ -161,7 +161,7 @@ func TestBuildCorrelationGraph_KBSuggestions(t *testing.T) {
 	r := &ReportData{
 		KBSuggestions: []KBSuggestion{
 			{
-				TIDID:     "000012345",
+				TIDID:      "000012345",
 				Title:      "SSSD fails to start after upgrade",
 				Score:      0.72,
 				SampleLine: "Unknown message in log file",
@@ -226,7 +226,7 @@ func TestBuildCorrelationGraph_NoNullSlices(t *testing.T) {
 		ConfigFindings: []ConfigFinding{
 			{
 				Severity: SevWarning, Category: "dns",
-				Message:    "no source line", SourcePath: "",
+				Message: "no source line", SourcePath: "",
 				SourceLine: 0, Evidence: "",
 			},
 		},

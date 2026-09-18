@@ -251,13 +251,15 @@ func anonymizeReport(r *ReportData) {
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
 	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
 
-	// Snapshot the original domain/realm BEFORE any field is overwritten with
-	// its placeholder. maskString must be able to match the real values even
-	// after SearchDomain/KerberosRealm themselves are mutated below, otherwise
-	// any string scrubbed later (SSSDConfigSnippet, Problems, Warnings, ...)
-	// would no longer match the original domain.
+	// Snapshot the original domain/realm/AD-domain/hostname BEFORE any field
+	// is overwritten with its placeholder. maskString must be able to match
+	// the real values even after SearchDomain/KerberosRealm themselves are
+	// mutated below, otherwise any string scrubbed later (SSSDConfigSnippet,
+	// Problems, Warnings, ...) would no longer match the original domain.
 	origDomain := r.SearchDomain
 	origRealm := r.KerberosRealm
+	origAdDomain := r.AdDomain
+	origHostname := r.Hostname
 
 	maskString := func(s string) string {
 		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
@@ -273,15 +275,17 @@ func anonymizeReport(r *ReportData) {
 			s = strings.ReplaceAll(s, origRealm, "EXAMPLE.COM")
 			s = strings.ReplaceAll(s, strings.ToLower(origRealm), "example.com")
 		}
-		// AdDomain (ad_domain from sssd.conf) and Hostname are not covered by
-		// the SearchDomain/KerberosRealm handling above, so replace them here to
-		// guarantee the domain and server name never leak into any field.
-		if r.AdDomain != "" {
-			s = strings.ReplaceAll(s, r.AdDomain, "example.com")
-			s = strings.ReplaceAll(s, strings.ToUpper(r.AdDomain), "EXAMPLE.COM")
+		// AdDomain (ad_domain from sssd.conf) and the FQDN Hostname are NOT
+		// SearchDomain/KerberosRealm, so mask them explicitly against the
+		// ORIGINAL snapshots (taken before any field was overwritten) —
+		// including their case variants (realm strings and log lines are
+		// often uppercased).
+		if origAdDomain != "" && origAdDomain != "Not configured" {
+			s = strings.ReplaceAll(s, origAdDomain, "example.com")
+			s = strings.ReplaceAll(s, strings.ToUpper(origAdDomain), "EXAMPLE.COM")
 		}
-		if r.Hostname != "" {
-			s = strings.ReplaceAll(s, r.Hostname, "redacted-host")
+		if origHostname != "" {
+			s = strings.ReplaceAll(s, origHostname, "redacted-host")
 		}
 		// uname -a starts with "Linux <nodename> <release> <machine> ... <os>".
 		// The nodename is often a SHORT name (e.g. "srv123") that differs from
@@ -326,8 +330,19 @@ func anonymizeReport(r *ReportData) {
 	// (Same ordering constraint as the Problems/Warnings scrubbing above.)
 	r.Summary.Headline = maskString(r.Summary.Headline)
 
+	// Overwrite the top-level AD domain and FQDN with their placeholders
+	// AFTER every embedding field has been scrubbed against the originals
+	// (origAdDomain/origHostname were snapshotted at the top of this
+	// function). This closes the leak where /ad_domain and /hostname
+	// exposed the raw internal domain and server name.
 	r.SearchDomain = maskString(r.SearchDomain)
 	r.KerberosRealm = maskString(r.KerberosRealm)
+	if origAdDomain != "" && origAdDomain != "Not configured" {
+		r.AdDomain = constants.DomainReplacement
+	}
+	if origHostname != "" && origHostname != "Unknown" {
+		r.Hostname = "redacted-host"
+	}
 
 	for i, p := range r.Problems {
 		r.Problems[i] = maskString(p)
@@ -366,6 +381,14 @@ func anonymizeReport(r *ReportData) {
 			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, r.Hostname, "redacted-host")
 			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, r.Hostname, "redacted-host")
 		}
+		if origAdDomain != "" {
+			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, origAdDomain, "example.com")
+			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, origAdDomain, "example.com")
+		}
+		if origHostname != "" {
+			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, origHostname, "redacted-host")
+			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, origHostname, "redacted-host")
+		}
 	}
 	for i := range r.Graph.Findings {
 		r.Graph.Findings[i].Message = maskString(r.Graph.Findings[i].Message)
@@ -386,6 +409,49 @@ func anonymizeReport(r *ReportData) {
 			r.Graph.Sources[i].LineText = strings.ReplaceAll(r.Graph.Sources[i].LineText, r.Hostname, "redacted-host")
 		}
 	}
+	// Re-key entity IDs so they no longer embed raw PII: the entity IDs are
+	// content hashes of their (kind, value) and, unlike Labels/Values, were
+	// never scrubbed. Recompute them from the scrubbed values and rewrite
+	// every edge endpoint that referenced the old IDs; collapse entities
+	// that now share the same ID (e.g. domain + search-domain both mapping
+	// to example.com).
+	idRemap := map[string]string{}
+	scrubbedEntities := make([]GraphEntity, 0, len(r.Graph.Entities))
+	scrubbedIndex := map[string]int{}
+	for i := range r.Graph.Entities {
+		e := r.Graph.Entities[i]
+		oldID := e.ID
+		e.ID = entityID(e.Kind, e.Value)
+		newID := e.ID
+		idRemap[oldID] = newID
+		if idx, ok := scrubbedIndex[newID]; ok {
+			if e.Severity > scrubbedEntities[idx].Severity {
+				scrubbedEntities[idx].Severity = e.Severity
+			}
+			continue
+		}
+		scrubbedIndex[newID] = len(scrubbedEntities)
+		scrubbedEntities = append(scrubbedEntities, e)
+	}
+	r.Graph.Entities = scrubbedEntities
+	for i := range r.Graph.Edges {
+		if to, ok := idRemap[r.Graph.Edges[i].From]; ok {
+			r.Graph.Edges[i].From = to
+		}
+		if to, ok := idRemap[r.Graph.Edges[i].To]; ok {
+			r.Graph.Edges[i].To = to
+		}
+	}
+	dedupEdges := make([]GraphEdge, 0, len(r.Graph.Edges))
+	seenEdges := map[GraphEdge]struct{}{}
+	for _, e := range r.Graph.Edges {
+		if _, ok := seenEdges[e]; ok {
+			continue
+		}
+		seenEdges[e] = struct{}{}
+		dedupEdges = append(dedupEdges, e)
+	}
+	r.Graph.Edges = dedupEdges
 }
 
 // CompareConfigs runs the full analysis pipeline on two supportconfig

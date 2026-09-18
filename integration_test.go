@@ -1,3 +1,5 @@
+//go:build !cli
+
 // integration_test.go
 package main
 

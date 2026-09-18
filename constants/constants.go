@@ -71,6 +71,8 @@ const (
 	FlagTXT       = "txt"
 	FlagHTML      = "html"
 	FlagAnonymize = "anonymize"
+	FlagJSON      = "json"
+	FlagCompare   = "compare"
 
 	// Flag descriptions
 	DescVersion   = "Print program version"
@@ -78,6 +80,8 @@ const (
 	DescTXT       = "Generate a TXT report"
 	DescHTML      = "Generate an HTML report"
 	DescAnonymize = "Redact PII (IPs, Domains) from the report"
+	DescJSON      = "Generate a JSON report (structured, machine-readable)"
+	DescCompare   = "Compare two supportconfig paths (format: pathA:pathB)"
 
 	// Default behavior
 	DefaultGenerateBothFormats = true

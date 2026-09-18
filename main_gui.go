@@ -26,24 +26,19 @@ var assets embed.FS
 // main is the application entry point
 // It handles command-line argument parsing and routes to either CLI or GUI mode
 func main() {
-	// Setup CLI Flags using configuration constants
-	versionShort := flag.Bool(constants.FlagVersion, false, constants.DescVersion)
-	cliPath := flag.String(constants.FlagAnalyze, "", constants.DescAnalyze)
-	txtReport := flag.Bool(constants.FlagTXT, false, constants.DescTXT)
-	htmlReport := flag.Bool(constants.FlagHTML, false, constants.DescHTML)
-	// JSON report: full machine-readable export (summary + findings + evidence).
-	jsonReport := flag.Bool("json", false, "Generate a JSON report (structured, machine-readable)")
-	anonymize := flag.Bool(constants.FlagAnonymize, false, constants.DescAnonymize)
+	// Setup CLI Flags from the shared registry (cli_flags.go). The hybrid binary
+	// keeps its historical surface: differential analysis (-compare) is CLI-only.
+	opts := registerCLIFlags(flag.CommandLine, false)
 	flag.Parse()
 
-	if *versionShort {
+	if *opts.Version {
 		fmt.Printf("%s version %s (Hybrid)\n", constants.AppName, constants.AppVersion)
 		os.Exit(0)
 	}
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
-	if *cliPath != "" {
-		if err := runCLI(*cliPath, *txtReport, *htmlReport, *anonymize, *jsonReport); err != nil {
+	if *opts.Analyze != "" {
+		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
 			log.Fatalf("CLI execution failed: %v", err)
 		}
 		os.Exit(0) // Exit immediately. Do not load the GUI.
@@ -54,10 +49,10 @@ func main() {
 	// placed AFTER the path still work perfectly.
 	if flag.NArg() > 0 {
 		path := flag.Arg(0)
-		isAnonymize := *anonymize
-		isTxt := *txtReport
-		isHtml := *htmlReport
-		isJSON := *jsonReport
+		isAnonymize := *opts.Anonymize
+		isTxt := *opts.TXT
+		isHtml := *opts.HTML
+		isJSON := *opts.JSON
 		hasExplicitFormat := false
 
 		// Manually scan remaining arguments for all our flags
@@ -80,7 +75,7 @@ func main() {
 		}
 
 		// If they just passed the path and NO format flags, default to both to match previous behavior
-		if !hasExplicitFormat && !*txtReport && !*htmlReport {
+		if !hasExplicitFormat && !*opts.TXT && !*opts.HTML {
 			if appConfig.CLI.DefaultGenerateBothFormats {
 				isTxt = true
 				isHtml = true

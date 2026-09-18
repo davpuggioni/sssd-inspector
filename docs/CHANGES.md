@@ -257,3 +257,51 @@ The project now features:
 - Developer-friendly standards and guidelines
 
 All improvements were implemented without removing any existing functionality, ensuring backward compatibility while significantly enhancing code quality and maintainability.
+
+---
+
+## 2026-09-18 — Regression test net + PII-leak fix (unreleased work)
+
+### Regression guard for the CLI flag surface (the `-logdir` lesson)
+- The CLI flag set lived in two duplicated `main()` functions (`main_cli.go`,
+  `main_gui.go`); a previous `-logdir` feature was silently lost in a merge.
+- All flags now come from a single registry: `registerCLIFlags()` in
+  `cli_flags.go` (tag-free, shared by both binaries; `-compare` stays
+  CLI-only by construction).
+- `cli_flags_test.go` locks: (1) a hardcoded flag contract (`v, analyze,
+  txt, html, json, anonymize, compare`), (2) every flag shown in `-h`
+  usage, (3) a two-way lock between the registry and the README.md Options
+  table. Deleting or silently adding a user-visible flag now fails the suite.
+- `integration_test.go` is GUI-only: added `//go:build !cli` so
+  `go test -tags cli ./...` builds and runs (it previously failed), enabling
+  the CLI regression matrix.
+- New CI workflow `.github/workflows/ci.yml`: gofmt, `go vet` in both
+  build modes, both binary builds, `go test` default + `-tags cli`, `-race`
+  in both modes, and a CLI smoke test on the built binary.
+
+### Coverage of previously untested areas (71.6% -> 82.5% statements)
+- `runCLI` end-to-end (`shared_cli_test.go`, `shared_cli_modes_test.go`):
+  dir + tar.xz input, txt/html/json generation, stdout contract, PII
+  redaction, missing-path error, no-output mode.
+- Archive extraction (`loaders_test.go`): real `.tar.xz` built in-test,
+  relevant-files-only contract, invalid archive error, path-traversal flattening.
+- Parallel phases (`analyzer_parallel_test.go`): equivalence and
+  repeatability of `analyzePhase1/2Parallel` vs the sequential phases.
+- Correlation engine (`analyzer_correlate_test.go`,
+  `analyzer_correlate_checks_test.go`): helper tables + the four
+  contradiction checks with no-false-positive anchors.
+- `analyzeKerberosAndKeytab` (`analyzer_auth_keytab*.go`), FileFilter +
+  context scanning (`utils_filter_test.go`), caches
+  (`cache_test.go`), plus `findingKeys`/`categoryFor`/`chainable`
+  (`analyzer_extras_test.go`).
+
+### PII fix found by the new tests
+- `TestRunCLI_AnonymizeRedacts` exposed a real leak: with `-anonymize`, the
+  top-level `/ad_domain` and `/hostname` fields and the graph entity IDs
+  still carried raw PII; the uppercased AD-domain variant leaked into the
+  sssd.conf snippet and the correlation messages.
+- `anonymizeReport` (analyzer_core.go) now: snapshots the originals before
+  overwriting, masks `ad_domain`/hostname case variants inside every
+  embedding field, replaces the top-level fields with placeholders, and
+  re-keys graph entity IDs from the scrubbed values (rewriting edge
+  endpoints and collapsing duplicates).
