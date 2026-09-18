@@ -281,11 +281,25 @@ func anonymizeReport(r *ReportData) {
 		// including their case variants (realm strings and log lines are
 		// often uppercased).
 		if origAdDomain != "" && origAdDomain != "Not configured" {
+			// Preserve the "[section].key" structure so the finding still
+			// tells the user WHERE to act ("domain section, key X"), but
+			// redact the domain name itself: "domain/intra.swm.de.foo" ->
+			// "domain/example.com.foo".
 			s = strings.ReplaceAll(s, origAdDomain, "example.com")
 			s = strings.ReplaceAll(s, strings.ToUpper(origAdDomain), "EXAMPLE.COM")
 		}
 		if origHostname != "" {
 			s = strings.ReplaceAll(s, origHostname, "redacted-host")
+			// The hostname entity Value is scrubbed the same way: by the time
+			// the graph lane runs below, the FQDN above has already collapsed
+			// its domain ("srv-prod-07.intra.swm.de" -> "srv-prod-07.example.com"),
+			// so the FQDN match no longer hits. Redact the short hostname too
+			// so the server name is not recoverable ("srv-prod-07.example.com"
+			// -> "redacted-host"), while unrelated "example.com" values that
+			// never referenced the host are left untouched.
+			if short := strings.SplitN(origHostname, ".", 2)[0]; short != "" && short != origHostname {
+				s = strings.ReplaceAll(s, short+"."+constants.DomainReplacement, "redacted-host")
+			}
 		}
 		// uname -a starts with "Linux <nodename> <release> <machine> ... <os>".
 		// The nodename is often a SHORT name (e.g. "srv123") that differs from
@@ -322,6 +336,13 @@ func anonymizeReport(r *ReportData) {
 	for i := range r.ConfigFindings {
 		r.ConfigFindings[i].Message = maskString(r.ConfigFindings[i].Message)
 		r.ConfigFindings[i].Evidence = maskString(r.ConfigFindings[i].Evidence)
+		// SourceKey/SourcePath carry the raw domain in provenance strings
+		// such as "domain/intra.swm.de.ldap_id_mapping" (the section name is
+		// the domain in per-domain sssd.conf sections). They were never
+		// scrubbed and leaked the domain even when Message/Evidence were
+		// redacted.
+		r.ConfigFindings[i].SourceKey = maskString(r.ConfigFindings[i].SourceKey)
+		r.ConfigFindings[i].SourcePath = maskString(r.ConfigFindings[i].SourcePath)
 	}
 
 	// The executive-summary headline embeds finding text (domains, realms):
@@ -393,6 +414,10 @@ func anonymizeReport(r *ReportData) {
 	for i := range r.Graph.Findings {
 		r.Graph.Findings[i].Message = maskString(r.Graph.Findings[i].Message)
 		r.Graph.Findings[i].Evidence = maskString(r.Graph.Findings[i].Evidence)
+		// Like ConfigFindings, graph findings carry the raw domain in
+		// SourceKey ("domain/<domain>.<key>"); scrub both provenance fields.
+		r.Graph.Findings[i].SourceKey = maskString(r.Graph.Findings[i].SourceKey)
+		r.Graph.Findings[i].SourcePath = maskString(r.Graph.Findings[i].SourcePath)
 		if r.AdDomain != "" {
 			r.Graph.Findings[i].Evidence = strings.ReplaceAll(r.Graph.Findings[i].Evidence, r.AdDomain, "example.com")
 		}
