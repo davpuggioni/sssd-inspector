@@ -261,6 +261,18 @@ func anonymizeReport(r *ReportData) {
 	origAdDomain := r.AdDomain
 	origHostname := r.Hostname
 
+	// The syslog/rsyslog prefix in Examples/RawLog lines is the bare SHORT
+	// hostname ("Aug 18 ... webdev01 ldap_child[1]: ..."): it matches neither
+	// the FQDN nor "<short>.example.com" forms. Redact it with a word-boundary
+	// regex so "webdev01" is replaced but longer tokens like "webdev011" or
+	// "x-webdev01" are not. The match is case-insensitive because syslog
+	// hostnames are conventionally lowercased even when the FQDN is not.
+	var shortHostRegex *regexp.Regexp
+	if shortHost := strings.SplitN(origHostname, ".", 2)[0]; shortHost != "" &&
+		shortHost != origHostname && len(shortHost) >= 4 {
+		shortHostRegex = regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(shortHost) + `\b`)
+	}
+
 	maskString := func(s string) string {
 		s = ipRegex.ReplaceAllString(s, "XXX.XXX.XXX.XXX")
 		s = ipv6Regex.ReplaceAllString(s, "XXXX:XXXX::XXXX")
@@ -299,6 +311,9 @@ func anonymizeReport(r *ReportData) {
 			// never referenced the host are left untouched.
 			if short := strings.SplitN(origHostname, ".", 2)[0]; short != "" && short != origHostname {
 				s = strings.ReplaceAll(s, short+"."+constants.DomainReplacement, "redacted-host")
+			}
+			if shortHostRegex != nil {
+				s = shortHostRegex.ReplaceAllString(s, "redacted-host")
 			}
 		}
 		// uname -a starts with "Linux <nodename> <release> <machine> ... <os>".
@@ -386,6 +401,27 @@ func anonymizeReport(r *ReportData) {
 		}
 	}
 	r.SSSDConfigSnippet = maskString(r.SSSDConfigSnippet)
+
+	// Timeline, temporal cluster and KB suggestion samples are raw-log
+	// excerpts (syslog prefix + service tokens): they carry the same short
+	// hostname, IPs and domains as SSSDLogErrors.Examples, so scrub them too.
+	for i := range r.Timeline {
+		r.Timeline[i].Message = maskString(r.Timeline[i].Message)
+		r.Timeline[i].RawLog = maskString(r.Timeline[i].RawLog)
+		for j, s := range r.Timeline[i].Samples {
+			r.Timeline[i].Samples[j] = maskString(s)
+		}
+	}
+	for i := range r.TemporalClusters {
+		r.TemporalClusters[i].Description = maskString(r.TemporalClusters[i].Description)
+		r.TemporalClusters[i].SampleRawLog = maskString(r.TemporalClusters[i].SampleRawLog)
+	}
+	for i := range r.KBSuggestions {
+		r.KBSuggestions[i].SampleLine = maskString(r.KBSuggestions[i].SampleLine)
+	}
+	for i, h := range r.HostsIssues {
+		r.HostsIssues[i] = maskString(h)
+	}
 
 	// Scrub the correlation graph's entity labels/values and source line text
 	// so the frontend never sees raw PII (domains, IPs, hostnames).
