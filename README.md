@@ -395,7 +395,8 @@ The only code left uncovered is what genuinely requires a display server: the
 Wails `launchGUI()` bootstrap and the statements inside `main()` that call it.
 Everything those call into (the `App` methods, the dialogs, the analyzers) is
 covered by unit or process-level tests; statement coverage of the main package
-is around 88% in both build modes.
+is ~88% in the default (hybrid) build and ~86% with the `cli` build tag, which
+excludes the GUI-only files.
 
 ---
 
