@@ -197,7 +197,7 @@ func TestBuildCorrelationGraph_PIIRedaction(t *testing.T) {
 	}
 	// Build graph from raw data (PII still present), then anonymize in-place.
 	r.Graph = buildCorrelationGraph(r)
-	anonymizeReport(r)
+	anonymizeReport(r, "")
 
 	for _, e := range r.Graph.Entities {
 		if strings.Contains(e.Value, "corp.example.org") || strings.Contains(e.Value, "prod-server-01") {

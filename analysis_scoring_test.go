@@ -214,7 +214,7 @@ func TestAnonymizeReport_ScrubsSummaryHeadline(t *testing.T) {
 	}
 	computeExecutiveSummary(r)
 	r.Summary.Headline = "[CRITICAL] Host mycompany.com has a broken realm"
-	anonymizeReport(r)
+	anonymizeReport(r, "")
 
 	if strings.Contains(r.Summary.Headline, "mycompany.com") {
 		t.Errorf("summary headline was not anonymized: %q", r.Summary.Headline)

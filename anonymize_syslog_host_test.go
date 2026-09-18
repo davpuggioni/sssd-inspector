@@ -98,3 +98,38 @@ func TestNonAnonymizedReportKeepsRawLines(t *testing.T) {
 		t.Errorf("non-anonymized report lost the raw syslog hostname; fixture broken?")
 	}
 }
+
+// TestShortHostnameFromKernelLineWithoutHostnameField is the exact reported
+// scenario: basic-environment.txt has NO "Hostname:" line (only
+// "Kernel: <node> ..."), and the log lines carry that bare nodename as the
+// syslog prefix. The nodename must still be redacted.
+func TestShortHostnameFromKernelLineWithoutHostnameField(t *testing.T) {
+	dir, err := os.MkdirTemp("", "kernelfb-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	files := map[string]string{
+		"basic-environment.txt": "Kernel: svwebdevi01 5.14.21-150500.55.44-default #1 SMP x86_64\n",
+		"rpm.txt":               "sssd-2.9.4-150500.x86_64\n",
+		"sssd.conf":             "[sssd]\nservices = nss, pam\n\n[domain/corp.example]\nad_domain = corp.example\nid_provider = ad\n",
+		"sssd.txt":              "2026-08-18T09:19:05.898657+02:00 svwebdevi01 ldap_child[33887]: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed.\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report := analyzeData(dir, true, nil)
+	if len(report.SSSDLogErrors) == 0 {
+		t.Skip("fixture produced no log errors; adjust fixture")
+	}
+	for _, e := range report.SSSDLogErrors {
+		for _, ex := range e.Examples {
+			if strings.Contains(strings.ToLower(ex), "svwebdevi01") {
+				t.Errorf("kernel-nodename fallback failed, leak: %.160q", ex)
+			}
+		}
+	}
+}

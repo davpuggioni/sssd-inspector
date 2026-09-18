@@ -2,6 +2,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -238,28 +240,80 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		if progressFunc != nil {
 			progressFunc("Sanitizing PII data...", 95)
 		}
-		anonymizeReport(&report)
+		anonymizeReport(&report, dirPath)
 	}
 
 	return report
 }
 
-// anonymizeReport heavily scrubs PII from the report to ensure safe sharing
-func anonymizeReport(r *ReportData) {
+// anonymizeReport heavily scrubs PII from the report to ensure safe sharing.
+// dirPath is the analyzed supportconfig directory: it is used read-only as a
+// last-resort source for the server short hostname (uname nodename) when the
+// parsed report fields do not carry it.
+func anonymizeReport(r *ReportData, dirPath string) {
 	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
 	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
 	emailRegex := regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b`)
 
 	// Snapshot the original domain/realm/AD-domain/hostname BEFORE any field
-	// is overwritten with its placeholder. maskString must be able to match
-	// the real values even after SearchDomain/KerberosRealm themselves are
-	// mutated below, otherwise any string scrubbed later (SSSDConfigSnippet,
-	// Problems, Warnings, ...) would no longer match the original domain.
+	// is overwritten with its placeholder, and BEFORE r.KernelVersion itself
+	// is masked below. maskString must be able to match the real values even
+	// after SearchDomain/KerberosRealm themselves are mutated below, otherwise
+	// any string scrubbed later (SSSDConfigSnippet, Problems, Warnings, ...)
+	// would no longer match the original domain.
 	origDomain := r.SearchDomain
 	origRealm := r.KerberosRealm
 	origAdDomain := r.AdDomain
 	origHostname := r.Hostname
+
+	// Hostname fallback chain: report.Hostname comes from "Hostname:" in
+	// basic-environment.txt, but minimal or GDPR-restricted supportconfigs may
+	// not have it. The uname line ("Linux <nodename> ...", with or without the
+	// "Kernel:" prefix) then is the only record of the server name — and,
+	// crucially, the nodename IS the bare short hostname that syslog prefixes
+	// every log line with. Without this fallback the short hostname in SSSD
+	// Error Log examples (and every other raw-log excerpt) survives
+	// anonymization untouched.
+	// NOTE: the nodename does not have to equal a "Hostname:" value seen
+	// elsewhere: whatever token sits in the nodename slot is treated as the
+	// short hostname.
+	// The uname line may live either in the parsed r.KernelVersion field or,
+	// when the supportconfig section has an unexpected shape, only in the raw
+	// basic-environment.txt file — scan the file directly as a last resort so
+	// a missing KernelVersion can never silently disable the redaction.
+	// The scan is read-only and bounded (first 200 lines); failures are
+	// ignored because redaction is best-effort.
+	if origHostname == "" && dirPath != "" {
+		candidates := []string{r.KernelVersion}
+		if data, err := os.ReadFile(filepath.Join(dirPath, "basic-environment.txt")); err == nil {
+			lines := strings.Split(string(data), "\n")
+			if len(lines) > 200 {
+				lines = lines[:200]
+			}
+			candidates = append(candidates, lines...)
+		}
+		for _, candidate := range candidates {
+			fields := strings.Fields(candidate)
+			// Accept "Linux <node> ...", "Kernel: Linux <node> ..." and the
+			// short "Kernel: <node> ..." variant seen in supportconfigs.
+			start := -1
+			switch {
+			case len(fields) >= 2 && fields[0] == "Linux":
+				start = 1
+			case len(fields) >= 3 && fields[0] == "Kernel:" && fields[1] == "Linux":
+				start = 2
+			case len(fields) >= 2 && fields[0] == "Kernel:" && fields[1] != "Linux":
+				start = 1
+			}
+			if start > 0 {
+				if node := fields[start]; node != "" && node != "Linux" {
+					origHostname = node
+					break
+				}
+			}
+		}
+	}
 
 	// The syslog/rsyslog prefix in Examples/RawLog lines is the bare SHORT
 	// hostname ("Aug 18 ... webdev01 ldap_child[1]: ..."): it matches neither
@@ -267,9 +321,11 @@ func anonymizeReport(r *ReportData) {
 	// regex so "webdev01" is replaced but longer tokens like "webdev011" or
 	// "x-webdev01" are not. The match is case-insensitive because syslog
 	// hostnames are conventionally lowercased even when the FQDN is not.
+	// NOTE: unlike the exact-FQDN replacement, this fires on the SHORT name
+	// alone — including when the FQDN was never known (fallback above).
 	var shortHostRegex *regexp.Regexp
 	if shortHost := strings.SplitN(origHostname, ".", 2)[0]; shortHost != "" &&
-		shortHost != origHostname && len(shortHost) >= 4 {
+		len(shortHost) >= 4 {
 		shortHostRegex = regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(shortHost) + `\b`)
 	}
 
@@ -340,6 +396,9 @@ func anonymizeReport(r *ReportData) {
 	// hostname (e.g. "Linux prod-server-01 5.14.21-...#1 SMP ... x86_64").
 	// maskString now redacts the hostname/domain/IP parts while preserving the
 	// actual kernel-release information.
+	// NOTE: this must run AFTER the hostname fallback above (which reads the
+	// raw r.KernelVersion nodename): masking first would destroy the very
+	// token the fallback needs.
 	r.KernelVersion = maskString(r.KernelVersion)
 
 	for i, ns := range r.Nameservers {

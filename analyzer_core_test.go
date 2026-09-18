@@ -59,7 +59,7 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 		},
 	}
 
-	anonymizeReport(&report)
+	anonymizeReport(&report, "")
 
 	if strings.Contains(report.SSSDLogErrors[0].Description, "2001:0db8:85a3") {
 		t.Errorf("Failed to redact IPv6 address")
@@ -86,7 +86,7 @@ func TestAnonymizeReport_KernelVersionHostname(t *testing.T) {
 		Hostname:      "srv123.example.org",
 	}
 
-	anonymizeReport(&report)
+	anonymizeReport(&report, "")
 
 	if strings.Contains(report.KernelVersion, "srv123") {
 		t.Errorf("Kernel version still leaks the server hostname: %q", report.KernelVersion)
@@ -111,7 +111,7 @@ func TestAnonymizeReport_SSSDConfigSnippetDomain(t *testing.T) {
 		Problems:          []string{"[AD] Search domain corp.example.org did not match."},
 	}
 
-	anonymizeReport(&report)
+	anonymizeReport(&report, "")
 
 	if strings.Contains(report.SSSDConfigSnippet, "corp.example.org") {
 		t.Errorf("sssd.conf snippet still leaks the AD domain: %q", report.SSSDConfigSnippet)
