@@ -37,6 +37,18 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// Native dialog seams.
+//
+// They default to the Wails runtime implementations and exist so that the GUI
+// export paths (OpenFileBrowser, SavePDF, SaveJSON, SaveTXT) can be unit
+// tested. The Wails runtime helpers call log.Fatalf when no frontend context
+// is attached, which would terminate a test process instead of returning an
+// error, so the dialog call itself must be substitutable.
+var (
+	openFileDialogFn = runtime.OpenFileDialog
+	saveFileDialogFn = runtime.SaveFileDialog
+)
+
 // emitEvent safely emits a Wails runtime event, silently skipping if no
 // valid context is available (e.g., during unit tests or CLI mode).
 func (a *App) emitEvent(event string, args ...interface{}) {
@@ -62,7 +74,7 @@ func (a *App) OpenFileBrowser() (string, error) {
 			{DisplayName: constants.FilterAllFiles, Pattern: constants.PatternAllFiles},
 		},
 	}
-	return runtime.OpenFileDialog(a.ctx, options)
+	return openFileDialogFn(a.ctx, options)
 }
 
 // extractIfArchive returns the path to a supportconfig directory.
@@ -157,7 +169,7 @@ func (a *App) SavePDF(b64 string) (string, error) {
 			{DisplayName: constants.FilterPDF, Pattern: constants.PatternPDF},
 		},
 	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	filePath, err := saveFileDialogFn(a.ctx, options)
 	if err != nil {
 		return "", err
 	}
@@ -186,7 +198,7 @@ func (a *App) SaveJSON(report ReportData) (string, error) {
 			{DisplayName: "JSON Report", Pattern: "*.json"},
 		},
 	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	filePath, err := saveFileDialogFn(a.ctx, options)
 	if err != nil {
 		return "", err
 	}
@@ -221,7 +233,7 @@ func (a *App) SaveTXT(report ReportData) (string, error) {
 			{DisplayName: constants.FilterText, Pattern: constants.PatternText},
 		},
 	}
-	filePath, err := runtime.SaveFileDialog(a.ctx, options)
+	filePath, err := saveFileDialogFn(a.ctx, options)
 	if err != nil {
 		return "", err
 	}

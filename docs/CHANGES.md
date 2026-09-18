@@ -295,6 +295,32 @@ All improvements were implemented without removing any existing functionality, e
   (`cache_test.go`), plus `findingKeys`/`categoryFor`/`chainable`
   (`analyzer_extras_test.go`).
 
+### Entry-point coverage and remaining test gaps closed
+- `main()` cannot be called from a unit test (it ends in `os.Exit`), so the
+  decidable logic of both binaries moved into unit-testable functions and the
+  entry points are now guarded at process level:
+  - `runCLIEntry` / `dispatchCLI` (`main_cli_entry_test.go`, `//go:build cli`):
+    dispatch order (`-v` → `-compare` → `-analyze` → positional), exit codes
+    (0/1/2), usage output, trailing-format-flag rescan and the
+    default-both-formats behaviour.
+  - `runHybridCLI` / `launchGUI` split (`main_gui_entry_test.go`): the hybrid
+    binary must handle a path without ever starting the GUI, plus the
+    CLI-only `-compare` rejection.
+  - `main_coverage_test.go`: builds the real `cli` and hybrid binaries and runs
+    them (`-v`, `-h`, unknown flag, `-analyze`, positional path, `-compare`),
+    asserting exit codes and output. This is what covers `main()` itself and
+    protects against turning an `os.Exit(1)` into a `log.Fatalf`.
+- GUI export paths are now testable through dialog seams
+  (`openFileDialogFn` / `saveFileDialogFn` in `app.go`):
+  `OpenFileBrowser`, `SavePDF` (base64 data-URL decode), `SaveJSON`, `SaveTXT`,
+  cancellation semantics (`ErrCancelled`), dialog errors and write errors
+  (`app_export_test.go`, `//go:build !cli`), plus the Wails `startup` hook.
+- Remaining zero-coverage code is only the parts that require a display server:
+  `launchGUI()` and the `main()` statements that call it.
+- `README.md`: Author section now states that the code was developed with the
+  help of AI assistants, and the Testing section documents the new
+  entry-point/process-level tests and both regression guards.
+
 ### PII fix found by the new tests
 - `TestRunCLI_AnonymizeRedacts` exposed a real leak: with `-anonymize`, the
   top-level `/ad_domain` and `/hostname` fields and the graph entity IDs

@@ -348,6 +348,9 @@ go test -bench=. -benchmem -count=1 ./...
 
 # Run specific test
 go test -count=1 -run TestAnonymizeReport_DeepPII -v
+
+# Coverage report
+go test -count=1 -coverprofile=cover.out ./... && go tool cover -func=cover.out | tail -1
 ```
 
 The test suite includes:
@@ -359,6 +362,40 @@ The test suite includes:
 - **Error handling tests** — Custom error types, wrapping, and context propagation
 - **Logger tests** — Structured logging levels, fields, and filtering
 - **UI component tests** — Button, ProgressBar, StatusMessage, FileInput lifecycle
+- **CLI contract tests** (`cli_flags_test.go`) — Flag registry, usage output and a
+  bidirectional lock between the registered flags and the Options table above
+- **Entry-point tests** (`main_cli_entry_test.go`, `main_gui_entry_test.go`) —
+  Dispatch order, exit codes and the CLI-vs-GUI split, for both binaries
+- **Process-level tests** (`main_coverage_test.go`) — The real compiled binaries
+  are built and executed, so `main()` itself (which cannot be called from a unit
+  test because it ends in `os.Exit`) is guarded too
+- **Entry-point coverage measurement** (`main_cover_measure_test.go`) — The
+  binaries are rebuilt with `go build -cover` and run with `GOCOVERDIR`, then the
+  profile is read back with `go tool covdata func`: `main()` of the CLI must be
+  100%, which pins it as a pure delegation to the tested dispatchers
+- **GUI export tests** (`app_export_test.go`) — `Analyze`, PDF/JSON/TXT export
+  and the file dialog paths, with the native dialogs substituted through seams
+- **PII redaction tests** — `-anonymize` output is asserted to be free of raw
+  IPs, domains, e-mails and MAC addresses, including graph entity IDs
+
+### Regression guards
+
+Two incidents shaped the current tests, and both are now pinned:
+
+1. **A silently lost CLI flag.** The `-logdir` flag was dropped during a
+   repository restructure. `cli_flags_test.go` now hardcodes the flag contract
+   and cross-checks it against this README, so removing a documented flag
+   without updating the code, the tests, the docs and `docs/CHANGES.md` fails
+   the suite.
+2. **A CLI invocation falling through to the GUI.** The hybrid binary must never
+   start `launchGUI()` when it was given a path: the process-level tests run it
+   headless with a hard timeout and fail if it does not terminate.
+
+The only code left uncovered is what genuinely requires a display server: the
+Wails `launchGUI()` bootstrap and the statements inside `main()` that call it.
+Everything those call into (the `App` methods, the dialogs, the analyzers) is
+covered by unit or process-level tests; statement coverage of the main package
+is around 88% in both build modes.
 
 ---
 
@@ -438,18 +475,6 @@ Contributions are welcome! Here's how you can help:
 "Your new SSSD error message": "Human-readable explanation of what this means and how to fix it",
 ```
 
-### Adding a KB Article
-
-```json
-{
-  "tid_id": "TID-000000001",
-  "title": "Your KB Article Title",
-  "url": "https://www.suse.com/support/kb/doc/?id=000000001",
-  "description": "Detailed description of the issue and resolution steps.",
-  "log_patterns": ["Exact log line pattern to match"],
-  "config_patterns": ["Relevant sssd.conf setting"]
-}
-```
 
 ---
 
@@ -469,10 +494,16 @@ This tool is intended for diagnostic purposes. It parses logs based on patterns 
 
 **Davide M. Puggioni** — SUSE Technical Support
 
+The code in this repository was written with the help of Artificial
+Intelligence (AI) coding assistants, used for implementation, refactoring,
+test generation and documentation. All AI-assisted output was reviewed,
+verified and validated by the author (builds, unit/integration tests and
+real-world supportconfig analyses) before being committed.
+
 ---
 
 ## 🙏 Acknowledgments
 
 - Built with [Wails](https://wails.io/) — Native Go + WebKit desktop applications
-- Pattern engine inspired by SSSD C source code analysis
+- Pattern engine inspired by SSSD C source code analysis - https://github.com/sssd/sssd
 - Knowledge Base articles sourced from SUSE Knowledge Base Articles

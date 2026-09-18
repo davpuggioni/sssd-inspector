@@ -8,6 +8,12 @@ sssd-inspector
 supportconfig_sssd_report_*.txt
 supportconfig_sssd_report_*.html
 
+# Report written next to the analyzed path (runCLI/runCompare: <name>_report.*)
+*_report.txt
+*_report.html
+*_report.json
+compare_report.json
+
 # Escludi archivi e cartelle dei clienti estratti
 *.txz
 *.tar.xz

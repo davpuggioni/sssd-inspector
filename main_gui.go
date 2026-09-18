@@ -7,8 +7,10 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -23,32 +25,56 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// main is the application entry point
-// It handles command-line argument parsing and routes to either CLI or GUI mode
+// main is the application entry point of the hybrid binary.
+//
+// It decides whether this invocation is a CLI one (handled by runHybridCLI)
+// or a GUI launch. All decidable routing lives in runHybridCLI so that it is
+// unit-testable (main_gui_entry_test.go); main itself is exercised end-to-end
+// against the real binary by main_coverage_test.go.
 func main() {
+	if code, handled := runHybridCLI(os.Args[1:], os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
+	launchGUI()
+}
+
+// runHybridCLI handles the command-line surface of the hybrid binary and
+// reports whether the invocation was fully handled. When it returns
+// handled == false the caller must start the GUI.
+//
+// Exit codes: 0 success, 1 runtime error, 2 usage error.
+func runHybridCLI(args []string, stdout, stderr io.Writer) (int, bool) {
 	// Setup CLI Flags from the shared registry (cli_flags.go). The hybrid binary
 	// keeps its historical surface: differential analysis (-compare) is CLI-only.
-	opts := registerCLIFlags(flag.CommandLine, false)
-	flag.Parse()
+	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	opts := registerCLIFlags(fs, false)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0, true
+		}
+		return 2, true
+	}
 
 	if *opts.Version {
-		fmt.Printf("%s version %s (Hybrid)\n", constants.AppName, constants.AppVersion)
-		os.Exit(0)
+		fmt.Fprintf(stdout, "%s version %s (Hybrid)\n", constants.AppName, constants.AppVersion)
+		return 0, true
 	}
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *opts.Analyze != "" {
 		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
-			log.Fatalf("CLI execution failed: %v", err)
+			fmt.Fprintf(stderr, "CLI execution failed: %v\n", err)
+			return 1, true
 		}
-		os.Exit(0) // Exit immediately. Do not load the GUI.
+		return 0, true // Exit immediately. Do not load the GUI.
 	}
 
 	// Fallback: If they provided a path WITHOUT -analyze, flag.Parse() stops parsing.
 	// We must manually scan the remaining arguments so that flags like -html or -anonymize
 	// placed AFTER the path still work perfectly.
-	if flag.NArg() > 0 {
-		path := flag.Arg(0)
+	if len(fs.Args()) > 0 {
+		path := fs.Args()[0]
 		isAnonymize := *opts.Anonymize
 		isTxt := *opts.TXT
 		isHtml := *opts.HTML
@@ -56,7 +82,7 @@ func main() {
 		hasExplicitFormat := false
 
 		// Manually scan remaining arguments for all our flags
-		for _, arg := range os.Args[1:] {
+		for _, arg := range args {
 			if strings.Contains(arg, "-"+constants.FlagAnonymize) {
 				isAnonymize = true
 			}
@@ -68,7 +94,7 @@ func main() {
 				isHtml = true
 				hasExplicitFormat = true
 			}
-			if strings.Contains(arg, "-json") || strings.Contains(arg, "--json") {
+			if strings.Contains(arg, "-"+constants.FlagJSON) {
 				isJSON = true
 				hasExplicitFormat = true
 			}
@@ -76,19 +102,30 @@ func main() {
 
 		// If they just passed the path and NO format flags, default to both to match previous behavior
 		if !hasExplicitFormat && !*opts.TXT && !*opts.HTML {
-			if appConfig.CLI.DefaultGenerateBothFormats {
+			if appConfig != nil && appConfig.CLI.DefaultGenerateBothFormats {
 				isTxt = true
 				isHtml = true
 			}
 		}
 
 		if err := runCLI(path, isTxt, isHtml, isAnonymize, isJSON); err != nil {
-			log.Fatalf("CLI execution failed: %v", err)
+			fmt.Fprintf(stderr, "CLI execution failed: %v\n", err)
+			return 1, true
 		}
-		os.Exit(0)
+		return 0, true
 	}
 
-	// Launch the Wails GUI with configuration-based settings
+	// No arguments: the caller launches the GUI.
+	return 0, false
+}
+
+// launchGUI starts the Wails desktop application with configuration-based settings.
+//
+// It is deliberately not unit-tested: it requires a display server and the
+// Wails/WebKit runtime. main_coverage_test.go guards the entry point itself,
+// while everything the GUI calls into (App.Analyze, the dialogs) is covered by
+// the app tests.
+func launchGUI() {
 	app := NewApp()
 
 	// Get window settings from configuration

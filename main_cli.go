@@ -6,70 +6,94 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"sssd-inspector/constants"
 )
 
-// main is the application entry point for CLI mode
-// It handles command-line argument parsing and executes CLI-only operations
+// main is the application entry point for CLI mode.
+//
+// It is intentionally reduced to a single statement: everything decidable
+// lives in runCLIEntry/dispatchCLI, which are unit-testable (main_cli_entry_test.go)
+// and are also exercised end-to-end against the real binary by
+// main_coverage_test.go.
 func main() {
-	// Setup CLI Flags from the shared registry (cli_flags.go). The static CLI
-	// binary is the only one advertising differential analysis (-compare).
-	opts := registerCLIFlags(flag.CommandLine, true)
-	flag.Parse()
+	os.Exit(runCLIEntry(os.Args[1:], os.Stdout, os.Stderr))
+}
 
+// runCLIEntry parses args and runs the CLI-only dispatch, returning the
+// process exit code: 0 on success, 1 on a runtime error, 2 on a usage error.
+//
+// Keeping the routing here (instead of inside main) matters: this is the code
+// path where the -logdir flag was silently lost during a project restructure,
+// so every dispatch decision is pinned by tests.
+func runCLIEntry(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	opts := registerCLIFlags(fs, true)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	return dispatchCLI(args, fs.Args(), opts, stdout, stderr)
+}
+
+// dispatchCLI applies the documented dispatch order:
+// -v (version) -> -compare -> -analyze -> positional path.
+func dispatchCLI(rawArgs, positional []string, opts *cliOptions, stdout, stderr io.Writer) int {
 	if *opts.Version {
-		fmt.Printf("%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
-		os.Exit(0)
+		fmt.Fprintf(stdout, "%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
+		return 0
 	}
 
 	// Compare mode: differential analysis between two supportconfigs
 	if *opts.Compare != "" {
 		parts := strings.SplitN(*opts.Compare, ":", 2)
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			fmt.Fprintln(os.Stderr, "Error: -compare requires two paths separated by ':' (e.g., -compare /path/A:/path/B)")
-			os.Exit(1)
+			fmt.Fprintln(stderr, "Error: -compare requires two paths separated by ':' (e.g., -compare /path/A:/path/B)")
+			return 1
 		}
 		if err := runCompare(parts[0], parts[1], *opts.Anonymize, *opts.JSON); err != nil {
-			fmt.Fprintf(os.Stderr, "Compare execution failed: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Compare execution failed: %v\n", err)
+			return 1
 		}
-		os.Exit(0)
+		return 0
 	}
 
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *opts.Analyze != "" {
 		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
-			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "CLI execution failed: %v\n", err)
+			return 1
 		}
-		os.Exit(0)
+		return 0
 	}
 
 	// Fallback logic for positional arguments
-	if flag.NArg() > 0 {
-		path := flag.Arg(0)
+	if len(positional) > 0 {
+		path := positional[0]
 		genTxt := *opts.TXT
 		genHtml := *opts.HTML
 		genJSON := *opts.JSON
 		genAnonymize := *opts.Anonymize
 
-		// Manual flag scanning for format flags
-		for _, arg := range os.Args[1:] {
-			if arg == "-txt" || arg == "--txt" {
+		// Manual flag scanning for format flags placed after the path.
+		for _, arg := range rawArgs {
+			switch arg {
+			case "-" + constants.FlagTXT, "--" + constants.FlagTXT:
 				genTxt = true
-			}
-			if arg == "-html" || arg == "--html" {
+			case "-" + constants.FlagHTML, "--" + constants.FlagHTML:
 				genHtml = true
-			}
-			if arg == "-json" || arg == "--json" {
+			case "-" + constants.FlagJSON, "--" + constants.FlagJSON:
 				genJSON = true
-			}
-			if arg == "-anonymize" || arg == "--anonymize" {
+			case "-" + constants.FlagAnonymize, "--" + constants.FlagAnonymize:
 				genAnonymize = true
 			}
 		}
@@ -81,11 +105,15 @@ func main() {
 		}
 
 		if err := runCLI(path, genTxt, genHtml, genAnonymize, genJSON); err != nil {
-			fmt.Fprintf(os.Stderr, "CLI execution failed: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "CLI execution failed: %v\n", err)
+			return 1
 		}
-		os.Exit(0)
+		return 0
 	}
+
+	// No -v/-compare/-analyze and no positional path: nothing to do, exactly
+	// like the historical flag.ExitOnError implementation (silent exit 0).
+	return 0
 }
 
 // runCompare executes a differential analysis between two supportconfig
