@@ -284,7 +284,7 @@ func isRedactableToken(v string) bool {
 // applyRedactToken replaces value (and its case variants — realms are
 // uppercase, syslog hosts lowercase) with placeholder. Values without a dot
 // are matched on word boundaries so a short hostname never clobbers a longer
-// token that merely starts with it (webdev01 must not alter webdev011).
+// token that merely starts with it (testhost01 must not alter testhost011).
 func applyRedactToken(s, value, replacement string) string {
 	if replacement == "" || !isRedactableToken(value) {
 		return s
@@ -374,10 +374,10 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 	}
 
 	// The syslog/rsyslog prefix in Examples/RawLog lines is the bare SHORT
-	// hostname ("Aug 18 ... webdev01 ldap_child[1]: ..."): it matches neither
+	// hostname ("Aug 18 ... testhost01 ldap_child[1]: ..."): it matches neither
 	// the FQDN nor "<short>.example.com" forms. Redact it with a word-boundary
-	// regex so "webdev01" is replaced but longer tokens like "webdev011" or
-	// "x-webdev01" are not. The match is case-insensitive because syslog
+	// regex so "testhost01" is replaced but longer tokens like "testhost011" or
+	// "x-testhost01" are not. The match is case-insensitive because syslog
 	// hostnames are conventionally lowercased even when the FQDN is not.
 	// NOTE: unlike the exact-FQDN replacement, this fires on the SHORT name
 	// alone — including when the FQDN was never known (fallback above).
@@ -395,7 +395,7 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 
 		// Raw-log mode (extraTokens): scrub the harvested identity values
 		// BEFORE the field-driven replacements below, so a FQDN host
-		// (dc01.intra.swm.de) is replaced as a whole instead of losing only
+		// (dc01.example.test) is replaced as a whole instead of losing only
 		// its domain part and keeping the host label.
 		for _, tok := range extraTokens {
 			s = applyRedactToken(s, tok.Value, tok.Replacement)
@@ -417,7 +417,7 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 		if isRedactableToken(origAdDomain) {
 			// Preserve the "[section].key" structure so the finding still
 			// tells the user WHERE to act ("domain section, key X"), but
-			// redact the domain name itself: "domain/intra.swm.de.foo" ->
+			// redact the domain name itself: "domain/example.test.foo" ->
 			// "domain/example.com.foo".
 			s = strings.ReplaceAll(s, origAdDomain, "example.com")
 			s = strings.ReplaceAll(s, strings.ToUpper(origAdDomain), "EXAMPLE.COM")
@@ -426,9 +426,9 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 			s = strings.ReplaceAll(s, origHostname, "redacted-host")
 			// The hostname entity Value is scrubbed the same way: by the time
 			// the graph lane runs below, the FQDN above has already collapsed
-			// its domain ("srv-prod-07.intra.swm.de" -> "srv-prod-07.example.com"),
+			// its domain ("testhost02.example.test" -> "testhost02.example.com"),
 			// so the FQDN match no longer hits. Redact the short hostname too
-			// so the server name is not recoverable ("srv-prod-07.example.com"
+			// so the server name is not recoverable ("testhost02.example.com"
 			// -> "redacted-host"), while unrelated "example.com" values that
 			// never referenced the host are left untouched.
 			if short := strings.SplitN(origHostname, ".", 2)[0]; short != "" && short != origHostname {
@@ -477,7 +477,7 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 		r.ConfigFindings[i].Message = maskString(r.ConfigFindings[i].Message)
 		r.ConfigFindings[i].Evidence = maskString(r.ConfigFindings[i].Evidence)
 		// SourceKey/SourcePath carry the raw domain in provenance strings
-		// such as "domain/intra.swm.de.ldap_id_mapping" (the section name is
+		// such as "domain/example.test.ldap_id_mapping" (the section name is
 		// the domain in per-domain sssd.conf sections). They were never
 		// scrubbed and leaked the domain even when Message/Evidence were
 		// redacted.

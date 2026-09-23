@@ -378,7 +378,7 @@ All improvements were implemented without removing any existing functionality, e
   out of the domain list); `looksLikeRealm` rejects `realm=supports`-style
   captures; the syslog host must be followed by `prog[pid]:`; a shared
   blacklist drops `root`/`kernel`/generic words. Host tokens are applied BEFORE
-  domain tokens so `dc01.intra.swm.de` collapses whole instead of leaving the
+  domain tokens so `dc01.example.test` collapses whole instead of leaving the
   `dc01` label behind.
 - `finalizeReport` now holds the graph+anonymize closing steps, shared by
   `analyzeData` and `analyzeLogsOnly`, so the PII-critical tail has exactly one
@@ -410,3 +410,30 @@ All improvements were implemented without removing any existing functionality, e
   test failed first, before the README/docs were updated — exactly as designed).
 - CI: smoke step builds raw logs, runs `-logdir -json -anonymize`, asserts the
   error is found, the domain is redacted, and `-h` advertises the flag.
+
+---
+
+## 2026-09-23 — Test-data hygiene: no real domains or hostnames
+
+### The problem
+- Test fixtures, test comments, CI smoke data and the `-logdir` documentation
+  contained real-world values taken from an analysed environment: a real
+  third-party company domain, internal hostnames taken from web/prod machines,
+  a private IP address and an employer domain used as test data. Tests must
+  only ever use reserved/generic names — so none of those literals is repeated
+  here either (the ban list in the guard test is where they are named).
+
+### The fix
+- All occurrences replaced with reserved values: domain `example.test`
+  (RFC 6761 `.test`, and deliberately NOT `example.com` so the redaction tests
+  can still observe the placeholder), hostnames `testhost01`/`testhost02`, IP
+  `192.0.2.10` (RFC 5737 TEST-NET-1), realm `EXAMPLE.TEST`.
+- `anonymize_sources_intra_test.go` renamed to
+  `anonymize_sources_domain_test.go` (the name itself carried the domain).
+- New guard `test_fixture_hygiene_test.go` walks `*.go`, `*.md` and the CI
+  workflows, strips the legitimate knowledge-base documentation URLs, and
+  fails when any banned real value appears. The ban list is assembled from
+  string parts so the guard does not trip on itself, and grows whenever a new
+  real value is discovered.
+- Left untouched on purpose: the knowledge-base article URLs (product
+  documentation) and the author identification in `wails.json`/`config.yaml`.

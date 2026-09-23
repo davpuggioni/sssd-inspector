@@ -46,13 +46,13 @@ func TestGetSSSDVersion(t *testing.T) {
 // Test: Verify Deep PII Redaction (IPv6, MAC, Emails)
 func TestAnonymizeReport_DeepPII(t *testing.T) {
 	report := ReportData{
-		SearchDomain:  "suse.com",
-		KerberosRealm: "SUSE.COM",
+		SearchDomain:  "example.test",
+		KerberosRealm: "EXAMPLE.TEST",
 		SSSDLogErrors: []SSSDLogError{
 			{
 				Description: "Connection to AD failed for IPv6 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
 				Examples: []string{
-					"Processing group user.name@suse.com",
+					"Processing group user.name@example.test",
 					"Hardware fault at MAC address 00:1B:44:11:3A:B7",
 				},
 			},
@@ -64,7 +64,7 @@ func TestAnonymizeReport_DeepPII(t *testing.T) {
 	if strings.Contains(report.SSSDLogErrors[0].Description, "2001:0db8:85a3") {
 		t.Errorf("Failed to redact IPv6 address")
 	}
-	if strings.Contains(report.SSSDLogErrors[0].Examples[0], "user.name@suse.com") {
+	if strings.Contains(report.SSSDLogErrors[0].Examples[0], "user.name@example.test") {
 		t.Errorf("Failed to redact UPN/Email address")
 	}
 	if strings.Contains(report.SSSDLogErrors[0].Examples[1], "00:1B:44:11:3A:B7") {

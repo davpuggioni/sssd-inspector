@@ -202,6 +202,12 @@ hardcoded contract in `cli_flags_test.go`, and cross-checked against the
 Options table above — removing a documented flag without updating the code,
 the tests, this table and `docs/CHANGES.md` fails the suite.
 
+Test data must be generic: fixtures, test comments, CI smoke data and docs
+may only use reserved names (RFC 2606/6761 domains such as `example.test` or
+`example.com`, documentation IPs such as `192.0.2.10`, invented hostnames such
+as `testhost01`) — never a real company domain or a hostname taken from an
+analysed machine. `test_fixture_hygiene_test.go` enforces the ban list.
+
 ### Output
 
 The CLI prints a human-readable summary to stdout plus `[Progress N%]` lines,

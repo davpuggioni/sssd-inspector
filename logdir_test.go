@@ -26,8 +26,8 @@ import (
 // that must be ignored.
 //
 // The content deliberately carries every identity value the anonymization
-// tests must never see again — domain intra.swm.de, realm INTRA.SWM.DE, host
-// svwebdevi01 (plus its FQDN and the DC dc01.intra.swm.de) — and one trap for
+// tests must never see again — domain example.test, realm EXAMPLE.TEST, host
+// testhost01 (plus its FQDN and the DC dc01.example.test) — and one trap for
 // each harvesting false positive: the service name "[be[ldap_id]]" (must NOT
 // be harvested as a domain) and a "root kernel:" syslog line (must NOT be
 // harvested as a hostname).
@@ -37,11 +37,11 @@ func writeRawLogFixture(t *testing.T) string {
 	files := map[string]string{
 		// Raw SSSD log: clock-skew errors repeated inside a tight window
 		// (enough for a temporal cluster) plus the identity-value carriers.
-		"sssd_intra.swm.de.log": strings.Join([]string{
+		"sssd_example.test.log": strings.Join([]string{
 			"(2026-09-18 10:00:01): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great",
-			"(2026-09-18 10:00:02): [krb5_child[1234]] [main] (0x0040): host/svwebdevi01.intra.swm.de@INTRA.SWM.DE authentication failed",
-			"(2026-09-18 10:00:03): [sssd[be[ldap_id]]] [sdap_get_servers] (0x0040): Domain [intra.swm.de] is offline",
-			"(2026-09-18 10:00:04): [sssd[be[ldap_id]]] [sdap_connect] (0x0040): URI ldap://dc01.intra.swm.de failed: Connection refused",
+			"(2026-09-18 10:00:02): [krb5_child[1234]] [main] (0x0040): host/testhost01.example.test@EXAMPLE.TEST authentication failed",
+			"(2026-09-18 10:00:03): [sssd[be[ldap_id]]] [sdap_get_servers] (0x0040): Domain [example.test] is offline",
+			"(2026-09-18 10:00:04): [sssd[be[ldap_id]]] [sdap_connect] (0x0040): URI ldap://dc01.example.test failed: Connection refused",
 			"(2026-09-18 10:00:05): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great",
 			"(2026-09-18 10:00:06): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great",
 			"(2026-09-18 10:00:07): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great",
@@ -49,13 +49,13 @@ func writeRawLogFixture(t *testing.T) string {
 			"(2026-09-18 10:00:09): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great",
 		}, "\n"),
 		// Rotated variant: must be collected (and scanned) like the main log.
-		"sssd_intra.swm.de.log.1": "(2026-09-17 09:00:01): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great\n",
+		"sssd_example.test.log.1": "(2026-09-17 09:00:01): [sssd[be[ldap_id]]] [sdap_id_op_connect_done] (0x0040): Connection failed: Clock skew too great\n",
 		// Syslog-formatted log: the host prefix is the only hostname source
 		// (raw mode has no basic-environment.txt). It must end in .log to be
 		// part of the -logdir input set, exactly like the SSSD logs.
 		"messages.log": strings.Join([]string{
-			"Aug 18 10:00:01 svwebdevi01 sssd[33887]: [krb5_child] Clock skew too great with KDC",
-			"Aug 18 10:00:02 svwebdevi01 sssd[33888]: pam_sss authentication failed for user bob",
+			"Aug 18 10:00:01 testhost01 sssd[33887]: [krb5_child] Clock skew too great with KDC",
+			"Aug 18 10:00:02 testhost01 sssd[33888]: pam_sss authentication failed for user bob",
 			"Aug 18 10:00:03 root kernel: [0.000000] boot noise that must not become a hostname",
 		}, "\n"),
 		// Non-log file: must never be picked up by collectLogFiles.
@@ -78,16 +78,16 @@ func TestIsRawSSDLLogFile(t *testing.T) {
 		name string
 		want bool
 	}{
-		{"sssd_intra.swm.de.log", true},
+		{"sssd_example.test.log", true},
 		{"ldap_child.log", true},
 		{"krb5_child.log", true},
-		{"SSSD_INTRA.SWM.DE.LOG", true}, // extension match is case-insensitive
-		{"sssd_intra.swm.de.log.1", true},
-		{"sssd_intra.swm.de.log.12", true},
-		{"sssd_intra.swm.de.log-20260918", true},
-		{"sssd_intra.swm.de.log.gz", false}, // compressed: scanner reads plain text
-		{"sssd_intra.swm.de.log.txt", false},
-		{"sssd_intra.swm.de.logx", false},
+		{"SSSD_EXAMPLE.TEST.LOG", true}, // extension match is case-insensitive
+		{"sssd_example.test.log.1", true},
+		{"sssd_example.test.log.12", true},
+		{"sssd_example.test.log-20260918", true},
+		{"sssd_example.test.log.gz", false}, // compressed: scanner reads plain text
+		{"sssd_example.test.log.txt", false},
+		{"sssd_example.test.logx", false},
 		{"messages", false},
 		{"messages.txt", false},
 		{"sssd.txt", false},
@@ -112,7 +112,7 @@ func TestCollectLogFiles_Directory(t *testing.T) {
 	if gotDir != dir {
 		t.Errorf("dir = %q, want %q", gotDir, dir)
 	}
-	want := []string{"messages.log", "sssd_intra.swm.de.log", "sssd_intra.swm.de.log.1"}
+	want := []string{"messages.log", "sssd_example.test.log", "sssd_example.test.log.1"}
 	if len(files) != len(want) {
 		t.Fatalf("files = %v, want %v", files, want)
 	}
@@ -132,7 +132,7 @@ func TestCollectLogFiles_Directory(t *testing.T) {
 // to its own directory, so -logdir also works on one extracted log.
 func TestCollectLogFiles_SingleFile(t *testing.T) {
 	dir := writeRawLogFixture(t)
-	single := filepath.Join(dir, "sssd_intra.swm.de.log")
+	single := filepath.Join(dir, "sssd_example.test.log")
 	gotDir, files, err := collectLogFiles(single)
 	if err != nil {
 		t.Fatalf("collectLogFiles(%q) failed: %v", single, err)
@@ -140,8 +140,8 @@ func TestCollectLogFiles_SingleFile(t *testing.T) {
 	if gotDir != dir {
 		t.Errorf("dir = %q, want %q", gotDir, dir)
 	}
-	if len(files) != 1 || files[0] != "sssd_intra.swm.de.log" {
-		t.Errorf("files = %v, want [sssd_intra.swm.de.log]", files)
+	if len(files) != 1 || files[0] != "sssd_example.test.log" {
+		t.Errorf("files = %v, want [sssd_example.test.log]", files)
 	}
 }
 
@@ -200,11 +200,11 @@ func TestHarvestPIITokens_ExtractsIdentityValues(t *testing.T) {
 		}
 		t.Errorf("harvested %s = %v, want it to contain %q", kind, list, want)
 	}
-	assertHas("domain", tokens.domains, "intra.swm.de")
-	assertHas("realm", tokens.realms, "INTRA.SWM.DE")
-	assertHas("host", tokens.hosts, "svwebdevi01")
-	assertHas("host", tokens.hosts, "svwebdevi01.intra.swm.de")
-	assertHas("host", tokens.hosts, "dc01.intra.swm.de")
+	assertHas("domain", tokens.domains, "example.test")
+	assertHas("realm", tokens.realms, "EXAMPLE.TEST")
+	assertHas("host", tokens.hosts, "testhost01")
+	assertHas("host", tokens.hosts, "testhost01.example.test")
+	assertHas("host", tokens.hosts, "dc01.example.test")
 
 	if tokens.primaryDomain() == "" || tokens.primaryRealm() == "" || tokens.primaryHost() == "" {
 		t.Errorf("primary accessors must be non-empty for this fixture: domain=%q realm=%q host=%q",
@@ -331,13 +331,13 @@ func TestAnalyzeLogsOnly_FieldsAndMarkers(t *testing.T) {
 	if report.SssdConfigFound {
 		t.Error("SssdConfigFound must be false: no sssd.conf exists in raw-log mode")
 	}
-	if report.SearchDomain != "intra.swm.de" {
+	if report.SearchDomain != "example.test" {
 		t.Errorf("SearchDomain = %q, want the harvested domain", report.SearchDomain)
 	}
-	if report.KerberosRealm != "INTRA.SWM.DE" {
+	if report.KerberosRealm != "EXAMPLE.TEST" {
 		t.Errorf("KerberosRealm = %q, want the harvested realm", report.KerberosRealm)
 	}
-	if report.Hostname != "svwebdevi01" {
+	if report.Hostname != "testhost01" {
 		t.Errorf("Hostname = %q, want the harvested syslog hostname", report.Hostname)
 	}
 }
@@ -378,7 +378,7 @@ func TestAnalyzeLogsOnly_SummaryClustersAndGraph(t *testing.T) {
 func assertNoRawPII(t *testing.T, label, text string) {
 	t.Helper()
 	for _, token := range []string{
-		"intra.swm.de", "INTRA.SWM.DE", "svwebdevi01", "dc01",
+		"example.test", "EXAMPLE.TEST", "testhost01", "dc01",
 	} {
 		if strings.Contains(text, token) {
 			t.Errorf("%s still contains raw PII token %q:\n%s", label, token, truncateForLog(text))
@@ -464,12 +464,12 @@ func TestAnalyzeLogsOnly_WithoutAnonymizeKeepsValues(t *testing.T) {
 	}
 	report := analyzeLogsOnly(dir, files, false, nil)
 
-	if report.Hostname != "svwebdevi01" || report.SearchDomain != "intra.swm.de" || report.KerberosRealm != "INTRA.SWM.DE" {
+	if report.Hostname != "testhost01" || report.SearchDomain != "example.test" || report.KerberosRealm != "EXAMPLE.TEST" {
 		t.Errorf("identity fields were altered without -anonymize: host=%q domain=%q realm=%q",
 			report.Hostname, report.SearchDomain, report.KerberosRealm)
 	}
 	data, _ := json.Marshal(report)
-	if !strings.Contains(string(data), "svwebdevi01") {
+	if !strings.Contains(string(data), "testhost01") {
 		t.Error("the raw hostname must appear in a non-anonymized report")
 	}
 }
@@ -487,7 +487,7 @@ func TestRunLogDirAnalyze_WritesRequestedFormats(t *testing.T) {
 		}
 	})
 
-	base := filepath.Base(dir) // "sssd_intra.swm.de.log" fixture dir is a temp name
+	base := filepath.Base(dir) // "sssd_example.test.log" fixture dir is a temp name
 	for _, suffix := range []string{"_report.txt", "_report.html", "_report.json"} {
 		matches, err := filepath.Glob(filepath.Join(work, "*"+suffix))
 		if err != nil {
@@ -580,7 +580,7 @@ func TestRunLogDirAnalyze_AnonymizedReportsHaveNoPII(t *testing.T) {
 // files, so a stray *.log next to a supportconfig cannot change its findings.
 func TestAnalyzeData_IgnoresRawLogFiles(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
-		"sssd_intra.swm.de.log": "(2026-09-18 10:00:01): [krb5_child] Clock skew too great\n",
+		"sssd_example.test.log": "(2026-09-18 10:00:01): [krb5_child] Clock skew too great\n",
 		"ldap_child.log":        "(2026-09-18 10:00:02): [ldap_child] Invalid credentials\n",
 	})
 	report := analyzeData(dir, false, nil)

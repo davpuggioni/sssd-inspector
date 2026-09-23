@@ -1,4 +1,4 @@
-// anonymize_sources_intra_test.go
+// anonymize_sources_domain_test.go
 //
 // Regression tests for the provenance PII leak: ConfigFindings (and their
 // graph copies) carry SourceKey values like "domain/<domain>.<key>" whose
@@ -17,7 +17,7 @@ import (
 
 // provenanceFixture builds a supportconfig whose sssd.conf has a per-domain
 // section (so SourceKey embeds the raw domain, e.g.
-// "domain/intra.swm.de.ldap_id_mapping") plus an FQDN hostname report value.
+// "domain/example.test.ldap_id_mapping") plus an FQDN hostname report value.
 func provenanceFixture(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "prov-*")
@@ -27,9 +27,9 @@ func provenanceFixture(t *testing.T) string {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	files := map[string]string{
 		"sssd.conf": "[sssd]\nservices = nss, pam\n\n" +
-			"[domain/intra.swm.de]\nad_domain = intra.swm.de\nldap_id_mapping = False\nid_provider = ad\n",
+			"[domain/example.test]\nad_domain = example.test\nldap_id_mapping = False\nid_provider = ad\n",
 		"rpm.txt":  "sssd-2.9.4-150500.x86_64\n",
-		"sssd.txt": "(0x0020): some line mentioning intra.swm.de\n",
+		"sssd.txt": "(0x0020): some line mentioning example.test\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -41,7 +41,7 @@ func provenanceFixture(t *testing.T) string {
 
 func failIfContainsRawDomain(t *testing.T, where, s string) {
 	t.Helper()
-	for _, raw := range []string{"intra.swm.de", "INTRA.SWM.DE"} {
+	for _, raw := range []string{"example.test", "EXAMPLE.TEST"} {
 		if strings.Contains(s, raw) {
 			t.Errorf("%s leaks raw domain %q: %.160q", where, raw, s)
 		}
@@ -116,7 +116,7 @@ func TestSourceKeyKeepsActionableSection(t *testing.T) {
 // leak the server short name ("srv-07.example.com").
 func TestHostnameEntityHasNoShortHostname(t *testing.T) {
 	dir := provenanceFixture(t)
-	const hostLine = "Hostname: srv-prod-07.intra.swm.de\n"
+	const hostLine = "Hostname: testhost02.example.test\n"
 	f, err := os.OpenFile(filepath.Join(dir, "basic-environment.txt"),
 		os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
@@ -134,10 +134,10 @@ func TestHostnameEntityHasNoShortHostname(t *testing.T) {
 			continue
 		}
 		withHost = true
-		if strings.Contains(strings.ToLower(e.Value), "srv-prod-07") {
+		if strings.Contains(strings.ToLower(e.Value), "testhost02") {
 			t.Errorf("hostname entity value %q leaks the server short name", e.Value)
 		}
-		if strings.Contains(strings.ToLower(e.ID), "srv-prod-07") {
+		if strings.Contains(strings.ToLower(e.ID), "testhost02") {
 			t.Errorf("hostname entity id %q leaks the server short name", e.ID)
 		}
 	}

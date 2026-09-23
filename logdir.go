@@ -249,8 +249,8 @@ func (t logPIITokens) primaryHost() string {
 // domains and hosts (a second [be[...]] domain, a different host in messages)
 // are redacted too — not just the primary ones seeded into the report fields.
 //
-// Hosts come FIRST: a FQDN host (dc01.intra.swm.de) must collapse to its
-// placeholder before the bare domain (intra.swm.de) is replaced, otherwise only
+// Hosts come FIRST: a FQDN host (dc01.example.test) must collapse to its
+// placeholder before the bare domain (example.test) is replaced, otherwise only
 // the domain part would be redacted and the host label ("dc01") would survive.
 func (t logPIITokens) redactTokens() []redactToken {
 	toks := make([]redactToken, 0, len(t.domains)+len(t.realms)+len(t.hosts))

@@ -2,7 +2,7 @@
 //
 // Regression tests for the SSSD Error Logs leak (reported with screenshot):
 // Examples/RawLog lines carry the bare syslog hostname
-// ("Aug 18 ... webdev01 ldap_child[1]: ..."), which matched neither the FQDN
+// ("Aug 18 ... testhost01 ldap_child[1]: ..."), which matched neither the FQDN
 // report.Hostname nor the "<short>.example.com" form, so the server name
 // stayed visible in anonymized reports.
 package main
@@ -24,11 +24,11 @@ func syslogShortHostFixture(t *testing.T) string {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	files := map[string]string{
-		"basic-environment.txt": "Hostname: WEBDEV01.intra.swm.de\nKernel: Linux webdev01 5.14.21-150500.55.44-default #1 SMP x86_64\n",
+		"basic-environment.txt": "Hostname: TESTHOST01.example.test\nKernel: Linux testhost01 5.14.21-150500.55.44-default #1 SMP x86_64\n",
 		"rpm.txt":               "sssd-2.9.4-150500.x86_64\n",
-		"sssd.conf":             "[sssd]\nservices = nss, pam\n\n[domain/intra.swm.de]\nad_domain = intra.swm.de\nid_provider = ad\n",
-		"sssd.txt": "Aug 18 10:00:01 webdev01 ldap_child[33887]: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed.\n" +
-			"Aug 18 10:00:02 webdev01 ldap_child[33888]: (0x0020): SRV lookup for _ldap._tcp.intra.swm.de failed, KDC 10.44.12.10 unreachable\n",
+		"sssd.conf":             "[sssd]\nservices = nss, pam\n\n[domain/example.test]\nad_domain = example.test\nid_provider = ad\n",
+		"sssd.txt": "Aug 18 10:00:01 testhost01 ldap_child[33887]: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed.\n" +
+			"Aug 18 10:00:02 testhost01 ldap_child[33888]: (0x0020): SRV lookup for _ldap._tcp.example.test failed, KDC 192.0.2.10 unreachable\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -47,7 +47,7 @@ func TestSyslogShortHostnameIsRedactedInLogExamples(t *testing.T) {
 	}
 	for i, e := range report.SSSDLogErrors {
 		for j, ex := range e.Examples {
-			if strings.Contains(strings.ToLower(ex), "webdev01") {
+			if strings.Contains(strings.ToLower(ex), "testhost01") {
 				t.Errorf("sssd_log_errors[%d].examples[%d] leaks the syslog hostname: %.160q", i, j, ex)
 			}
 		}
@@ -62,7 +62,7 @@ func TestTimelineAndClustersHaveNoRawPII(t *testing.T) {
 	check := func(where, s string) {
 		t.Helper()
 		lower := strings.ToLower(s)
-		for _, raw := range []string{"webdev01", "intra.swm.de", "10.44.12.10"} {
+		for _, raw := range []string{"testhost01", "example.test", "192.0.2.10"} {
 			if strings.Contains(lower, strings.ToLower(raw)) {
 				t.Errorf("%s leaks %q: %.160q", where, raw, s)
 			}
@@ -89,7 +89,7 @@ func TestNonAnonymizedReportKeepsRawLines(t *testing.T) {
 	found := false
 	for _, e := range report.SSSDLogErrors {
 		for _, ex := range e.Examples {
-			if strings.Contains(ex, "webdev01") {
+			if strings.Contains(ex, "testhost01") {
 				found = true
 			}
 		}
@@ -110,10 +110,10 @@ func TestShortHostnameFromKernelLineWithoutHostnameField(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	files := map[string]string{
-		"basic-environment.txt": "Kernel: svwebdevi01 5.14.21-150500.55.44-default #1 SMP x86_64\n",
+		"basic-environment.txt": "Kernel: testhost01 5.14.21-150500.55.44-default #1 SMP x86_64\n",
 		"rpm.txt":               "sssd-2.9.4-150500.x86_64\n",
 		"sssd.conf":             "[sssd]\nservices = nss, pam\n\n[domain/corp.example]\nad_domain = corp.example\nid_provider = ad\n",
-		"sssd.txt":              "2026-08-18T09:19:05.898657+02:00 svwebdevi01 ldap_child[33887]: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed.\n",
+		"sssd.txt":              "2026-08-18T09:19:05.898657+02:00 testhost01 ldap_child[33887]: Failed to initialize credentials using keytab [MEMORY:/etc/krb5.keytab]: Preauthentication failed.\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -127,7 +127,7 @@ func TestShortHostnameFromKernelLineWithoutHostnameField(t *testing.T) {
 	}
 	for _, e := range report.SSSDLogErrors {
 		for _, ex := range e.Examples {
-			if strings.Contains(strings.ToLower(ex), "svwebdevi01") {
+			if strings.Contains(strings.ToLower(ex), "testhost01") {
 				t.Errorf("kernel-nodename fallback failed, leak: %.160q", ex)
 			}
 		}
