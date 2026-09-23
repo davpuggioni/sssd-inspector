@@ -196,10 +196,17 @@ func buildTextReport(report ReportData) string {
 	}
 
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
-	sb.WriteString(fmt.Sprintf(" sssd-inspector v%s - SUSE Technical Support -Created by Davide M. Puggioni with Gemini Pro - 2026 - Released under the GNU GPL v3.\n", report.AppVersion))
+	sb.WriteString(fmt.Sprintf(" %s - SUSE Technical Support - Released under the GNU GPL v3 (see LICENSE).\n", toolSignature(report.AppVersion)))
 	sb.WriteString(strings.Repeat("=", 60) + "\n")
 
 	return sb.String()
+}
+
+// toolSignature returns the single, source-of-truth attribution for the footer
+// of every report. The version is read from constants so it never drifts from
+// the binary (main.go prints the same string for -v).
+func toolSignature(version string) string {
+	return fmt.Sprintf("sssd-inspector v%s", version)
 }
 
 // buildJSONReport serializes the full structured report (including the

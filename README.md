@@ -6,10 +6,16 @@
 
 ## ✨ Features
 
+### License
+
+This program is released under the terms of the **GNU General Public License
+v3.0 or later** (GPL-3.0-or-later). See [`LICENSE`](LICENSE) for the full text.
+The license note is also printed at the bottom of every generated report.
+
 ### Correlation Graph & Diff Mode (Phase 4)
 - **Interactive SVG force-directed graph** — entities (domain/realm/hostname/DNS) → findings → evidence, rendered client-side with zero external dependencies
 - **Hover/click interactivity** — highlight connected nodes, drill-down panel with source path + line + evidence, severity filters, draggable nodes
-- **Diff mode (`-compare A B`)** — delta between two supportconfig: common findings, only-in-A, only-in-B, health-score delta; JSON export for tooling
+- **Diff mode (`-compare A:B`)** — differential analysis between two supportconfigs (paths separated by `:`): common findings, only-in-A, only-in-B, health-score delta; prints to stdout and optionally writes `compare_report.json` (with `-json`)
 - **PII-safe** — graph labels, values, and evidence are anonymized alongside the rest of the report
 
 ### Executive Summary & Scoring (Phase 3+)
@@ -33,8 +39,8 @@
 - Optional `rules.yaml` / `rules/*.yaml`: add site-specific detectors **without recompiling** (see `rules/example.yaml`)
 
 ### Core Analysis Engine
-- **Single-Pass Log Scanning** — Analyzes all log files (sssd.txt, messages) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously — up to **10× faster** than traditional multi-scan approaches
-- **350+ Pattern Matching** — Comprehensive database of SSSD error patterns mapped to human-readable descriptions, covering:
+- **Single-Pass Log Scanning** — Scans the relevant log files (`sssd.txt`, `messages`, `messages.txt` — see `analyzer_singlepass.go`) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously
+- **260+ Error Patterns** — Pattern database of SSSD error signatures mapped to human-readable descriptions (plus test-only auxiliary entries), covering:
   - **Kerberos** — Clock skew, encryption type mismatches, KDC unreachable, FAST tunnel failures
   - **LDAP/AD** — TLS handshake failures, SASL bind errors, USN rollbacks, LDAP size limits
   - **PAM/NSS** — Offline authentication blocks, shell vetoes, negative cache rejections
@@ -42,12 +48,12 @@
   - **IPA/FreeIPA** — HBAC rule evaluation, SELinux user mapping, cross-forest AD trusts
   - **OAuth2/OIDC** — Identity Provider configuration validation
   - **And many more** — Sudo, SSH, InfoPipe, PAC, proxy providers
-- **Knowledge Base Integration** — Dynamically loaded JSON articles (TIDs) correlated with log evidence for precise troubleshooting
-- **PII Anonymization** — Built-in redaction of IP addresses, MAC addresses, email addresses, domain names, and Kerberos realms for safe report sharing
+- **Knowledge Base Integration** — 16 bundled JSON articles (TIDs) correlated with log evidence for precise troubleshooting
+- **PII Anonymization** — Built-in redaction of IPv4/IPv6, MAC, email, domain/realm, hostname (FQDN, short and syslog forms) for safe report sharing; opt-in via `-anonymize` (CLI) or the GUI checkbox; provenance fields (`source_key`/`source_path`) are redacted while keeping the actionable `domain/` section structure
 
 ### Performance Optimizations
 - **Regex Cache** — Thread-safe compilation cache, compiles each regex pattern once per application lifetime
-- **File Cache** — LRU-based file content cache reads each file only once per analysis
+- **File Cache** — Per-run cache of file contents: each file is read only once per analysis
 - **Scanner Pool** — Reusable buffer allocations via `sync.Pool` to reduce GC pressure
 - **Context-Aware Scanning** — Timeout-based cancellation prevents hangs on corrupted or NFS-mounted files
 - **Parallel-Analysis Helpers** — Optional worker-pool based phase helper functions (`analyzePhase1Parallel`/`analyzePhase2Parallel`) exist for large archives; the default CLI path runs phases sequentially
@@ -141,11 +147,11 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 |------|-------------|
 | `-v, --version` | Print program version |
 | `-analyze <path>` | Path to supportconfig directory or archive |
-| `-compare <A> <B>` | Differential analysis between two supportconfigs (JSON output) |
+| `-compare <A:B>` | Differential analysis between two supportconfigs (CLI-only flag; paths separated by a single `:`) |
 | `-txt` | Generate a TXT report (default: both formats) |
 | `-html` | Generate an HTML report (default: both formats) |
 | `-json` | Generate a structured JSON report (full findings + graph + clusters) |
-| `-anonymize` | Redact PII (IPs, domains, emails) from the report |
+| `-anonymize` | Redact PII (IPs, domains, hostnames, emails) from the report |
 
 ### Examples
 
@@ -156,8 +162,8 @@ sssd-inspector /tmp/supportconfig-abc123.txz -txt -html -anonymize
 # Export structured JSON (includes findings, graph, clusters, suggestions)
 sssd-inspector /tmp/supportconfig-abc123.txz -json -anonymize
 
-# Diff two supportconfig (before/after fix) — JSON delta to stdout
-sssd-inspector -compare /tmp/sc-before /tmp/sc-after -anonymize
+# Diff two supportconfig (before/after fix) — delta to stdout, plus compare_report.json with -json
+sssd-inspector -compare /tmp/sc-before:/tmp/sc-after -anonymize
 
 # Quick analysis with default TXT output
 sssd-inspector /var/log/supportconfig/
@@ -188,10 +194,15 @@ the tests, this table and `docs/CHANGES.md` fails the suite.
 
 ### Output
 
-The CLI produces:
-1. **Console output** — Color-coded summary of all findings directly in the terminal
-2. **TXT report** — `supportconfig-abc123_report.txt` (if `-txt` is specified)
-3. **HTML report** — `supportconfig-abc123_report.html` (if `-html` is specified)
+The CLI prints a human-readable summary to stdout plus `[Progress N%]` lines,
+and writes `<basename>_report.{txt,html,json}` next to the working directory
+(only for the formats requested via `-txt`/`-html`/`-json`):
+
+1. **Console output** — Human-readable summary of all findings directly in the terminal
+2. **TXT report** — `<basename>_report.txt` (if `-txt` is specified)
+3. **HTML report** — `<basename>_report.html` (if `-html` is specified)
+4. **JSON report** — `<basename>_report.json` (if `-json` is specified)
+5. **Compare JSON** — `compare_report.json` (only for `-compare`, and only with `-json`)
 
 ---
 
@@ -214,7 +225,7 @@ wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean 2>&1
 3. **Configure options** — Check "Anonymize PII" if you need to redact sensitive information
 4. **Start analysis** — Click "Analyze" and watch the progress bar fill in real-time
 5. **Review results** — Browse through system info, problems, warnings, error details, timeline, and KB articles
-6. **Export** — Click "Export PDF" for print-ready output or "Export TXT" for a plain text file
+6. **Export** — Click "Export PDF" (print-ready via browser dialog), "Export TXT" or "Export JSON" for the report file
 
 ### Keyboard Shortcuts
 
@@ -224,6 +235,7 @@ wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean 2>&1
 | `Ctrl+Enter` | Start analysis |
 | `Ctrl+P` | Export PDF report |
 | `Ctrl+S` | Export TXT report |
+| `Ctrl+J` | Export JSON report |
 
 ---
 
@@ -415,7 +427,7 @@ The application supports YAML-based configuration in multiple locations (checked
 # SSSD Inspector Configuration
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.1"
 
 analysis:
   max_file_size: "100MB"
@@ -434,6 +446,8 @@ anonymization:
   patterns:
     ip_v4: '\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     email: '(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b'
+    # (full schema: patterns + replacements maps — see config/config.go;
+    # note the GUI PII toggle defaults to off, and -anonymize is opt-in)
 
 knowledge_base:
   tid_directory: "./kb_articles"
@@ -500,6 +514,12 @@ Intelligence (AI) coding assistants, used for implementation, refactoring,
 test generation and documentation. All AI-assisted output was reviewed,
 verified and validated by the author (builds, unit/integration tests and
 real-world supportconfig analyses) before being committed.
+
+> **Note:** the tool does not embed author/AI attribution in its output.
+> Every generated report ends with a version + license footer (see
+> `toolSignature` in `report.go`) rather than a copyright line, so the
+> report footer never carries a year that can drift from the truth or an
+> attribution that is not mirrored in this file.
 
 ---
 
