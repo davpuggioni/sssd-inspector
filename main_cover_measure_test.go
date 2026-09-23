@@ -124,6 +124,10 @@ func TestMainCoverage_CLIEntryPointIsFullyCovered(t *testing.T) {
 	runCoveredInvocation(t, bin, covDir, writeSupportconfigFixture(t))
 	// ... and no arguments at all (the CLI has nothing to do, but must not hang).
 	runCoveredInvocation(t, bin, covDir)
+	// Raw-log mode: the -logdir dispatch branch, both outcomes (a directory of
+	// raw logs that succeeds, and a path that fails with exit code 1).
+	runCoveredInvocation(t, bin, covDir, "-logdir", writeRawLogFixture(t))
+	runCoveredInvocation(t, bin, covDir, "-logdir", filepath.Join(t.TempDir(), "missing"))
 
 	coverage := entryPointCoverage(t, covDir, "main_cli.go")
 
@@ -159,6 +163,10 @@ func TestMainCoverage_HybridEntryPoint(t *testing.T) {
 	runCoveredInvocation(t, bin, covDir, filepath.Join(t.TempDir(), "missing"))
 	// ... and positional path alone, which must apply the configured defaults.
 	runCoveredInvocation(t, bin, covDir, writeSupportconfigFixture(t))
+	// Raw-log mode: the -logdir dispatch branch must be exercised here too,
+	// including its failure path (a missing path exits 1).
+	runCoveredInvocation(t, bin, covDir, "-logdir", writeRawLogFixture(t))
+	runCoveredInvocation(t, bin, covDir, "-logdir", filepath.Join(t.TempDir(), "missing"))
 
 	coverage := entryPointCoverage(t, covDir, "main_gui.go")
 

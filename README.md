@@ -51,6 +51,12 @@ The license note is also printed at the bottom of every generated report.
 - **Knowledge Base Integration** — 16 bundled JSON articles (TIDs) correlated with log evidence for precise troubleshooting
 - **PII Anonymization** — Built-in redaction of IPv4/IPv6, MAC, email, domain/realm, hostname (FQDN, short and syslog forms) for safe report sharing; opt-in via `-anonymize` (CLI) or the GUI checkbox; provenance fields (`source_key`/`source_path`) are redacted while keeping the actionable `domain/` section structure
 
+### Raw SSSD Log Mode (`-logdir`)
+- **No supportconfig needed** — analyze `*.log` files directly (e.g. `/var/log/sssd/sssd_<domain>.log`, `ldap_child.log`, `krb5_child.log`), including rotated variants (`*.log.N`, `*.log-<date>`)
+- **Same engines as supportconfig mode** — single-pass pattern scan, timeline, temporal clusters, KB suggestions, root-cause sequence correlation, executive summary, correlation graph
+- **Honest about the unknown** — fields that can only come from a supportconfig are reported as `N/A (raw log mode)` instead of being guessed; supportconfig-only findings (e.g. *sssd.conf not found*) are never emitted
+- **PII-safe by construction** — with `-anonymize`, the domain/realm/hostname are harvested from the log lines themselves (`Domain [...]`, principals, `ldap://` URIs, syslog prefixes) and redacted, since there is no `sssd.conf` to read them from
+
 ### Performance Optimizations
 - **Regex Cache** — Thread-safe compilation cache, compiles each regex pattern once per application lifetime
 - **File Cache** — Per-run cache of file contents: each file is read only once per analysis
@@ -147,6 +153,7 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 |------|-------------|
 | `-v, --version` | Print program version |
 | `-analyze <path>` | Path to supportconfig directory or archive |
+| `-logdir <path>` | Analyze raw SSSD logs (no supportconfig): a directory of `*.log` files or a single log file, e.g. `/var/log/sssd`. Rotated logs (`*.log.N`, `*.log-<date>`) are included; `*.log.gz` are not. Takes precedence over `-analyze` |
 | `-compare <A:B>` | Differential analysis between two supportconfigs (CLI-only flag; paths separated by a single `:`) |
 | `-txt` | Generate a TXT report (default: both formats) |
 | `-html` | Generate an HTML report (default: both formats) |
@@ -164,6 +171,9 @@ sssd-inspector /tmp/supportconfig-abc123.txz -json -anonymize
 
 # Diff two supportconfig (before/after fix) — delta to stdout, plus compare_report.json with -json
 sssd-inspector -compare /tmp/sc-before:/tmp/sc-after -anonymize
+
+# Raw SSSD logs, no supportconfig (same format flags as -analyze)
+sssd-inspector -logdir /var/log/sssd -txt -html -anonymize
 
 # Quick analysis with default TXT output
 sssd-inspector /var/log/supportconfig/

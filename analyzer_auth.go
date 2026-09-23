@@ -6,6 +6,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"sssd-inspector/constants"
 )
 
 func analyzeDNS(dirPath string, report *ReportData) {
@@ -151,7 +153,7 @@ func analyzeKerberosAndKeytab(dirPath string, report *ReportData) {
 		}
 	}
 
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
+	logFiles := constants.SupportconfigLogFiles()
 
 	if anyFileContains(dirPath, logFiles, "KVNO Principal") || anyFileContains(dirPath, logFiles, "Default principal:") {
 		report.KeytabFound = true

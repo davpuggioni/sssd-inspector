@@ -22,6 +22,7 @@ import (
 type cliOptions struct {
 	Version   *bool
 	Analyze   *string
+	LogDir    *string
 	TXT       *bool
 	HTML      *bool
 	JSON      *bool
@@ -42,6 +43,7 @@ func registerCLIFlags(fs *flag.FlagSet, includeCompare bool) *cliOptions {
 	opts := &cliOptions{
 		Version:   fs.Bool(constants.FlagVersion, false, constants.DescVersion),
 		Analyze:   fs.String(constants.FlagAnalyze, "", constants.DescAnalyze),
+		LogDir:    fs.String(constants.FlagLogDir, "", constants.DescLogDir),
 		TXT:       fs.Bool(constants.FlagTXT, false, constants.DescTXT),
 		HTML:      fs.Bool(constants.FlagHTML, false, constants.DescHTML),
 		JSON:      fs.Bool(constants.FlagJSON, false, constants.DescJSON),

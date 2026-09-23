@@ -73,6 +73,7 @@ const (
 	FlagAnonymize = "anonymize"
 	FlagJSON      = "json"
 	FlagCompare   = "compare"
+	FlagLogDir    = "logdir"
 
 	// Flag descriptions
 	DescVersion   = "Print program version"
@@ -82,6 +83,7 @@ const (
 	DescAnonymize = "Redact PII (IPs, Domains) from the report"
 	DescJSON      = "Generate a JSON report (structured, machine-readable)"
 	DescCompare   = "Compare two supportconfig paths (format: pathA:pathB)"
+	DescLogDir    = "Analyze raw SSSD logs from a directory or file (e.g., /var/log/sssd)"
 
 	// Default behavior
 	DefaultGenerateBothFormats = true
@@ -134,6 +136,27 @@ const (
 	MessagesTXT         = "messages.txt"
 	BootTXT             = "boot.txt"
 )
+
+// SupportconfigLogFiles returns the log files that carry SSSD log messages
+// inside a supportconfig archive or directory. It is the single source of
+// truth for that list: the single-pass scanner, the legacy analyzers and the
+// KB matcher must all agree on it, otherwise a rename in one place silently
+// disables detection in the others.
+func SupportconfigLogFiles() []string {
+	return []string{SSSDTXT, MessagesFile, MessagesTXT}
+}
+
+// RawSSDLLogSuffix is the extension of raw SSSD log files as found in
+// /var/log/sssd (sssd_<domain>.log, ldap_child.log, krb5_child.log, ...).
+// Rotated files add a numeric or date suffix after it (file.log.1,
+// file.log-20260918); compressed archives (file.log.gz) are NOT scanned.
+const RawSSDLLogSuffix = ".log"
+
+// RawLogModeNA marks report fields that cannot be known in raw-log mode
+// (-logdir), where no supportconfig metadata is available. It doubles as the
+// "no supportconfig" signal for the text/HTML/JSON reports. Never use it as a
+// redaction token: see isRedactableToken in analyzer_core.go.
+const RawLogModeNA = "N/A (raw log mode)"
 
 // Service status constants
 const (

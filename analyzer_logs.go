@@ -6,10 +6,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"sssd-inspector/constants"
 )
 
-// logFileNames lists the files to scan for SSSD log messages
-var logFileNames = []string{"sssd.txt", "messages", "messages.txt"}
+// logFileNames lists the files to scan for SSSD log messages (supportconfig
+// layout). The list itself lives in constants.SupportconfigLogFiles so every
+// analyzer scans the same files.
+var logFileNames = constants.SupportconfigLogFiles()
 
 // analyzeSSSDConfigAndLogs orchestrates the full analysis of SSSD configuration and logs.
 // It loads sssd.conf, scans log files for known error patterns, builds a timeline,

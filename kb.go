@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"sssd-inspector/constants"
 )
 
 // normalizeTIDArticle bridges the two supported TID JSON schemas so the rest
@@ -91,7 +93,7 @@ func matchKBArticles(dirPath string, report *ReportData) {
 		return
 	}
 
-	logFiles := []string{"sssd.txt", "messages", "messages.txt"}
+	logFiles := constants.SupportconfigLogFiles()
 	configFiles := []string{"sssd.conf"}
 
 	activeSecModule := report.MACType

@@ -67,6 +67,17 @@ func dispatchCLI(rawArgs, positional []string, opts *cliOptions, stdout, stderr 
 		return 0
 	}
 
+	// Raw SSSD log mode: analyze *.log files directly (e.g. /var/log/sssd)
+	// without any supportconfig. Takes precedence over -analyze, matching the
+	// historical dispatch order (Version -> Compare -> LogDir -> Analyze -> path).
+	if *opts.LogDir != "" {
+		if err := runLogDirAnalyze(*opts.LogDir, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
+			fmt.Fprintf(stderr, "LogDir execution failed: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *opts.Analyze != "" {
 		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {

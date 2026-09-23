@@ -196,3 +196,37 @@ func TestRunHybridCLI_HelpExitsZero(t *testing.T) {
 		t.Errorf("usage output missing from stderr: %q", stderr.String())
 	}
 }
+
+// TestRunHybridCLI_LogDirIsHandledWithoutGUI is the headless guard: handled
+// must be true, otherwise main() calls launchGUI(), which blocks forever on a
+// machine without a display server.
+func TestRunHybridCLI_LogDirIsHandledWithoutGUI(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, handled := runHybridCLI([]string{"-logdir", writeRawLogFixture(t)}, &stdout, &stderr)
+	if !handled {
+		t.Fatal("-logdir must be handled by the CLI dispatcher (an unhandled run would start the GUI)")
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 (stderr: %q)", code, stderr.String())
+	}
+}
+
+// TestRunHybridCLI_LogDirBeatsAnalyze: same precedence as the CLI binary, so
+// the two entry points never disagree about what an invocation means.
+func TestRunHybridCLI_LogDirBeatsAnalyze(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, handled := runHybridCLI([]string{
+		"-logdir", writeRawLogFixture(t),
+		"-analyze", filepath.Join(t.TempDir(), "no-such-supportconfig"),
+	}, &stdout, &stderr)
+	if !handled {
+		t.Fatal("-logdir must be handled by the CLI dispatcher")
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 (-logdir must win over -analyze; stderr: %q)",
+			code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "CLI execution failed") {
+		t.Errorf("-analyze must not run when -logdir is set, got stderr %q", stderr.String())
+	}
+}

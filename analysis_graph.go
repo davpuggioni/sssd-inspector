@@ -102,17 +102,19 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		g.Edges = append(g.Edges, GraphEdge{From: from, To: to, Kind: kind})
 	}
 
-	// 1. Top-level entities from ReportData
-	if r.AdDomain != "" && r.AdDomain != "Not configured" {
+	// 1. Top-level entities from ReportData. isRedactableToken rejects the
+	// unknown-value markers ("" "None" "Not configured" "Unknown" and the
+	// raw-log-mode N/A), so a placeholder can never become a graph entity.
+	if isRedactableToken(r.AdDomain) {
 		addEntity("domain", "AD Domain", r.AdDomain, "", SevWarning)
 	}
-	if r.KerberosRealm != "" && r.KerberosRealm != "Not configured" {
+	if isRedactableToken(r.KerberosRealm) {
 		addEntity("realm", "Kerberos Realm", r.KerberosRealm, "", SevWarning)
 	}
-	if r.Hostname != "" && r.Hostname != "Unknown" {
+	if isRedactableToken(r.Hostname) {
 		addEntity("hostname", "Hostname", r.Hostname, "", SevWarning)
 	}
-	if r.SearchDomain != "" && r.SearchDomain != "None" {
+	if isRedactableToken(r.SearchDomain) {
 		addEntity("dns", "DNS Search Domain", r.SearchDomain, "resolv.conf", SevWarning)
 	}
 

@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"sssd-inspector/constants"
 )
 
 // matchCategory identifies what type of pattern was matched
@@ -85,11 +87,19 @@ func isRegexPattern(pattern string) bool {
 	return false
 }
 
-// performSinglePassScan does ONE scan of all log files (sssd.txt, messages, messages.txt)
-// and extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
+// performSinglePassScan does ONE scan of the supportconfig log files and
+// extracts ALL information: error patterns, keytab info, watchdog, crypto bugs,
 // account status, KB article evidence, and timeline events.
 // This eliminates the ~29 separate scans that were previously performed.
 func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArticle) *SinglePassResult {
+	return performSinglePassScanOnFiles(dirPath, constants.SupportconfigLogFiles(), macType, kbArticles)
+}
+
+// performSinglePassScanOnFiles is the parameterised single-pass scanner: the
+// caller supplies the exact log file names to scan. That is what lets raw-log
+// mode (-logdir, e.g. *.log from /var/log/sssd) reuse the whole engine while
+// the supportconfig path keeps scanning exactly its own three files.
+func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType string, kbArticles []TIDArticle) *SinglePassResult {
 	result := &SinglePassResult{
 		KBEvidence: make(map[string][]string),
 	}
@@ -222,9 +232,8 @@ func performSinglePassScan(dirPath string, macType string, kbArticles []TIDArtic
 
 	// (Capacity is managed by the timeline aggregator itself.)
 
-	// STEP 3: SINGLE PASS through all log files
-	logFileNames := []string{"sssd.txt", "messages", "messages.txt"}
-	scanFilesWithContext(ctx, dirPath, logFileNames, func(line string) {
+	// STEP 3: SINGLE PASS through the log files selected by the caller
+	scanFilesWithContext(ctx, dirPath, logFiles, func(line string) {
 		lineTrimmed := strings.TrimSpace(line)
 		if lineTrimmed == "" {
 			return

@@ -32,6 +32,7 @@ import (
 var cliFlagContract = []string{
 	constants.FlagVersion, // "v"
 	constants.FlagAnalyze, // "analyze"
+	constants.FlagLogDir,  // "logdir" — raw SSSD log directory/file analysis
 	constants.FlagTXT,     // "txt"
 	constants.FlagHTML,    // "html"
 	constants.FlagJSON,    // "json"

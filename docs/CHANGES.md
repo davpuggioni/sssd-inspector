@@ -331,3 +331,82 @@ All improvements were implemented without removing any existing functionality, e
   embedding field, replaces the top-level fields with placeholders, and
   re-keys graph entity IDs from the scrubbed values (rewriting edge
   endpoints and collapsing duplicates).
+
+---
+
+## 2026-09-23 — Raw SSSD log mode restored (`-logdir`)
+
+### The feature
+- `-logdir <path>` analyses raw SSSD logs without any supportconfig: a
+  directory of `*.log` files (rotated `*.log.N` / `*.log-<date>` included) or
+  a single log file, e.g. `/var/log/sssd`.
+- The flag was originally added in `9f2d01e` and silently lost during a
+  repository restructure (duplicated flag surface in two `main()` functions).
+  It is now registered in the shared `cli_flags.go` registry, so it exists on
+  BOTH binaries and is pinned by the flag contract test + the README lock.
+- Dispatch order (pinned by tests): `Version -> Compare -> LogDir -> Analyze ->
+  positional`. `-logdir` is handled by the hybrid dispatcher too, so it can
+  never fall through to `launchGUI()` (headless guard).
+- Same engines as supportconfig mode: single-pass scan, timeline, temporal
+  clusters, KB suggestions (the historical version passed a nil KB list,
+  disabling all KB features), root-cause sequence correlation, executive
+  summary and correlation graph.
+- Fields that only a supportconfig can provide are reported as
+  `N/A (raw log mode)` (`constants.RawLogModeNA`); supportconfig-only findings
+  ("sssd.conf not found", "sssd.service not running", "No Kerberos Keytab")
+  are never emitted.
+- Report output reuses `writeReports` (extracted from `runCLI`), so both modes
+  write `<basename>_report.{txt,html,json}`; like `-analyze`, only explicitly
+  requested formats are written.
+
+### Anonymization hardening (found while building the mode)
+- Without an `sssd.conf` there is no parsed domain/realm/hostname, so raw-log
+  mode HARVESTS them from the log lines themselves (`Domain [...]`,
+  `[domain/...]`, `realm=`, principals, `ldap://` URIs, syslog `prog[pid]`
+  prefixes) and seeds both the report fields and a new `extraTokens` parameter
+  of `anonymizeReport` — otherwise `-anonymize` would have been a silent no-op
+  (the same failure class as the Hostname-less supportconfig leak fixed in
+  `208a05d`).
+- New `isRedactableToken` guard: the N/A marker and the unknown-value markers
+  (`""`, `None`, `Not configured`, `Unknown`) can never be used as redaction
+  tokens — replacing them would corrupt every field carrying them and would
+  turn graph nodes into `redacted-host` without anything being redacted.
+  Applied across `maskString`, the top-level field overwrites and the graph
+  entity/replacement guards (`analysis_graph.go` included).
+- Harvest anti-corruption rules: explicit domain markers allow single labels,
+  anything else must contain a dot (keeps `[be[ldap_id]]`-style service names
+  out of the domain list); `looksLikeRealm` rejects `realm=supports`-style
+  captures; the syslog host must be followed by `prog[pid]:`; a shared
+  blacklist drops `root`/`kernel`/generic words. Host tokens are applied BEFORE
+  domain tokens so `dc01.intra.swm.de` collapses whole instead of leaving the
+  `dc01` label behind.
+- `finalizeReport` now holds the graph+anonymize closing steps, shared by
+  `analyzeData` and `analyzeLogsOnly`, so the PII-critical tail has exactly one
+  implementation. (Dedup/executive summary stay inline: the supportconfig
+  `debug_level` hint is appended after the summary and moving it would change
+  existing health scores.)
+- `constants.SupportconfigLogFiles()` replaces the four duplicated
+  `[]string{"sssd.txt", "messages", "messages.txt"}` literals
+  (`analyzer_logs.go`, `analyzer_singlepass.go`, `analyzer_auth.go`, `kb.go`),
+  and `performSinglePassScanOnFiles` parameterises the single-pass scanner so
+  raw-log mode reuses it while the supportconfig path keeps its exact file set.
+
+### Tests added
+- `logdir_test.go`: file-selection table (`*.log` + rotations; not `.gz`, not
+  supportconfig names), `collectLogFiles` paths (dir / single file / missing /
+  empty / non-log), harvesting (identity values found + false positives
+  rejected), `analyzeLogsOnly` (errors detected, NO supportconfig-only
+  findings, N/A markers, seeded identity fields, summary/clusters/graph),
+  anonymization (zero raw PII in JSON, N/A markers survive, raw values kept
+  without `-anonymize`), `runLogDirAnalyze` end-to-end for all three formats,
+  and the bidirectional isolation guard (`analyzeData` ignores `*.log`).
+- `main_cli_entry_test.go`: dispatch precedence (`-logdir` beats `-analyze`),
+  missing path -> exit 1, end-to-end JSON.
+- `main_gui_entry_test.go`: `-logdir` is handled (never reaches `launchGUI()`)
+  and keeps the same precedence as the CLI binary.
+- `main_cover_measure_test.go`: `-logdir` success + failure runs in both
+  binaries, keeping the `dispatchCLI`/`runHybridCLI` coverage thresholds honest.
+- `cli_flags_test.go`: `FlagLogDir` added to the hardcoded flag contract (this
+  test failed first, before the README/docs were updated — exactly as designed).
+- CI: smoke step builds raw logs, runs `-logdir -json -anonymize`, asserts the
+  error is found, the domain is redacted, and `-h` advertises the flag.

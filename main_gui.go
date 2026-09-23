@@ -61,6 +61,17 @@ func runHybridCLI(args []string, stdout, stderr io.Writer) (int, bool) {
 		return 0, true
 	}
 
+	// Raw SSSD log mode: analyze *.log files directly (e.g. /var/log/sssd).
+	// Handled means handled==true so the GUI is NEVER launched for it — an
+	// unhandled invocation would block forever in launchGUI() without a display.
+	if *opts.LogDir != "" {
+		if err := runLogDirAnalyze(*opts.LogDir, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {
+			fmt.Fprintf(stderr, "LogDir execution failed: %v\n", err)
+			return 1, true
+		}
+		return 0, true
+	}
+
 	// Traffic Cop Logic (If they used the strict -analyze flag)
 	if *opts.Analyze != "" {
 		if err := runCLI(*opts.Analyze, *opts.TXT, *opts.HTML, *opts.Anonymize, *opts.JSON); err != nil {

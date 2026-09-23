@@ -230,27 +230,85 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		}
 	}
 
-	// ---- Phase 5: build correlation graph (after summary, before anonymization) ----
-	// The graph is built on the raw (non-anonymized) report so that entity
-	// extraction can see the real domain/realm/hostname values; anonymizeReport
-	// will scrub the graph's Label/Value/LineText fields afterwards.
-	report.Graph = buildCorrelationGraph(&report)
+	// Graph + anonymization are shared with raw-log mode (-logdir) so the
+	// PII-critical closing steps have exactly one implementation.
+	finalizeReport(&report, dirPath, anonymize, progressFunc)
+
+	return report
+}
+
+// finalizeReport runs the closing steps every analysis mode shares: build the
+// correlation graph, then scrub the report when anonymization is requested.
+//
+// The graph is built on the RAW (non-anonymized) report so that entity
+// extraction can see the real domain/realm/hostname values; anonymizeReport
+// then scrubs the graph's Label/Value/Evidence/LineText fields and re-keys the
+// entity IDs.
+//
+// extraTokens carries identity values harvested from evidence: raw-log mode
+// derives them from the log lines themselves, where no sssd.conf exists to
+// populate the report fields (see logdir.go).
+func finalizeReport(r *ReportData, dirPath string, anonymize bool, progressFunc func(string, int), extraTokens ...redactToken) {
+	r.Graph = buildCorrelationGraph(r)
 
 	if anonymize {
 		if progressFunc != nil {
 			progressFunc("Sanitizing PII data...", 95)
 		}
-		anonymizeReport(&report, dirPath)
+		anonymizeReport(r, dirPath, extraTokens...)
 	}
+}
 
-	return report
+// redactToken is an identity value harvested from evidence (raw SSSD logs)
+// together with the placeholder that must replace it. Raw-log mode derives
+// them from the log lines themselves, because without an sssd.conf there is no
+// parsed report field to snapshot.
+type redactToken struct {
+	Value       string
+	Replacement string
+}
+
+// isRedactableToken reports whether v is a real identity value usable as a
+// redaction token. Unknown-value markers must NEVER be substituted: replacing
+// constants.RawLogModeNA inside the report would corrupt every field that
+// carries it (and the graph would label nodes "redacted-host" without having
+// redacted anything).
+func isRedactableToken(v string) bool {
+	switch v {
+	case "", "None", "Not configured", "Unknown", constants.RawLogModeNA:
+		return false
+	}
+	return !strings.HasPrefix(v, "N/A")
+}
+
+// applyRedactToken replaces value (and its case variants — realms are
+// uppercase, syslog hosts lowercase) with placeholder. Values without a dot
+// are matched on word boundaries so a short hostname never clobbers a longer
+// token that merely starts with it (webdev01 must not alter webdev011).
+func applyRedactToken(s, value, replacement string) string {
+	if replacement == "" || !isRedactableToken(value) {
+		return s
+	}
+	if strings.Contains(value, ".") {
+		s = strings.ReplaceAll(s, value, replacement)
+		s = strings.ReplaceAll(s, strings.ToLower(value), strings.ToLower(replacement))
+		s = strings.ReplaceAll(s, strings.ToUpper(value), strings.ToUpper(replacement))
+		return s
+	}
+	re, err := regexp.Compile(`(?i)\b` + regexp.QuoteMeta(value) + `\b`)
+	if err != nil {
+		return s
+	}
+	return re.ReplaceAllString(s, replacement)
 }
 
 // anonymizeReport heavily scrubs PII from the report to ensure safe sharing.
 // dirPath is the analyzed supportconfig directory: it is used read-only as a
 // last-resort source for the server short hostname (uname nodename) when the
 // parsed report fields do not carry it.
-func anonymizeReport(r *ReportData, dirPath string) {
+// extraTokens are additional identity values to scrub (raw-log mode, see
+// logdir.go).
+func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) {
 	ipRegex := regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
 	macRegex := regexp.MustCompile(`(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b`)
 	ipv6Regex := regexp.MustCompile(`(?i)\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\b|\b(?:[a-f0-9]{1,4}:){1,7}:|\b:(?::[a-f0-9]{1,4}){1,7}\b`)
@@ -335,11 +393,19 @@ func anonymizeReport(r *ReportData, dirPath string) {
 		s = macRegex.ReplaceAllString(s, "XX:XX:XX:XX:XX:XX")
 		s = emailRegex.ReplaceAllString(s, "[REDACTED_USER]@example.com")
 
-		if origDomain != "" && origDomain != "None" {
+		// Raw-log mode (extraTokens): scrub the harvested identity values
+		// BEFORE the field-driven replacements below, so a FQDN host
+		// (dc01.intra.swm.de) is replaced as a whole instead of losing only
+		// its domain part and keeping the host label.
+		for _, tok := range extraTokens {
+			s = applyRedactToken(s, tok.Value, tok.Replacement)
+		}
+
+		if isRedactableToken(origDomain) {
 			s = strings.ReplaceAll(s, origDomain, "example.com")
 			s = strings.ReplaceAll(s, strings.ToUpper(origDomain), "EXAMPLE.COM")
 		}
-		if origRealm != "" && origRealm != "Not configured" {
+		if isRedactableToken(origRealm) {
 			s = strings.ReplaceAll(s, origRealm, "EXAMPLE.COM")
 			s = strings.ReplaceAll(s, strings.ToLower(origRealm), "example.com")
 		}
@@ -348,7 +414,7 @@ func anonymizeReport(r *ReportData, dirPath string) {
 		// ORIGINAL snapshots (taken before any field was overwritten) —
 		// including their case variants (realm strings and log lines are
 		// often uppercased).
-		if origAdDomain != "" && origAdDomain != "Not configured" {
+		if isRedactableToken(origAdDomain) {
 			// Preserve the "[section].key" structure so the finding still
 			// tells the user WHERE to act ("domain section, key X"), but
 			// redact the domain name itself: "domain/intra.swm.de.foo" ->
@@ -356,7 +422,7 @@ func anonymizeReport(r *ReportData, dirPath string) {
 			s = strings.ReplaceAll(s, origAdDomain, "example.com")
 			s = strings.ReplaceAll(s, strings.ToUpper(origAdDomain), "EXAMPLE.COM")
 		}
-		if origHostname != "" {
+		if isRedactableToken(origHostname) {
 			s = strings.ReplaceAll(s, origHostname, "redacted-host")
 			// The hostname entity Value is scrubbed the same way: by the time
 			// the graph lane runs below, the FQDN above has already collapsed
@@ -432,10 +498,10 @@ func anonymizeReport(r *ReportData, dirPath string) {
 	// exposed the raw internal domain and server name.
 	r.SearchDomain = maskString(r.SearchDomain)
 	r.KerberosRealm = maskString(r.KerberosRealm)
-	if origAdDomain != "" && origAdDomain != "Not configured" {
+	if isRedactableToken(origAdDomain) {
 		r.AdDomain = constants.DomainReplacement
 	}
-	if origHostname != "" && origHostname != "Unknown" {
+	if isRedactableToken(origHostname) {
 		r.Hostname = "redacted-host"
 	}
 
@@ -489,19 +555,19 @@ func anonymizeReport(r *ReportData, dirPath string) {
 	for i := range r.Graph.Entities {
 		r.Graph.Entities[i].Label = maskString(r.Graph.Entities[i].Label)
 		r.Graph.Entities[i].Value = maskString(r.Graph.Entities[i].Value)
-		if r.AdDomain != "" {
+		if isRedactableToken(r.AdDomain) {
 			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, r.AdDomain, "example.com")
 			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, r.AdDomain, "example.com")
 		}
-		if r.Hostname != "" {
+		if isRedactableToken(r.Hostname) {
 			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, r.Hostname, "redacted-host")
 			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, r.Hostname, "redacted-host")
 		}
-		if origAdDomain != "" {
+		if isRedactableToken(origAdDomain) {
 			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, origAdDomain, "example.com")
 			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, origAdDomain, "example.com")
 		}
-		if origHostname != "" {
+		if isRedactableToken(origHostname) {
 			r.Graph.Entities[i].Label = strings.ReplaceAll(r.Graph.Entities[i].Label, origHostname, "redacted-host")
 			r.Graph.Entities[i].Value = strings.ReplaceAll(r.Graph.Entities[i].Value, origHostname, "redacted-host")
 		}
@@ -513,19 +579,19 @@ func anonymizeReport(r *ReportData, dirPath string) {
 		// SourceKey ("domain/<domain>.<key>"); scrub both provenance fields.
 		r.Graph.Findings[i].SourceKey = maskString(r.Graph.Findings[i].SourceKey)
 		r.Graph.Findings[i].SourcePath = maskString(r.Graph.Findings[i].SourcePath)
-		if r.AdDomain != "" {
+		if isRedactableToken(r.AdDomain) {
 			r.Graph.Findings[i].Evidence = strings.ReplaceAll(r.Graph.Findings[i].Evidence, r.AdDomain, "example.com")
 		}
-		if r.Hostname != "" {
+		if isRedactableToken(r.Hostname) {
 			r.Graph.Findings[i].Evidence = strings.ReplaceAll(r.Graph.Findings[i].Evidence, r.Hostname, "redacted-host")
 		}
 	}
 	for i := range r.Graph.Sources {
 		r.Graph.Sources[i].LineText = maskString(r.Graph.Sources[i].LineText)
-		if r.AdDomain != "" {
+		if isRedactableToken(r.AdDomain) {
 			r.Graph.Sources[i].LineText = strings.ReplaceAll(r.Graph.Sources[i].LineText, r.AdDomain, "example.com")
 		}
-		if r.Hostname != "" {
+		if isRedactableToken(r.Hostname) {
 			r.Graph.Sources[i].LineText = strings.ReplaceAll(r.Graph.Sources[i].LineText, r.Hostname, "redacted-host")
 		}
 	}

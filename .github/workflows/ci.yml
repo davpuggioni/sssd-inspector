@@ -54,3 +54,21 @@ jobs:
           /tmp/sssd-inspector-cli -analyze ./kb_articles -json >/tmp/smoke.json 2>/dev/null || true
           /tmp/sssd-inspector-cli -v | grep -q "version"
           test -s /tmp/smoke.json
+
+      - name: CLI smoke test (raw-log mode via -logdir)
+        # Guards the flag's wiring in the real binary: create raw SSSD logs
+        # with an error and a domain, run -logdir with -anonymize, and assert
+        # that (a) the error is detected and (b) the domain was redacted.
+        run: |
+          mkdir -p /tmp/rawlogs
+          printf '%s\n' \
+            '(2026-09-18 10:00:01): [sssd[be[ldap_id]]] Connection failed: Clock skew too great' \
+            '(2026-09-18 10:00:03): [sssd[be[ldap_id]]] Domain [intra.swm.de] is offline' \
+            > /tmp/rawlogs/sssd_intra.swm.de.log
+          /tmp/sssd-inspector-cli -logdir /tmp/rawlogs -json -anonymize >/tmp/logdir.out 2>&1
+          test -s /tmp/rawlogs/../rawlogs_report.json || test -s rawlogs_report.json
+          grep -q "Clock skew" /tmp/logdir.out
+          ! grep -q "intra.swm.de" rawlogs_report.json
+          grep -q "example.com" rawlogs_report.json
+          # -logdir must also be advertised in the usage output
+          /tmp/sssd-inspector-cli -h 2>&1 | grep -q -- "-logdir"

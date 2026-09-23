@@ -230,3 +230,67 @@ func TestRunCLIEntry_EndToEnd(t *testing.T) {
 		t.Errorf("expected a JSON document in the report file, got %q", data)
 	}
 }
+
+// TestDispatchCLI_LogDirPrecedence pins the documented dispatch order: with
+// both -logdir and -analyze, raw-log mode wins and the supportconfig path is
+// never attempted (its path is deliberately nonexistent here).
+func TestDispatchCLI_LogDirPrecedence(t *testing.T) {
+	args := []string{
+		"-logdir", writeRawLogFixture(t),
+		"-analyze", filepath.Join(t.TempDir(), "no-such-supportconfig"),
+	}
+	opts, positional, err := newCLIOptions(t, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := dispatchCLI(args, positional, opts, &stdout, &stderr); code != 0 {
+		t.Errorf("exit code = %d, want 0 (-logdir must win over -analyze; stderr: %q)",
+			code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "CLI execution failed") {
+		t.Errorf("-analyze must not run when -logdir is set, got stderr %q", stderr.String())
+	}
+}
+
+// TestDispatchCLI_LogDirMissingPathFails: a bad -logdir path exits 1 with an
+// explanation instead of a silent success.
+func TestDispatchCLI_LogDirMissingPathFails(t *testing.T) {
+	args := []string{"-logdir", filepath.Join(t.TempDir(), "missing")}
+	opts, positional, err := newCLIOptions(t, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := dispatchCLI(args, positional, opts, &stdout, &stderr); code != 1 {
+		t.Errorf("exit code = %d, want 1 for a missing -logdir path", code)
+	}
+	if !strings.Contains(stderr.String(), "LogDir execution failed") {
+		t.Errorf("stderr = %q, want an explanation of the failure", stderr.String())
+	}
+}
+
+// TestDispatchCLI_LogDirEndToEnd: full raw-log run through the dispatcher,
+// producing a JSON report — raw-log mode must expose the same outputs as
+// -analyze.
+func TestDispatchCLI_LogDirEndToEnd(t *testing.T) {
+	work := t.TempDir()
+	chdir(t, work)
+
+	args := []string{"-logdir", writeRawLogFixture(t), "-json"}
+	opts, positional, err := newCLIOptions(t, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := dispatchCLI(args, positional, opts, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %q)", code, stderr.String())
+	}
+	data, err := os.ReadFile(findReport(t, work, "_report.json"))
+	if err != nil {
+		t.Fatalf("JSON report not written: %v", err)
+	}
+	if !strings.Contains(string(data), "summary") {
+		t.Errorf("expected a JSON report with a summary section, got %q", truncateForLog(string(data)))
+	}
+}
