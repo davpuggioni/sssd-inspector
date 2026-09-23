@@ -406,25 +406,6 @@ The test suite includes:
 - **PII redaction tests** — `-anonymize` output is asserted to be free of raw
   IPs, domains, e-mails and MAC addresses, including graph entity IDs
 
-### Regression guards
-
-Two incidents shaped the current tests, and both are now pinned:
-
-1. **A silently lost CLI flag.** The `-logdir` flag was dropped during a
-   repository restructure. `cli_flags_test.go` now hardcodes the flag contract
-   and cross-checks it against this README, so removing a documented flag
-   without updating the code, the tests, the docs and `docs/CHANGES.md` fails
-   the suite.
-2. **A CLI invocation falling through to the GUI.** The hybrid binary must never
-   start `launchGUI()` when it was given a path: the process-level tests run it
-   headless with a hard timeout and fail if it does not terminate.
-
-The only code left uncovered is what genuinely requires a display server: the
-Wails `launchGUI()` bootstrap and the statements inside `main()` that call it.
-Everything those call into (the `App` methods, the dialogs, the analyzers) is
-covered by unit or process-level tests; statement coverage of the main package
-is ~88% in the default (hybrid) build and ~86% with the `cli` build tag, which
-excludes the GUI-only files.
 
 ---
 
