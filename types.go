@@ -263,5 +263,5 @@ type ComparisonReport struct {
 	Common     []string   `json:"common"`      // category+message keys present in both
 	OnlyInA    []string   `json:"only_in_a"`   // keys unique to A
 	OnlyInB    []string   `json:"only_in_b"`   // keys unique to B
-	ScoreDelta int        `json:"score_delta"` // health_A - health_B
+	ScoreDelta int        `json:"score_delta"` // HealthScore(B) - HealthScore(A); positive means B is healthier
 }

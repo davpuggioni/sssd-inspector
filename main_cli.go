@@ -170,7 +170,7 @@ func runCompare(pathA, pathB string, anonymize, genJSON bool) error {
 		fmt.Fprintf(os.Stderr, "[Compare %3d%%] %s\n", pct, msg)
 	}
 
-	result := CompareConfigs(extractDirA, extractDirB, progressFunc)
+	result := CompareConfigsAnonymized(extractDirA, extractDirB, anonymize, progressFunc)
 
 	// Build comparison TXT report
 	var sb strings.Builder

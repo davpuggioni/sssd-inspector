@@ -277,3 +277,31 @@ func TestCompareConfigs_WithChanges(t *testing.T) {
 		t.Errorf("expected B to be healthier than A (positive delta), got %d", report.ScoreDelta)
 	}
 }
+func TestCompareConfigsAnonymized_FlagRespected(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	writeFile(t, dirA, "sssd.conf", "[sssd]\ndomains = example.com\n\n[domain/example.com]\nid_provider = ad\nad_server = 192.168.1.10\n")
+	writeFile(t, dirB, "sssd.conf", "[sssd]\ndomains = example.com\n\n[domain/example.com]\nid_provider = ad\nad_server = dc.example.com\n")
+
+	progress := func(msg string, pct int) {}
+	// Non-anonymized: raw IP 192.168.1.10 should be preserved in finding message
+	reportNonAnon := CompareConfigsAnonymized(dirA, dirB, false, progress)
+	foundRawIP := false
+	for _, f := range reportNonAnon.A.ConfigFindings {
+		if strings.Contains(f.Message, "192.168.1.10") {
+			foundRawIP = true
+			break
+		}
+	}
+	if !foundRawIP {
+		t.Errorf("expected raw IP 192.168.1.10 in non-anonymized finding message")
+	}
+
+	// Anonymized: raw IP 192.168.1.10 must be scrubbed
+	reportAnon := CompareConfigsAnonymized(dirA, dirB, true, progress)
+	for _, f := range reportAnon.A.ConfigFindings {
+		if strings.Contains(f.Message, "192.168.1.10") {
+			t.Errorf("found raw IP in anonymized comparison finding: %s", f.Message)
+		}
+	}
+}

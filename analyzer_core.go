@@ -643,22 +643,28 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 // CompareConfigs runs the full analysis pipeline on two supportconfig
 // directories and returns a ComparisonReport describing the delta between
 // them: which findings are common, which are unique to A or B, and the
-// health-score difference (A − B). A positive delta means B is healthier.
+// health-score difference (B − A). A positive delta means B is healthier.
 //
-// Both sides are analyzed with anonymization enabled so the caller can
-// freely forward the report to a UI or external system.
+// By default or when anonymize is true, both sides are analyzed with anonymization
+// enabled so the caller can freely forward the report to a UI or external system.
 func CompareConfigs(dirA, dirB string, progressFunc func(string, int)) ComparisonReport {
+	return CompareConfigsAnonymized(dirA, dirB, true, progressFunc)
+}
+
+// CompareConfigsAnonymized runs the differential analysis pipeline with
+// explicit anonymization control.
+func CompareConfigsAnonymized(dirA, dirB string, anonymize bool, progressFunc func(string, int)) ComparisonReport {
 	progressFunc(constants.MsgInitializing, constants.ProgressStart)
 
 	progressFunc("Analyzing first supportconfig…", 10)
-	reportA := analyzeData(dirA, true, func(msg string, pct int) {
+	reportA := analyzeData(dirA, anonymize, func(msg string, pct int) {
 		// Map the sub-analysis progress 0..100 onto the global 10..45 band.
 		scaled := 10 + int(float64(pct)*0.35)
 		progressFunc(msg, scaled)
 	})
 
 	progressFunc("Analyzing second supportconfig…", 50)
-	reportB := analyzeData(dirB, true, func(msg string, pct int) {
+	reportB := analyzeData(dirB, anonymize, func(msg string, pct int) {
 		scaled := 50 + int(float64(pct)*0.35)
 		progressFunc(msg, scaled)
 	})
