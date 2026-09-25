@@ -40,7 +40,7 @@ The license note is also printed at the bottom of every generated report.
 
 ### Core Analysis Engine
 - **Single-Pass Log Scanning** — Scans the relevant log files (`sssd.txt`, `messages`, `messages.txt` — see `analyzer_singlepass.go`) in one pass, extracting errors, warnings, timeline events, and KB article evidence simultaneously
-- **260+ Error Patterns** — Pattern database of SSSD error signatures mapped to human-readable descriptions (plus test-only auxiliary entries), covering:
+- **220+ Error Patterns** — Pattern database of SSSD error signatures mapped to human-readable descriptions (plus test-only auxiliary entries), covering:
   - **Kerberos** — Clock skew, encryption type mismatches, KDC unreachable, FAST tunnel failures
   - **LDAP/AD** — TLS handshake failures, SASL bind errors, USN rollbacks, LDAP size limits
   - **PAM/NSS** — Offline authentication blocks, shell vetoes, negative cache rejections
@@ -310,7 +310,7 @@ sssd-inspector/
 ├── analyzer_parallel.go     # Parallel analysis phases
 ├── analyzer_system.go       # OS, hardware, services analysis
 ├── analyzer_auth.go         # DNS, Kerberos, PAM, NSS analysis
-├── analyzer_logs.go         # SSSD log pattern definitions (350+ patterns)
+├── analyzer_logs.go         # SSSD log pattern definitions (220+ patterns)
 ├── config_parser.go         # sssd.conf INI parser + AD typed option validator (Phase A)
 ├── analyzer_correlate.go    # Cross-source correlation/reconciliation engine (Phase B)
 │
@@ -347,7 +347,7 @@ sssd-inspector/
 
 The core innovation of SSSD Inspector is its single-pass log scanning engine. Instead of reading the same log files ~29 times during analysis (as traditional tools do), the engine:
 
-1. **Builds an Aho-Corasick automaton** — 350+ error patterns + quick checks + KB article patterns are almost entirely literal strings, so they run through an Aho-Corasick trie: **O(n) matching per line in a single pass regardless of how many patterns are registered**, avoiding the classic trap of throwing 350 patterns into one giant regex alternation and watching performance fall off a cliff
+1. **Builds an Aho-Corasick automaton** — 230+ error patterns + quick checks + KB article patterns are almost entirely literal strings, so they run through an Aho-Corasick trie: **O(n) matching per line in a single pass regardless of how many patterns are registered**, avoiding the classic trap of throwing hundreds of patterns into one giant regex alternation and watching performance fall off a cliff
 2. **Pre-filters lines** — Fast keyword check (`sssd`, `krb5`, `ldap`, `pam`, etc.) skips ~90% of unrelated syslog lines
 3. **Single pass** — Each surviving line is walked once through the automaton, extracting errors, keytab info, watchdog alerts, crypto bugs, evidence, and timestamps simultaneously
 4. **Ordered phases** — Analysis runs through discrete sequential phases (config, logs, Kerberos, cross-source correlation) so dependent checks always see fully-populated report fields; parallel helper functions exist but are not invoked on this path
