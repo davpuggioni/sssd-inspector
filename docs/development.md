@@ -323,6 +323,130 @@ function updateProgress(percentage, message) {
    )
    ```
 
+## Adding New Diagnostic Patterns
+
+SSSD Inspector matches diagnostic signals across SSSD log files, configuration files (`sssd.conf`), and Kerberos/DNS state. Depending on what you are adding and whether you can recompile the binary, there are three main extension points.
+
+### 1. Built-in SSSD Log Patterns (Requires Recompilation)
+
+This is the primary way to detect diagnostic messages emitted by SSSD components (`sssd_be`, `krb5_child`, `ldap_child`, responders).
+
+#### Step A: Extract the Literal Signature from SSSD C Source
+
+Look at the SSSD C source code (typically `DEBUG(SSSDBG_CRIT_FAILURE, ...)`, `SSSDBG_OP_FAILURE`, or `SSSDBG_ERR`) in `src/providers/` or `src/responder/`.
+
+Example log line from SSSD:
+```text
+(2026-01-01 10:00:00) [sssd[be[example.com]]] [sdap_async] (0x0020): Failed to set the LDAP referrer option
+```
+
+**Rule for patterns:**
+- Use a **contiguous substring** of the log message.
+- Stop **before format specifiers** (`%s`, `%d`, etc.) because the log line will contain the substituted value at runtime.
+- Matching is case-insensitive.
+
+#### Step B: Add the Pattern to `analyzer_logs.go` (`buildErrorPatterns`)
+
+Open `analyzer_logs.go` and add an entry inside `buildErrorPatterns()`:
+
+```go
+"Failed to set the LDAP referrer option": "LDAP Referral Error: LDAP/AD server rejected the referral chase option. Searches relying on referral chasing may fail. Check ldap_referrals and DC ACLs.",
+```
+
+The key is the substring to match, and the value is a formatted description:
+`"<Category Title>: <explanation and remediation advice>"`.
+
+#### Step C: Register the Category Prefix in `logPatternCategory`
+
+In `analyzer_logs.go`, register the descriptive prefix in `logPatternCategory`:
+
+```go
+var logPatternCategory = map[string]string{
+    // ...
+    "LDAP Referral Error": "ldap",
+}
+```
+
+This prefix is matched case-insensitively by `categoryFor()` (`analyzer_logs.go`). It binds the log finding to one of the root-cause domains (`dns`, `srv`, `net`, `time`, `join`, `keytab`, `krb5`, `crypto`, `tls`, `sasl`, `gpo`, `idmap`, `db`, `cache`, `enum`, `access`, `offline`).
+
+If you introduce a brand new category, also configure its relative weight in `logCategorySeverity` in `analysis_scoring.go` (weights range from 1 to 3).
+
+#### Step D: Verify the Pre-Filter in `analyzer_singlepass.go`
+
+SSSD Inspector uses an Aho-Corasick automaton to discard ~90% of unrelated syslog lines before detailed scanning. Check `prefilterKeywords` in `analyzer_singlepass.go`:
+
+```go
+var prefilterKeywords = []string{
+    "sssd", "krb5", "ldap", "keytab", "winbind", "ad ", "gpo", "pam",
+    "nss", "hbac", "ipa", "kdc", "tgt ", "tls", "gssapi", "library",
+    "dlopen", "shared",
+}
+```
+
+If your message comes from an external child process or a log where none of these keywords appear on the line, append a relevant keyword to `prefilterKeywords`.
+
+#### Step E: Regular Expression Patterns (Optional)
+
+By default, patterns run through the fast O(n) Aho-Corasick multi-pattern trie (`ahocorasick.go`). If your pattern requires regex syntax, it must contain one of `regexMetaTokens` (`.*`, `\d`, `\s`, `\w`, `+?`, `(?i)`) to be routed to RE2 in `analyzer_singlepass.go`.
+
+---
+
+### 2. Site-Specific Rules via `rules.yaml` (No Recompilation)
+
+For customer-specific or custom diagnostic checks without modifying Go code, create `rules.yaml` (or drop `.yaml` files into a `rules/` directory next to the binary or current working directory).
+
+Template:
+```yaml
+rules:
+  - name: "custom-ldap-referral-check"
+    severity: "warning"          # critical | error | warning
+    category: "ldap"             # category string
+    files: ["sssd.txt", "messages", "messages.txt"]
+    patterns:
+      - "Failed to set the LDAP referrer option"
+    pattern_type: "literal"      # literal (default) | regex
+    match: "any"                 # any (default) | all (all patterns on the same line)
+    message: "LDAP referral option was rejected by the domain controller."
+```
+
+Rules are additive: they generate `ConfigFinding` entries in the diagnostic report.
+
+---
+
+### 3. SUSE Knowledge Base Articles via `kb_articles/*.json`
+
+When an error pattern should be linked to an official resolution article, create a JSON file in `kb_articles/`:
+
+```json
+{
+  "tid_id": "TID-000000000",
+  "title": "LDAP referral option rejected by Active Directory",
+  "url": "https://www.suse.com/support/kb/doc/?id=000000000",
+  "description": "Active Directory domain controllers reject the LDAP referral chasing option.",
+  "log_patterns": [
+    "Failed to set the LDAP referrer option"
+  ],
+  "config_patterns": [
+    "ldap_referrals"
+  ]
+}
+```
+
+The single-pass scanner will extract evidence lines and correlate them during the KB matching phase.
+
+---
+
+### Testing and Hygiene Guidelines
+
+When adding new patterns or test fixtures:
+1. **Never use real company names, live hostnames, or production IP addresses.** Always use RFC 2606 reserved domains (e.g., `example.com`, `example.org`) and test IPs (e.g., `192.0.2.10`, `198.51.100.1`). `test_fixture_hygiene_test.go` enforces this rule.
+2. Add a unit test in `analyzer_logs_test.go` or `analysis_scoring_test.go` confirming that your pattern matches and is categorized as expected.
+3. Verify test suite with:
+   ```bash
+   go test ./... && go test -tags cli ./...
+   ```
+
+
 ## Debugging
 
 ### Backend Debugging
