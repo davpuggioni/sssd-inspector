@@ -17,7 +17,7 @@ The application searches for `config.yaml` in the following order:
 # Application metadata
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.3"
   author: "Davide Michele Puggioni"
   
 # Analysis parameters

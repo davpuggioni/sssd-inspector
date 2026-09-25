@@ -71,8 +71,8 @@ func TestRepositoryUsesOnlyGenericTestNames(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "node_modules", "frontend", "kb_articles":
-				return filepath.SkipDir // out of scope (JS sources / KB data)
+			case ".git", "node_modules", "frontend", "kb_articles", "dist":
+				return filepath.SkipDir // out of scope (JS sources / KB data / build output)
 			}
 			return nil
 		}

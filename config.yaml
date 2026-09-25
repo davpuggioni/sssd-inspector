@@ -4,7 +4,7 @@
 # Application metadata
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.3"
   author: "Davide Michele Puggioni <davide.puggioni@suse.com>"
 
 # Analysis parameters

@@ -1,3 +1,7 @@
 
 
-wails build -platform linux/amd64 -ldflags "-w -s" -clean
+wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean
+
+# Full release: build the binary and package dist/sssd-inspector-<version>-linux-amd64.tar.gz
+# with the binary, kb_articles/, LICENSE, LICENCE.md, README.md, config.yaml (+ .sha256):
+./build_release.sh

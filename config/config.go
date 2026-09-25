@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"sssd-inspector/constants"
 )
 
 // Config represents the complete application configuration
@@ -125,7 +127,7 @@ type CLIConfig struct {
 // Constants for default values
 const (
 	DefaultAppName       = "SSSD Inspector"
-	DefaultAppVersion    = "0.2.0"
+	DefaultAppVersion    = constants.AppVersion
 	DefaultMaxFileSize   = "100MB"
 	DefaultMaxLineLength = "1MB"
 	DefaultBufferSize    = "64KB"

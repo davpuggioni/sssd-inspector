@@ -1,5 +1,43 @@
 # Implementation Summary
 
+## 2026-09-25 — Version 0.2.3: single-source version + release packaging
+
+### Version alignment
+- `constants.AppVersion` (`0.2.3`) is now the only literal: `analyzer_core.go`
+  hardcoded `"0.2.0"` and `config.DefaultAppVersion` duplicated the value.
+- The CLI path masked the drift (`shared.go` re-copies the constant onto the
+  report), but the GUI path (`app.go` → `analyzeData`, and therefore the
+  PDF/TXT/JSON exports) and the config default still carried `0.2.0`.
+- `analyzer_core.go` and `config.DefaultAppVersion` now reference
+  `constants.AppVersion`; `config.yaml`, `README.md`,
+  `docs/configuration.md`, the sample reports (`scA_report.json`,
+  `mocksc_report.json`) and the frontend `APP_VERSION`
+  (`FrontendConfig.app.version`) quote `0.2.3`.
+
+### Regression guard
+- New `version_drift_test.go`: no `AppVersion` string literal outside
+  `constants/`, `config.DefaultAppVersion == constants.AppVersion`, and every
+  `version:` in `config.yaml`, `README.md` and `docs/configuration.md` must
+  match the constant. The drift that shipped in the GUI could not pass it.
+- `test_fixture_hygiene_test.go` skips the generated `dist/` directory.
+
+### Release packaging
+- New `build_release.sh`: `wails build -platform linux/amd64 -tags webkit2_41
+  -ldflags "-w -s" -clean` (output captured with `tee`, `pipefail` so a failed
+  build aborts the script), a `-v` smoke test comparing the binary output with
+  `constants.AppVersion` (safe headless: `runHybridCLI` returns before
+  `launchGUI`), then `dist/sssd-inspector-0.2.3-linux-amd64.tar.gz` containing
+  the binary, `kb_articles/` (loaded next to the executable), `LICENSE`,
+  `LICENCE.md`, `README.md`, `config.yaml` and `build_instructions.txt`, plus a
+  `.sha256` checksum.
+- `.gitignore` ignores the generated `dist/`; `build_instructions.txt`
+  documents the current command (the old one lacked `-tags webkit2_41`).
+- `docs/development.md` Release Process now points at `build_release.sh` and
+  uses the `v0.2.3` tag example.
+
+---
+
+
 ## Overview
 
 This document summarizes the comprehensive refactoring and enhancement of the SSSD Inspector project, implementing Senior Go Developer and Senior Frontend Developer best practices while maintaining all existing functionality.
@@ -145,7 +183,7 @@ ok      sssd-inspector  0.013s
 ```yaml
 app:
   name: "SSSD Inspector"
-  version: "0.2.0"
+  version: "0.2.3"
 
 analysis:
   max_file_size: "100MB"

@@ -10,7 +10,7 @@
 export const UI = {
   /** Application title and branding */
   APP_TITLE: 'SSSD Supportconfig Analyzer',
-  APP_VERSION: '2.0.0',
+  APP_VERSION: '0.2.3',
   
   /** Button labels */
   BUTTONS: {

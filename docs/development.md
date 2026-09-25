@@ -450,14 +450,18 @@ go tool pprof http://localhost:6060/debug/pprof/goroutine
    ```bash
    go test ./...
    ```
-4. **Build release binaries**:
+4. **Build and package the release**:
    ```bash
-   wails build -platform linux/amd64,windows/amd64,darwin/amd64 -clean
+   ./build_release.sh
    ```
+   The script runs `wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean`,
+   checks the built binary's `-v` output against `constants.AppVersion`, and
+   writes `dist/sssd-inspector-<version>-linux-amd64.tar.gz` (binary +
+   `kb_articles/` + `LICENSE` + `README.md`, plus a `.sha256`).
 5. **Test binaries** on target platforms
 6. **Create release tag**:
    ```bash
-   git tag -a v0.2.0 -m "Release version 0.2.0"
-   git push origin v0.2.0
+   git tag -a v0.2.3 -m "Release version 0.2.3"
+   git push origin v0.2.3
    ```
 7. **Upload binaries** to release platform

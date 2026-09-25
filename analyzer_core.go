@@ -56,7 +56,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
-	report.AppVersion = "0.2.0" // Major bump for Streaming Engine & PII Redaction
+	report.AppVersion = constants.AppVersion
 	report.SssdService = "Not Running / Unknown"
 	report.WinbindService = "Not Running / Unknown"
 	report.NscdStatus = "Not Running / Unknown"
