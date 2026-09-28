@@ -270,6 +270,9 @@
 	<h2 id="findings">Actionable Problems Found</h2>
 	{{if .ConfigFindings}}
 		<h2 class="warn-header">Configuration Findings (with provenance)</h2>
+		{{if .CatalogProvenance}}
+			<div class="finding-meta" style="margin-bottom:0.6em;">sssd.conf parameters validated {{.CatalogProvenance}}</div>
+		{{end}}
 		{{range .ConfigFindings}}
 			<div class="finding {{sevClass .Severity}}">
 				<div class="headline">{{.Message}}</div>

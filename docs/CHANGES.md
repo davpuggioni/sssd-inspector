@@ -1,5 +1,67 @@
 # Implementation Summary
 
+## 2026-09-28 — catalog section awareness, provenance, false-positive fixes
+
+A user review of a real supportconfig report found that the catalog validator,
+although working, produced two false positives out of four findings and never
+stated where its knowledge came from. This pass fixes all of it.
+
+### Findings were not attributed to their source
+The report asserted *"It is not part of the SSSD option list for this release"*
+without ever saying which release, or how many options had been compared —
+`grep -rn 'catalog' report.go types.go` returned nothing. Now every catalog
+finding ends with `[checked against the SSSD 2.14.0 option catalog: 519
+options from 54 documentation sources]`, and the same line is published as
+`ReportData.CatalogProvenance` (`catalog_provenance` in JSON) and rendered in
+the HTML and text reports, so the audit trail is visible even when no finding
+is raised. `OptionMeta.Source` records the exact man page each option came from.
+
+### `config_file_version` reported as unknown (false positive)
+It is a real `[sssd]` option, absent from the upstream `sssd.conf.5.xml` of
+this release. New curated table `curatedOptions` in `catalog_gen.go` fills such
+gaps; entries are tagged `"source": "curated"` so curated knowledge stays
+distinguishable from man-page knowledge.
+
+### 88 phantom options in the catalog
+`<term>` elements were harvested unconditionally, but a man page is full of
+things that are not options: PAM return codes (`pam_auth_err` in pam_sss(8)),
+signal names (`sighup` in sssd(8)), LDAP attribute names (`gecos` in the
+InfoPipe tables), and the *enumerated values* of an option, which upstream
+writes as a nested `<variablelist>` inside the option's own entry
+(`always`, `true`, `no_session`, `hybrid`, ...). The consequence was the worst
+kind of false negative: a genuine typo like `gecos = x` validated as a known
+option, and those names could be offered as "did you mean" suggestions.
+
+Fixed by resolving the sssd.conf section of every `<term>` from the enclosing
+DocBook `refsect` id (`docSectionMarkers` / `sectionRefID`, which also maps
+`all-section-options` and the responder sections), tracking the
+`variablelist` nesting depth (`indexedTerms`), turning nested terms into the
+parent option's allowed values, and pruning anything that cannot be placed in a
+section. The bare `.B <word>` roff fallback may now only enrich options that
+are already known, never invent them. Net effect: 596 → 519 options, 54 → 49
+sections, and the man-page enumerations for `pac_check` and
+`pam_initgroups_scheme` are now learned automatically instead of being curated.
+
+### Section-blind validation
+`OptionMeta.Sections` was generated but never read: a valid option in the wrong
+section could not be distinguished from a typo. New check `wrongSectionReason`
+emits a `config_section` finding naming the section the option belongs to,
+which has a different remediation (move the key, do not rename it).
+
+Provider options are written in `[domain/<name>]`, while the provider man pages
+document them per provider, so the comparison is done on the section *family*
+(`sectionFamily`): an `sssd.conf` has no `[provider/ad]` section, and whether
+`ldap_uri` applies to a given domain depends on its `id_provider`, which the
+catalog does not model. Reporting `ldap_uri` or `ad_gpo_access_control` as
+invalid inside `[domain/example.com]` would have been a new false positive.
+
+### Regression tests
+`config_catalog_test.go` gained the four cases from the reported supportconfig:
+`config_file_version` known, `reconnection_retries` still unknown but with
+provenance, enumerated values absent from the option list, wrong section
+distinguished from typo, plus a full valid AD configuration that must produce
+no finding, provenance publication, `sectionFamily` and `wrongSectionReason`.
+
 ## 2026-09-28 — /etc/hosts states, embedded KB, offline option catalog
 
 ### False "Malformed /etc/hosts" fixed (`conffiles.go`)
@@ -25,7 +87,7 @@
   (`upstream/src/man/**/*.xml`) and, as a fallback, compiled roff pages
   (`sssd*.5`, `sssd*.5.gz`). `enrichKnownEnums` fills the value lists that
   upstream only documents as prose.
-- `sssd_catalog/catalog.json` (596 options, 54 sections for SSSD 2.14.0) is
+- `sssd_catalog/catalog.json` (519 options, 49 sections for SSSD 2.14.0) is
   embedded with `go:embed` and committed, together with the readable
   `catalog.md`.
 - New `config_catalog.go` validates every `sssd.conf` key against the

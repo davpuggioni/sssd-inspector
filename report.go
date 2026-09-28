@@ -63,6 +63,9 @@ func buildTextReport(report ReportData) string {
 
 	sb.WriteString(fmt.Sprintf("[+] SSSD Installed:    %v\n", report.SssdInstalled))
 	sb.WriteString(fmt.Sprintf("[+] SSSD Config:       %v\n", report.SssdConfigFound))
+	if report.CatalogProvenance != "" {
+		sb.WriteString(fmt.Sprintf("[+] Config Catalog:    %s\n", report.CatalogProvenance))
+	}
 	sb.WriteString(fmt.Sprintf("[+] SSSD Service:      %s\n", report.SssdService))
 	sb.WriteString(fmt.Sprintf("[+] Winbind Status:    %s\n", report.WinbindService))
 	sb.WriteString(fmt.Sprintf("[+] NSCD Service:      %s\n", report.NscdStatus))

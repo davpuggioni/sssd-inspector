@@ -86,19 +86,32 @@ func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
 		return
 	}
 	names := catalogOptionNames(cat)
+	prov := catalogProvenance(cat)
+	// Publish the audit trail on the report itself, so it is visible even when
+	// no configuration finding is raised.
+	report.CatalogProvenance = prov
 
 	for _, name := range cfg.Order {
 		sec := cfg.Sections[name]
 		for key, vals := range sec.Options {
 			opt, known := cat.Options[key]
 			if !known {
-				reportUnknownOption(report, names, sec, key, vals)
+				reportUnknownOption(report, prov, names, sec, key, vals)
+				continue
+			}
+			// A known option in a section that does not accept it is a
+			// different (and far more common) mistake than a typo, so it gets
+			// its own message: the key exists, the placement does not.
+			if msg := wrongSectionReason(opt, sec); msg != "" {
+				line, evidence := firstKeyVal(vals, key)
+				addConfigFinding(report, SevWarning, "config_section", msg, "sssd.conf",
+					sec.Name+"."+key, line, evidence)
 				continue
 			}
 			for _, kv := range vals {
 				if v := invalidValueReason(opt, kv.Value); v != "" {
-					msg := fmt.Sprintf("CONFIGURATION WARNING: '%s = %s' in section [%s] is not valid for the '%s' option (%s). SSSD ignores the setting or falls back to the default '%s'.",
-						key, kv.Value, sec.Name, opt.Type, v, opt.Default)
+					msg := fmt.Sprintf("CONFIGURATION WARNING: '%s = %s' in section [%s] is not valid for the '%s' option (%s). SSSD ignores the setting or falls back to the default '%s'. %s",
+						key, kv.Value, sec.Name, opt.Type, v, opt.Default, prov)
 					addConfigFinding(report, SevWarning, "config_value", msg, "sssd.conf",
 						sec.Name+"."+key, kv.Line, key+" = "+kv.Value)
 				}
@@ -107,22 +120,81 @@ func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
 	}
 }
 
+// firstKeyVal returns the line number and rendered evidence of the first
+// occurrence of a key, used by findings that are not value-specific.
+func firstKeyVal(vals []SssdKeyVal, key string) (int, string) {
+	if len(vals) == 0 {
+		return 0, ""
+	}
+	return vals[0].Line, key + " = " + vals[0].Value
+}
+
+// sectionFamily returns the part of a section name before the first slash, so
+// that "domain/ad" and "domain/example.com" both belong to the "domain"
+// family. The provider part is a qualifier that this validator deliberately
+// ignores: whether ldap_uri applies to a given [domain/...] section depends on
+// its id_provider, and the catalog does not model provider negotiation.
+func sectionFamily(name string) string {
+	if i := strings.IndexByte(name, '/'); i > 0 {
+		return name[:i]
+	}
+	return name
+}
+
+// wrongSectionReason returns a non-empty explanation when a documented option
+// is used in an sssd.conf section of a different family. SSSD silently ignores
+// the setting there, exactly as for an unknown parameter, but the remediation
+// is completely different: the key must be moved, not renamed.
+func wrongSectionReason(opt OptionMeta, sec *SssdSection) string {
+	allowed := opt.Sections
+	if len(allowed) == 0 {
+		return "" // no section information: never guess
+	}
+	family := sectionFamily(sec.Kind)
+	if family == "" {
+		family = sectionFamily(sec.Name)
+	}
+	for _, s := range allowed {
+		if s == "*" || s == sec.Name || s == family {
+			return ""
+		}
+		// Same family (e.g. the option is documented for domain/ad and the
+		// key is used in [domain/example.com]): acceptable, the provider
+		// decides whether it applies.
+		if sectionFamily(s) == family {
+			return ""
+		}
+	}
+	target := strings.Join(allowed, "], [")
+	return fmt.Sprintf("CONFIGURATION WARNING: '%s' is not valid in section [%s]; it is only valid in section [%s]. SSSD ignores the setting where it is written.",
+		opt.Name, sec.Name, target)
+}
+
+// catalogProvenance renders the audit trail of the embedded catalog, so every
+// finding states which documentation release it was checked against. Without
+// it the report asserts "not part of the SSSD option list for this release"
+// without ever saying which release, or how many options were compared.
+func catalogProvenance(cat *SssdCatalog) string {
+	version := cat.Version
+	if version == "" {
+		version = "unknown"
+	}
+	return fmt.Sprintf("[checked against the SSSD %s option catalog: %d options from %d documentation sources]",
+		version, len(cat.Options), len(cat.Sources))
+}
+
 // reportUnknownOption emits the typo finding, including the closest known
 // option name when one is close enough to be a credible correction.
-func reportUnknownOption(report *ReportData, names []string, sec *SssdSection, key string, vals []SssdKeyVal) {
-	line := 0
-	evidence := ""
-	if len(vals) > 0 {
-		line = vals[0].Line
-		evidence = key + " = " + vals[0].Value
-	}
+func reportUnknownOption(report *ReportData, prov string, names []string, sec *SssdSection, key string, vals []SssdKeyVal) {
+	line, evidence := firstKeyVal(vals, key)
 	if suggestion := suggestOptionName(names, key); suggestion != "" {
-		msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. Did you mean '%s'? SSSD silently ignores unknown parameters, so this setting has no effect.",
-			key, sec.Name, suggestion)
+		msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. Did you mean '%s'? SSSD silently ignores unknown parameters, so this setting has no effect. %s",
+			key, sec.Name, suggestion, prov)
 		addConfigFinding(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence)
 		return
 	}
-	msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. It is not part of the SSSD option list for this release; SSSD silently ignores it (check for a typo).", key, sec.Name)
+	msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. It is not part of the SSSD option list for this release; SSSD silently ignores it (check for a typo). %s",
+		key, sec.Name, prov)
 	addConfigFinding(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence)
 }
 

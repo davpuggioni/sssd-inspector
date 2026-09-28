@@ -268,3 +268,176 @@ func TestCatalogOptionNamesFallback(t *testing.T) {
 		t.Errorf("catalogOptionNames with OptionNames set = %v, want [only]", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests for the false positives found in a real supportconfig
+// report. Each case reproduces one of the four findings a user reported.
+// ---------------------------------------------------------------------------
+
+// TestCatalog_ConfigFileVersionIsKnown pins the curated option: it is a real,
+// documented [sssd] option that is missing from several upstream sssd.conf.5.xml
+// releases. Reporting it as "unknown" sends the reader to fix a correct config.
+func TestCatalog_ConfigFileVersionIsKnown(t *testing.T) {
+	r := catalogFindings(t, "[sssd]\nconfig_file_version = 2\nservices = nss, pam\n")
+	for _, f := range r.ConfigFindings {
+		if strings.Contains(f.Message, "config_file_version") {
+			t.Errorf("config_file_version must not be reported: %s", f.Message)
+		}
+	}
+	cat, err := loadEmbeddedCatalog()
+	if err != nil {
+		t.Fatalf("embedded catalog: %v", err)
+	}
+	opt, ok := cat.Options["config_file_version"]
+	if !ok {
+		t.Fatal("config_file_version is missing from the catalog")
+	}
+	if opt.Type != "int" {
+		t.Errorf("config_file_version type = %q, want int", opt.Type)
+	}
+	if len(opt.Sections) == 0 || opt.Sections[0] != "sssd" {
+		t.Errorf("config_file_version sections = %v, want [sssd]", opt.Sections)
+	}
+}
+
+// TestCatalog_ReconnectionRetriesIsNotAnOption pins the opposite direction:
+// reconnection_retries is not an SSSD option in this release, so it must still
+// be reported, and the message must carry its provenance.
+func TestCatalog_ReconnectionRetriesIsNotAnOption(t *testing.T) {
+	r := catalogFindings(t, "[domain/example.com]\nid_provider = ad\nreconnection_retries = 3\n")
+	found := false
+	for _, f := range r.ConfigFindings {
+		if strings.Contains(f.Message, "reconnection_retries") {
+			found = true
+			if f.Category != "config_unknown" {
+				t.Errorf("reconnection_retries category = %q, want config_unknown", f.Category)
+			}
+			if !strings.Contains(f.Message, "option catalog") {
+				t.Errorf("finding must state its provenance, got: %s", f.Message)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("reconnection_retries was not reported at all: %+v", r.ConfigFindings)
+	}
+}
+
+// TestCatalog_EnumerationValuesAreNotOptions is the guard for the extraction bug
+// that made "always", "env", "true", "false" and "hybrid" validate as real
+// options: they are enumerated VALUES of pam_initgroups_scheme and friends,
+// harvested from nested <variablelist> entries in the man page.
+func TestCatalog_EnumerationValuesAreNotOptions(t *testing.T) {
+	cat, err := loadEmbeddedCatalog()
+	if err != nil {
+		t.Fatalf("embedded catalog: %v", err)
+	}
+	for _, junk := range []string{"always", "env", "true", "false", "hybrid", "no_session", "never"} {
+		if _, ok := cat.Options[junk]; ok {
+			t.Errorf("enumerated value %q leaked into the option list", junk)
+		}
+	}
+	// ...while the real option and its values are both present.
+	opt, ok := cat.Options["pam_initgroups_scheme"]
+	if !ok {
+		t.Fatal("pam_initgroups_scheme is missing from the catalog")
+	}
+	if !containsFold(opt.Values, "always") {
+		t.Errorf("pam_initgroups_scheme values = %v, want the man-page enumeration", opt.Values)
+	}
+}
+
+// TestCatalog_WrongSectionIsDistinguishedFromTypo covers the case the section
+// check exists for: a real option written in a section that never accepts it.
+func TestCatalog_WrongSectionIsDistinguishedFromTypo(t *testing.T) {
+	// entry_cache_nowait_percentage is an [nss] option; using it under
+	// [domain/...] is silently ignored by SSSD but is not a typo.
+	r := catalogFindings(t, "[domain/example.com]\nid_provider = ad\nentry_cache_nowait_percentage = 50\n")
+	found := false
+	for _, f := range r.ConfigFindings {
+		if strings.Contains(f.Message, "entry_cache_nowait_percentage") {
+			found = true
+			if f.Category != "config_section" {
+				t.Errorf("category = %q, want config_section", f.Category)
+			}
+			if !strings.Contains(f.Message, "nss") {
+				t.Errorf("message must name the correct section, got: %s", f.Message)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("option in the wrong section was not reported: %+v", r.ConfigFindings)
+	}
+}
+
+// TestCatalog_ProviderOptionsValidInDomainSection is the false-positive guard
+// for the most common real configuration: AD/LDAP provider options are written
+// in [domain/<name>], while the catalog documents them per provider.
+func TestCatalog_ProviderOptionsValidInDomainSection(t *testing.T) {
+	cfg := "[domain/example.com]\n" +
+		"id_provider = ad\n" +
+		"ad_domain = example.com\n" +
+		"ad_gpo_access_control = permissive\n" +
+		"ldap_uri = ldap://dc01.example.com\n" +
+		"ldap_id_mapping = True\n" +
+		"ldap_schema = ad\n" +
+		"access_provider = ad\n"
+	r := catalogFindings(t, cfg)
+	for _, f := range r.ConfigFindings {
+		t.Errorf("valid AD configuration produced a finding [%s]: %s", f.Category, f.Message)
+	}
+}
+
+// TestCatalog_ProvenanceIsPublished checks that the report always states which
+// documentation release its configuration claims are based on, even when no
+// finding is raised.
+func TestCatalog_ProvenanceIsPublished(t *testing.T) {
+	r := catalogFindings(t, "[sssd]\nservices = nss, pam\n")
+	if r.CatalogProvenance == "" {
+		t.Fatal("report does not publish the catalog provenance")
+	}
+	for _, want := range []string{"checked against the SSSD", "option catalog", "documentation sources"} {
+		if !strings.Contains(r.CatalogProvenance, want) {
+			t.Errorf("provenance %q is missing %q", r.CatalogProvenance, want)
+		}
+	}
+}
+
+// TestSectionFamily pins the family extraction used by the section check.
+func TestSectionFamily(t *testing.T) {
+	cases := map[string]string{
+		"domain/example.com": "domain",
+		"domain/ad":          "domain",
+		"nss":                "nss",
+		"":                   "",
+		"pam":                "pam",
+	}
+	for in, want := range cases {
+		if got := sectionFamily(in); got != want {
+			t.Errorf("sectionFamily(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestWrongSectionReason covers the matching rules directly.
+func TestWrongSectionReason(t *testing.T) {
+	nssOpt := OptionMeta{Name: "entry_cache_nowait_percentage", Sections: []string{"nss"}}
+	adOpt := OptionMeta{Name: "ad_gpo_access_control", Sections: []string{"domain/ad"}}
+	anyOpt := OptionMeta{Name: "debug_level", Sections: []string{"*"}}
+	noSec := OptionMeta{Name: "orphan", Sections: nil}
+
+	if wrongSectionReason(nssOpt, &SssdSection{Name: "domain/example.com", Kind: "domain"}) == "" {
+		t.Error("an [nss] option in [domain/...] must be reported")
+	}
+	if wrongSectionReason(nssOpt, &SssdSection{Name: "nss", Kind: "nss"}) != "" {
+		t.Error("an [nss] option in [nss] must be accepted")
+	}
+	if wrongSectionReason(adOpt, &SssdSection{Name: "domain/example.com", Kind: "domain"}) != "" {
+		t.Error("a provider option in [domain/...] must be accepted")
+	}
+	if wrongSectionReason(anyOpt, &SssdSection{Name: "pam", Kind: "pam"}) != "" {
+		t.Error("the wildcard section must always be accepted")
+	}
+	if wrongSectionReason(noSec, &SssdSection{Name: "pam", Kind: "pam"}) != "" {
+		t.Error("an option without section data must never be reported")
+	}
+}

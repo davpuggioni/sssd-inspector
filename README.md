@@ -214,9 +214,17 @@ analysed machine. `test_fixture_hygiene_test.go` enforces the ban list.
 The binary embeds a catalog of every SSSD configuration option
 (`sssd_catalog/catalog.json`, generated ahead of time). The catalog backs the
 configuration validator, so a typo like `ldap_url = ldap://dc01` is reported as
-`Did you mean 'ldap_uri'?`, and a bad value like `ldap_schema = rfc2309` is
-reported together with the documented value list. The whole check runs offline
-— nothing is fetched at runtime.
+`Did you mean 'ldap_uri'?`, a bad value like `ldap_schema = rfc2309` is
+reported together with the documented value list, and an option used in a
+section that never accepts it (for example an `[nss]` option written under
+`[domain/...]`) is reported as a section mistake rather than as a typo. The
+whole check runs offline — nothing is fetched at runtime.
+
+Every finding states where the knowledge came from, for example
+`[checked against the SSSD 2.14.0 option catalog: 519 options from 54
+documentation sources]`. The same line is published in the HTML and text
+reports, so a configuration claim is never presented without the documentation
+release it was checked against.
 
 Regenerate the catalog whenever the upstream SSSD release changes:
 
@@ -247,6 +255,24 @@ documentation and defaults, and finally falls back to compiled roff man pages
 (`sssd*.5`, `sssd*.5.gz`) when XML sources are unavailable. A curated table in
 `catalog_gen.go` (`enrichKnownEnums`) fills in the value lists that upstream
 documents only as prose.
+
+Only options that can be attributed to an `sssd.conf` section are published.
+A man page contains plenty of `<term>` elements that are **not** options — PAM
+return codes in `pam_sss(8)`, signal names in `sssd(8)`, LDAP attribute names in
+the InfoPipe tables — and a nested `<variablelist>` inside an option's own entry
+lists its *enumerated values* (`always`, `true`, `no_session`, ...). Harvesting
+those made nonsense names validate as real options, so they are now filtered:
+nested terms become the parent option's allowed values, and entries that cannot
+be placed in a section are dropped.
+
+A second curated table (`curatedOptions`) covers options that SSSD genuinely
+supports but that some releases fail to document. `config_file_version` is the
+current example: it is read by the daemon and shipped in distro `sssd.conf(5)`
+pages, but is absent from the upstream `sssd.conf.5.xml`. Such entries are
+tagged `"source": "curated"` in `catalog.json` to keep curated knowledge
+distinguishable from man-page knowledge. When adding one, verify the option in
+the SSSD source tree first — a false "unknown parameter" sends the reader to
+break a correct configuration.
 
 Both outputs are committed because they serve different audiences:
 

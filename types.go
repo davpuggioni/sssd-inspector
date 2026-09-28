@@ -134,6 +134,11 @@ type ReportData struct {
 	// Structured, provenance-aware configuration findings (AD validator + correlation)
 	ConfigFindings []ConfigFinding `json:"config_findings"`
 
+	// CatalogProvenance records which offline SSSD option catalog validated
+	// sssd.conf, so the report always states the documentation release its
+	// configuration claims are based on.
+	CatalogProvenance string `json:"catalog_provenance,omitempty"`
+
 	// Log Analysis & Problems
 	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors"`
 	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
