@@ -49,8 +49,8 @@ func TestValidateConfigStructure_HealthyConfig(t *testing.T) {
 }
 
 func TestValidateIDMapRanges_Overlap(t *testing.T) {
-	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_idmap_min_id = 10000\nldap_idmap_max_id = 20000\n\n" +
-		"[domain/b.example.com]\nid_provider = ad\nldap_idmap_min_id = 15000\nldap_idmap_max_id = 30000\n")
+	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_idmap_range_min = 10000\nldap_idmap_range_max = 20000\n\n" +
+		"[domain/b.example.com]\nid_provider = ad\nldap_idmap_range_min = 15000\nldap_idmap_range_max = 30000\n")
 	var report ReportData
 	validateIDMapRanges(cfg, &report)
 
@@ -65,8 +65,61 @@ func TestValidateIDMapRanges_Overlap(t *testing.T) {
 	}
 }
 
+// TestValidateIDMapRanges_RealOptionNames is the regression test for the
+// silent no-op bug: the checker used to look up 'ldap_idmap_min_id' /
+// 'ldap_idmap_max_id', which are not SSSD options, so a real sssd.conf using
+// the documented names was never validated.
+func TestValidateIDMapRanges_RealOptionNames(t *testing.T) {
+	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_idmap_range_min = 10000\nldap_idmap_range_max = 20000\n\n" +
+		"[domain/b.example.com]\nid_provider = ad\nldap_idmap_range_min = 15000\nldap_idmap_range_max = 30000\n")
+	var report ReportData
+	validateIDMapRanges(cfg, &report)
+
+	if len(report.ConfigFindings) == 0 {
+		t.Fatalf("documented ldap_idmap_range_min/max options must be validated; got no findings")
+	}
+	for _, f := range report.ConfigFindings {
+		if f.Category != "idmap" {
+			t.Errorf("unexpected finding category %q: %s", f.Category, f.Message)
+		}
+	}
+}
+
+// TestValidateIDMapRanges_AdjacentRangesAreNotOverlapping documents that
+// ldap_idmap_range_max is exclusive, so [10000,20000) and [20000,30000) are
+// disjoint and must not be reported.
+func TestValidateIDMapRanges_AdjacentRangesAreNotOverlapping(t *testing.T) {
+	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_idmap_range_min = 10000\nldap_idmap_range_max = 20000\n\n" +
+		"[domain/b.example.com]\nid_provider = ad\nldap_idmap_range_min = 20000\nldap_idmap_range_max = 30000\n")
+	var report ReportData
+	validateIDMapRanges(cfg, &report)
+
+	if len(report.ConfigFindings) != 0 {
+		t.Errorf("adjacent (non-overlapping) ranges must be accepted: %+v", report.ConfigFindings)
+	}
+}
+
+// TestValidateIDMapRanges_LegacyAliasStillWorks keeps backwards compatibility
+// with configs using the older idmap_range_min/max spelling.
+func TestValidateIDMapRanges_LegacyAliasStillWorks(t *testing.T) {
+	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nidmap_range_min = 10000\nidmap_range_max = 20000\n\n" +
+		"[domain/b.example.com]\nid_provider = ad\nidmap_range_min = 15000\nidmap_range_max = 30000\n")
+	var report ReportData
+	validateIDMapRanges(cfg, &report)
+
+	found := false
+	for _, f := range report.ConfigFindings {
+		if f.Category == "idmap" && strings.Contains(f.Message, "overlap") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("legacy idmap_range_min/max aliases must still be validated")
+	}
+}
+
 func TestValidateIDMapRanges_InvertedRange(t *testing.T) {
-	cfg := parseSssdConfig("[domain/example.com]\nid_provider = ad\nldap_idmap_min_id = 30000\nldap_idmap_max_id = 20000\n")
+	cfg := parseSssdConfig("[domain/example.com]\nid_provider = ad\nldap_idmap_range_min = 30000\nldap_idmap_range_max = 20000\n")
 	var report ReportData
 	validateIDMapRanges(cfg, &report)
 
@@ -83,8 +136,8 @@ func TestValidateIDMapRanges_InvertedRange(t *testing.T) {
 
 func TestValidateIDMapRanges_DisabledMappingIgnored(t *testing.T) {
 	// With ldap_id_mapping = False the ranges are irrelevant: no findings.
-	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_id_mapping = False\nldap_idmap_min_id = 10000\nldap_idmap_max_id = 20000\n\n" +
-		"[domain/b.example.com]\nid_provider = ad\nldap_id_mapping = False\nldap_idmap_min_id = 15000\nldap_idmap_max_id = 30000\n")
+	cfg := parseSssdConfig("[domain/a.example.com]\nid_provider = ad\nldap_id_mapping = False\nldap_idmap_range_min = 10000\nldap_idmap_range_max = 20000\n\n" +
+		"[domain/b.example.com]\nid_provider = ad\nldap_id_mapping = False\nldap_idmap_range_min = 15000\nldap_idmap_range_max = 30000\n")
 	var report ReportData
 	validateIDMapRanges(cfg, &report)
 

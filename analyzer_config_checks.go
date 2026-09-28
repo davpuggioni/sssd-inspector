@@ -89,11 +89,19 @@ type idRange struct {
 	line   int
 }
 
-// validateIDMapRanges collects every ldap_idmap_min_id/ldap_idmap_max_id pair
-// across all domain sections and flags:
+// validateIDMapRanges collects every ID-mapping range declared in a domain
+// section and flags:
 //   - inverted or invalid ranges inside a single domain;
 //   - overlaps between ranges of different domains (or duplicated values in
 //     the same domain family), which cause cross-domain UID/GID collisions.
+//
+// The canonical option names are 'ldap_idmap_range_min' and
+// 'ldap_idmap_range_max' (both integer, verified against sssd-ldap(5) and the
+// upstream sssd.api.d/sssd-ldap.conf definitions). The legacy
+// 'idmap_range_min'/'idmap_range_max' spellings are accepted as aliases since
+// they still show up in older examples. The previous implementation looked up
+// 'ldap_idmap_min_id'/'ldap_idmap_max_id', which are NOT SSSD option names at
+// all: the check silently never matched a real sssd.conf.
 func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 	var ranges []idRange
 	for _, name := range cfg.Order {
@@ -106,8 +114,10 @@ func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 		if v, _, ok := firstOption(sec, "ldap_id_mapping"); ok && equalFoldTrim(v, "false") {
 			continue
 		}
-		minV, minLine, minOK := firstOption(sec, "ldap_idmap_min_id")
-		maxV, _, maxOK := firstOption(sec, "ldap_idmap_max_id")
+		// ldap_idmap_range_max is exclusive (it is min + size), so two ranges
+		// are disjoint when cur.min >= prev.max.
+		minV, minLine, minOK := firstOptionAny(sec, "ldap_idmap_range_min", "idmap_range_min")
+		maxV, maxLine, maxOK := firstOptionAny(sec, "ldap_idmap_range_max", "idmap_range_max")
 		if !minOK || !maxOK {
 			continue
 		}
@@ -116,13 +126,16 @@ func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 		if err1 != nil || err2 != nil {
 			continue
 		}
-		r := idRange{domain: sec.Name, minID: minID, maxID: maxID, line: minLine}
+		line := minLine
+		if line == 0 {
+			line = maxLine
+		}
 		if minID >= maxID {
-			msg := fmt.Sprintf("CONFIGURATION ERROR: '%s' declares an invalid ID mapping range (%d-%d): min must be lower than max.", sec.Name, minID, maxID)
-			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", sec.Name+".ldap_idmap_min_id", r.line, fmt.Sprintf("ldap_idmap_min_id = %d", minID))
+			msg := fmt.Sprintf("CONFIGURATION ERROR: '%s' declares an invalid ID mapping range (%d-%d): 'ldap_idmap_range_min' must be lower than 'ldap_idmap_range_max' (which is exclusive).", sec.Name, minID, maxID)
+			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", sec.Name+".ldap_idmap_range_min", line, fmt.Sprintf("ldap_idmap_range_min = %d", minID))
 			continue
 		}
-		ranges = append(ranges, r)
+		ranges = append(ranges, idRange{domain: sec.Name, minID: minID, maxID: maxID, line: line})
 	}
 
 	// Sort by min ID and check each range only against its neighbours so the
@@ -130,12 +143,23 @@ func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 	sort.Slice(ranges, func(i, j int) bool { return ranges[i].minID < ranges[j].minID })
 	for i := 1; i < len(ranges); i++ {
 		prev, cur := ranges[i-1], ranges[i]
-		if cur.minID <= prev.maxID {
+		if cur.minID < prev.maxID {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: ID mapping ranges overlap between '%s' (%d-%d) and '%s' (%d-%d). Users of the two domains can receive colliding UID/GIDs.",
 				prev.domain, prev.minID, prev.maxID, cur.domain, cur.minID, cur.maxID)
-			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", cur.domain+".ldap_idmap_min_id", cur.line, fmt.Sprintf("ldap_idmap_min_id = %d", cur.minID))
+			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", cur.domain+".ldap_idmap_range_min", cur.line, fmt.Sprintf("ldap_idmap_range_min = %d", cur.minID))
 		}
 	}
+}
+
+// firstOptionAny returns the first matching occurrence among the given key
+// aliases, in the order they are listed.
+func firstOptionAny(sec *SssdSection, keys ...string) (string, int, bool) {
+	for _, k := range keys {
+		if v, line, ok := firstOption(sec, k); ok {
+			return v, line, true
+		}
+	}
+	return "", 0, false
 }
 
 // equalFoldTrim compares two strings case-insensitively after trimming.

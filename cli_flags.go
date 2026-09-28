@@ -20,13 +20,14 @@ import (
 // cliOptions holds the values of the flags registered by registerCLIFlags.
 // The pointers are owned by the flag.FlagSet passed to that function.
 type cliOptions struct {
-	Version   *bool
-	Analyze   *string
-	LogDir    *string
-	TXT       *bool
-	HTML      *bool
-	JSON      *bool
-	Anonymize *bool
+	Version    *bool
+	Analyze    *string
+	LogDir     *string
+	TXT        *bool
+	HTML       *bool
+	JSON       *bool
+	Anonymize  *bool
+	GenCatalog *string
 
 	// Compare is only registered when includeCompare is true (CLI binary);
 	// it is nil otherwise, so callers must not dereference it blindly.
@@ -41,13 +42,14 @@ type cliOptions struct {
 // advertise the flag.
 func registerCLIFlags(fs *flag.FlagSet, includeCompare bool) *cliOptions {
 	opts := &cliOptions{
-		Version:   fs.Bool(constants.FlagVersion, false, constants.DescVersion),
-		Analyze:   fs.String(constants.FlagAnalyze, "", constants.DescAnalyze),
-		LogDir:    fs.String(constants.FlagLogDir, "", constants.DescLogDir),
-		TXT:       fs.Bool(constants.FlagTXT, false, constants.DescTXT),
-		HTML:      fs.Bool(constants.FlagHTML, false, constants.DescHTML),
-		JSON:      fs.Bool(constants.FlagJSON, false, constants.DescJSON),
-		Anonymize: fs.Bool(constants.FlagAnonymize, false, constants.DescAnonymize),
+		Version:    fs.Bool(constants.FlagVersion, false, constants.DescVersion),
+		Analyze:    fs.String(constants.FlagAnalyze, "", constants.DescAnalyze),
+		LogDir:     fs.String(constants.FlagLogDir, "", constants.DescLogDir),
+		TXT:        fs.Bool(constants.FlagTXT, false, constants.DescTXT),
+		HTML:       fs.Bool(constants.FlagHTML, false, constants.DescHTML),
+		JSON:       fs.Bool(constants.FlagJSON, false, constants.DescJSON),
+		Anonymize:  fs.Bool(constants.FlagAnonymize, false, constants.DescAnonymize),
+		GenCatalog: fs.String(constants.FlagGenCatalog, "", constants.DescGenCatalog),
 	}
 	if includeCompare {
 		opts.Compare = fs.String(constants.FlagCompare, "", constants.DescCompare)

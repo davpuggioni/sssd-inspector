@@ -350,6 +350,7 @@ export namespace main {
 	    pam_sss_installed: boolean;
 	    pam_gdpr_restricted: boolean;
 	    hosts_issues: string[];
+	    hosts_file_status: string;
 	    nameservers: string[];
 	    search_domain: string;
 	    time_service: string;
@@ -401,6 +402,7 @@ export namespace main {
 	        this.pam_sss_installed = source["pam_sss_installed"];
 	        this.pam_gdpr_restricted = source["pam_gdpr_restricted"];
 	        this.hosts_issues = source["hosts_issues"];
+	        this.hosts_file_status = source["hosts_file_status"];
 	        this.nameservers = source["nameservers"];
 	        this.search_domain = source["search_domain"];
 	        this.time_service = source["time_service"];

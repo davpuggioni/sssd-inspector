@@ -159,6 +159,7 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 | `-html` | Generate an HTML report (default: both formats) |
 | `-json` | Generate a structured JSON report (full findings + graph + clusters) |
 | `-anonymize` | Redact PII (IPs, domains, hostnames, emails) from the report |
+| `-gen-catalog <dir>` | Generate sssd_catalog/catalog.{json,md} from upstream man pages and API definitions |
 
 ### Examples
 
@@ -207,6 +208,56 @@ may only use reserved names (RFC 2606/6761 domains such as `example.test` or
 `example.com`, documentation IPs such as `192.0.2.10`, invented hostnames such
 as `testhost01`) — never a real company domain or a hostname taken from an
 analysed machine. `test_fixture_hygiene_test.go` enforces the ban list.
+
+### Offline sssd.conf option catalog (`-gen-catalog`)
+
+The binary embeds a catalog of every SSSD configuration option
+(`sssd_catalog/catalog.json`, generated ahead of time). The catalog backs the
+configuration validator, so a typo like `ldap_url = ldap://dc01` is reported as
+`Did you mean 'ldap_uri'?`, and a bad value like `ldap_schema = rfc2309` is
+reported together with the documented value list. The whole check runs offline
+— nothing is fetched at runtime.
+
+Regenerate the catalog whenever the upstream SSSD release changes:
+
+```bash
+# 1. Drop the upstream sources into the (git-ignored) drop-zone.
+#    Expected layout:
+#      upstream/sssd.api.conf            # SSSD option API definitions
+#      upstream/sssd.api.d/*.conf        # per-provider option definitions
+#      upstream/src/man/*.xml            # DocBook man pages
+#      upstream/src/man/include/*.xml    # shared man-page includes
+#      upstream/version.m4               # upstream version (fill the VERSION string)
+#    See upstream/README.md for the exact files to copy.
+
+# 2. Regenerate both catalog.json and catalog.md.
+go run . -gen-catalog upstream
+# or, for the hybrid binary:
+go run -tags cli . -gen-catalog upstream
+
+# 3. Commit the result. catalog.md is the reviewable diff; catalog.json is
+#    what the binary embeds.
+git add sssd_catalog/catalog.json sssd_catalog/catalog.md
+```
+
+The generator is tolerant by design: it parses the API `*.conf` files
+(`option = type, subtype, mandatory[, default]`) first for the authoritative
+option list and types, then the DocBook XML (`<term>` + `Default:` lines) for
+documentation and defaults, and finally falls back to compiled roff man pages
+(`sssd*.5`, `sssd*.5.gz`) when XML sources are unavailable. A curated table in
+`catalog_gen.go` (`enrichKnownEnums`) fills in the value lists that upstream
+documents only as prose.
+
+Both outputs are committed because they serve different audiences:
+
+- `sssd_catalog/catalog.json` — embedded with `go:embed` and consumed by the
+  validator (`config_catalog.go`).
+- `sssd_catalog/catalog.md` — human-readable reference that makes catalog
+  changes reviewable in a pull request.
+
+If `sssd_catalog/catalog.json` is missing or malformed the validator degrades
+silently (no findings) instead of failing the analysis run;
+`TestEmbeddedCatalogLoads` fails the build instead.
 
 ### Output
 

@@ -27,3 +27,8 @@ compare_report.json
 # Escludi eventuali file temporanei degli IDE (opzionale)
 .vscode/
 .idea/
+
+# Upstream man pages and API definitions drop-zone
+upstream/*
+!upstream/README.md
+

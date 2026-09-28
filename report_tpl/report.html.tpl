@@ -219,6 +219,7 @@
 		<tr><th>NSCD Service Status</th><td>{{.NscdStatus}}</td></tr>
 		<tr><th>NSSwitch Valid</th><td>{{if .NsswitchValid}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
 		<tr><th>PAM pam_sss.so Found</th><td>{{if .PamGDPRRestricted}}<span class="warn">Restricted (GDPR)</span>{{else if .PamSssInstalled}}<span class="success">Yes</span>{{else}}<span class="fail">No</span>{{end}}</td></tr>
+		<tr><th>Hosts File Status</th><td>{{if eq .HostsFileStatus "missing_on_host"}}<span class="fail">Missing from Host</span>{{else if eq .HostsFileStatus "not_collected"}}<span class="warn">Not Collected</span>{{else}}<span class="success">Present</span>{{end}}</td></tr>
 		
 		<tr><td colspan="2" class="section-title">Installed SSSD Packages</td></tr>
 		<tr><td colspan="2">

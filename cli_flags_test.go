@@ -37,7 +37,8 @@ var cliFlagContract = []string{
 	constants.FlagHTML,    // "html"
 	constants.FlagJSON,    // "json"
 	constants.FlagAnonymize,
-	constants.FlagCompare, // CLI-only: present only with includeCompare=true
+	constants.FlagCompare,    // CLI-only: present only with includeCompare=true
+	constants.FlagGenCatalog, // "gen-catalog"
 }
 
 // registryFlagNames returns the flag names registered by registerCLIFlags.
@@ -131,39 +132,32 @@ func TestReadmeDocumentsEveryRegisteredFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot read README.md: %v", err)
 	}
-	re := regexp.MustCompile("(?m)^\\|\\s*`-([a-zA-Z0-9-]+)")
+	cellRe := regexp.MustCompile("(?m)^\\|\\s*`([^`]+)`")
+	tokRe := regexp.MustCompile(`--?([a-zA-Z][a-zA-Z0-9-]*)`)
 	documented := map[string]bool{}
-	for _, m := range re.FindAllStringSubmatch(string(data), -1) {
-		documented[m[1]] = true
-	}
-	// README annotations: version is documented as "-v, --version"; strip
-	// comma suffixes so composite entries still match the canonical name.
-	for _, f := range registryFlagNames(t, true) {
-		found := documented[f]
-		if !found {
-			// e.g. "`-v, --version`" produces tokens "-v"/"--version"
-			found = documented[f] || false
+
+	for _, m := range cellRe.FindAllStringSubmatch(string(data), -1) {
+		cell := m[1]
+		for _, tok := range tokRe.FindAllStringSubmatch(cell, -1) {
+			name := tok[1]
+			if name == "version" {
+				name = constants.FlagVersion
+			}
+			documented[name] = true
 		}
-		if !found {
+	}
+
+	for _, f := range registryFlagNames(t, true) {
+		if !documented[f] {
 			t.Errorf("flag -%s is registered but not documented in README.md Options table", f)
 		}
 	}
-	// Reverse direction: everything documented must exist (guards stale docs
-	// like "-compare <A> <B>" literal forms are skipped: only dash-led tokens).
-	tokRe := regexp.MustCompile(`-([a-zA-Z][a-zA-Z0-9-]*)`)
+
+	// Reverse direction: everything documented must exist in the registry.
 	fs := lookupRegistry(t, true)
-	for raw := range documented {
-		_ = raw
-	}
-	for _, m := range re.FindAllStringSubmatch(string(data), -1) {
-		for _, tok := range tokRe.FindAllStringSubmatch(m[1], -1) {
-			name := tok[1]
-			if name == "v" || name == "version" {
-				name = constants.FlagVersion
-			}
-			if fs.Lookup(name) == nil && name != "version" {
-				t.Errorf("README.md documents -%s but no such flag is registered", name)
-			}
+	for name := range documented {
+		if fs.Lookup(name) == nil {
+			t.Errorf("README.md documents -%s but no such flag is registered", name)
 		}
 	}
 }

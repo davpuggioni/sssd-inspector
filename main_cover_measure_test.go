@@ -96,6 +96,23 @@ func entryPointCoverage(t *testing.T, covDir, file string) map[string]float64 {
 	return coverage
 }
 
+// writeCatalogSourceFixture creates a minimal upstream drop-zone (an
+// sssd.api.conf) so the -gen-catalog dispatch branch has a source it can
+// actually parse. runCoveredInvocation runs the binary with its working
+// directory inside a t.TempDir(), so the generated sssd_catalog/ files land
+// there and never touch the committed catalog.
+func writeCatalogSourceFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	content := "# minimal fixture for the catalog generator\n" +
+		"[service]\ndebug_level = int, None, false\ntimeout = int, None, false\n\n" +
+		"[domain]\nid_provider = str, None, true\ncache_credentials = bool, None, false\n"
+	if err := os.WriteFile(filepath.Join(dir, "sssd.api.conf"), []byte(content), 0644); err != nil {
+		t.Fatalf("cannot write catalog fixture: %v", err)
+	}
+	return dir
+}
+
 // TestMainCoverage_CLIEntryPointIsFullyCovered: the CLI main() must stay a
 // one-liner delegating to runCLIEntry, and the dispatchers must be exercised by
 // the invocations below.
@@ -128,6 +145,10 @@ func TestMainCoverage_CLIEntryPointIsFullyCovered(t *testing.T) {
 	// raw logs that succeeds, and a path that fails with exit code 1).
 	runCoveredInvocation(t, bin, covDir, "-logdir", writeRawLogFixture(t))
 	runCoveredInvocation(t, bin, covDir, "-logdir", filepath.Join(t.TempDir(), "missing"))
+	// Catalog generation dispatch branch, both outcomes: a successful
+	// generation from a minimal fixture and a missing source directory.
+	runCoveredInvocation(t, bin, covDir, "-gen-catalog", writeCatalogSourceFixture(t))
+	runCoveredInvocation(t, bin, covDir, "-gen-catalog", filepath.Join(t.TempDir(), "missing"))
 
 	coverage := entryPointCoverage(t, covDir, "main_cli.go")
 
@@ -167,6 +188,10 @@ func TestMainCoverage_HybridEntryPoint(t *testing.T) {
 	// including its failure path (a missing path exits 1).
 	runCoveredInvocation(t, bin, covDir, "-logdir", writeRawLogFixture(t))
 	runCoveredInvocation(t, bin, covDir, "-logdir", filepath.Join(t.TempDir(), "missing"))
+	// Catalog generation dispatch branch, both outcomes: a successful
+	// generation from a minimal fixture and a missing source directory.
+	runCoveredInvocation(t, bin, covDir, "-gen-catalog", writeCatalogSourceFixture(t))
+	runCoveredInvocation(t, bin, covDir, "-gen-catalog", filepath.Join(t.TempDir(), "missing"))
 
 	coverage := entryPointCoverage(t, covDir, "main_gui.go")
 

@@ -97,6 +97,28 @@ func TestValidateADSections_UseFQDNFlag(t *testing.T) {
 	}
 }
 
+// TestValidateADSections_GpoAccessControlDisabled is the regression test for
+// the false positive on 'ad_gpo_access_control = disabled': the value is
+// documented in sssd-ad(5) as the "do not evaluate GPOs at all" mode and must
+// not be reported as a CONFIGURATION ERROR.
+func TestValidateADSections_GpoAccessControlDisabled(t *testing.T) {
+	for _, val := range []string{"disabled", "Disabled", "permissive", "enforcing"} {
+		r := validateOneSection(t, "id_provider = ad\nad_gpo_access_control = "+val+"\n")
+		if containsStringCategory(r, "gpo") {
+			t.Errorf("ad_gpo_access_control = %s must be accepted, got %v", val, findingCategories(r))
+		}
+	}
+}
+
+// TestValidateADSections_GpoAccessControlInvalid keeps the guard for genuinely
+// unsupported values.
+func TestValidateADSections_GpoAccessControlInvalid(t *testing.T) {
+	r := validateOneSection(t, "id_provider = ad\nad_gpo_access_control = yes\n")
+	if !containsStringCategory(r, "gpo") {
+		t.Errorf("ad_gpo_access_control = yes must be rejected, got %v", findingCategories(r))
+	}
+}
+
 // containsStringCategory checks a finding category list (shares the
 // substring semantics of containsString).
 func containsStringCategory(r *ReportData, expected string) bool {

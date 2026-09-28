@@ -117,6 +117,7 @@ type ReportData struct {
 	PamSssInstalled   bool     `json:"pam_sss_installed"`
 	PamGDPRRestricted bool     `json:"pam_gdpr_restricted"`
 	HostsIssues       []string `json:"hosts_issues"`
+	HostsFileStatus   string   `json:"hosts_file_status"` // present / missing_on_host / not_collected
 	Nameservers       []string `json:"nameservers"`
 	SearchDomain      string   `json:"search_domain"`
 	TimeService       string   `json:"time_service"`

@@ -102,6 +102,7 @@ function renderReportHTML(report) {
         <tr><th>nsswitch.conf Valid</th><td>${yesNo(report.nsswitch_valid)}</td></tr>
         <tr><th>pam_sss Installed</th><td>${yesNo(report.pam_sss_installed)}</td></tr>
         <tr><th>GDPR Restricted Mode</th><td>${yesNo(report.pam_gdpr_restricted)}</td></tr>
+        <tr><th>Hosts File Status</th><td>${report.hosts_file_status === 'missing_on_host' ? '<span class="status-badge error">Missing from Host</span>' : report.hosts_file_status === 'not_collected' ? '<span class="status-badge warn">Not Collected</span>' : '<span class="status-badge success">Present</span>'}</td></tr>
         <tr><th>Hosts File Issues</th><td>${listItems(report.hosts_issues)}</td></tr>
         <tr><th>Nameservers</th><td>${listItems(report.nameservers)}</td></tr>
         <tr><th>Search Domain</th><td>${report.search_domain || 'None'}</td></tr>

@@ -1,5 +1,65 @@
 # Implementation Summary
 
+## 2026-09-28 — /etc/hosts states, embedded KB, offline option catalog
+
+### False "Malformed /etc/hosts" fixed (`conffiles.go`)
+- Supportconfig never ships `/etc/hosts` as a standalone file: it is inlined
+  into `network.txt`, so the old lookup for a file literally named `hosts`
+  always missed and the report claimed the file was malformed.
+- `analyzeHosts` now classifies three states (`HostsFileStatus`):
+  `HostsOK`, `HostsMissing`, `HostsMalformed`. Only genuinely broken content
+  raises a finding; an absent file is reported as "not captured" instead.
+- Covered by `conffiles_test.go` / `analyzer_hosts_test.go`.
+
+### Knowledge base embedded in the binary (`kb.go`)
+- `kb_articles/*.json` is embedded with `go:embed`; external
+  `kb_articles/` next to the binary or in the CWD is still merged on top
+  (external entries win on ID collision). The inspector no longer needs the
+  data directory to be shipped alongside it.
+
+### Offline sssd.conf option catalog (`-gen-catalog`)
+- New maintainer-oriented generator flag `-gen-catalog <dir>` (registered in
+  `cli_flags.go`, dispatched from both `main_cli.go` and `main_gui.go`).
+- `catalog_gen.go` builds `sssd_catalog/catalog.json` + `catalog.md` from
+  `upstream/sssd.api.conf`, `upstream/sssd.api.d/*.conf`, DocBook man pages
+  (`upstream/src/man/**/*.xml`) and, as a fallback, compiled roff pages
+  (`sssd*.5`, `sssd*.5.gz`). `enrichKnownEnums` fills the value lists that
+  upstream only documents as prose.
+- `sssd_catalog/catalog.json` (596 options, 54 sections for SSSD 2.14.0) is
+  embedded with `go:embed` and committed, together with the readable
+  `catalog.md`.
+- New `config_catalog.go` validates every `sssd.conf` key against the
+  catalog: unknown parameter (with a "did you mean?" suggestion via
+  Levenshtein distance), wrong type for bool/int options, and values outside
+  the documented enumeration. All three are `SevWarning` — SSSD ignores such
+  settings, it does not fail.
+- `upstream/` is a git-ignored drop-zone (`upstream/README.md` documents the
+  exact files to copy); regenerate with `go run . -gen-catalog upstream`.
+
+### Bug fixes found by the catalog
+- `ldap_idmap_min_id` / `ldap_idmap_max_id` are **not** SSSD options: the
+  ID-mapping range overlap check never matched a real `sssd.conf`. It now
+  reads `ldap_idmap_range_min` / `ldap_idmap_range_max` (with the legacy
+  `idmap_range_*` spellings kept as aliases) and treats `range_max` as
+  exclusive.
+- `ad_gpo_access_control = disabled` is documented in `sssd-ad(5)` but was
+  reported as a `CONFIGURATION ERROR`. All three documented modes
+  (`disabled`, `permissive`, `enforcing`) are now accepted.
+
+### Regression guards
+- `config_catalog_test.go`: embedded catalog integrity, typo suggestion,
+  type/enum checks, pure helper coverage.
+- `analyzer_config_catalog_e2e_test.go`: end-to-end `analyzeData` run proving
+  the findings reach the report warnings (and only the warnings).
+- `analyzer_config_checks_test.go` / `analyzer_config_validate_test.go`:
+  real option names, adjacent-range acceptance, GPO `disabled`.
+- `main_cover_measure_test.go` now runs `-gen-catalog` both ways (success
+  from a minimal fixture and a missing source directory).
+- `cli_flags_test.go` README cross-check rewritten to capture whole
+  backticked cells, so it validates both directions.
+
+---
+
 ## 2026-09-25 — Version 0.2.3: single-source version + release packaging
 
 ### Version alignment

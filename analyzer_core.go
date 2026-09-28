@@ -146,11 +146,12 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		// Phase A: real INI parser + typed AD option validator (replaces the fragile
 		// substring-based legacy scanning in analyzeSSSDConfig.
 		cfg := parseSssdConfig(sssdConfContent)
-		validateDuplicateKeys(cfg, &report)   // duplicate keys apply to the whole config
-		validateDomainStructure(cfg, &report) // mandatory id_provider + no inherit_from in domains
-		validateADConfig(cfg, &report)        // AD-specific typed-option checks
-		validateConfigStructure(cfg, &report) // Phase 2: domains + responders
-		validateIDMapRanges(cfg, &report)     // Phase 2: idmap range overlaps
+		validateDuplicateKeys(cfg, &report)        // duplicate keys apply to the whole config
+		validateDomainStructure(cfg, &report)      // mandatory id_provider + no inherit_from in domains
+		validateADConfig(cfg, &report)             // AD-specific typed-option checks
+		validateConfigStructure(cfg, &report)      // Phase 2: domains + responders
+		validateIDMapRanges(cfg, &report)          // Phase 2: idmap range overlaps
+		validateConfigAgainstCatalog(cfg, &report) // Embedded catalog: unknown keys, bad types, bad enum values
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
 	}

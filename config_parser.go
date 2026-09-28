@@ -361,11 +361,15 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 		addConfigFinding(report, SevError, "tls", msg, "sssd.conf", prefix+"ldap_id_use_start_tls", line, "ldap_id_use_start_tls = "+v)
 	}
 
-	// ad_gpo_access_control accepts only 'permissive' or 'enforcing'.
+	// ad_gpo_access_control accepts 'disabled', 'permissive' or 'enforcing'.
+	// 'disabled' was added in SSSD 1.14 and is valid (verified against
+	// sssd-ad(5): "It can be set to 'disabled', 'permissive' or
+	// 'enforcing'"); the previous check rejected it and produced a false
+	// CONFIGURATION ERROR.
 	if v, line, ok := firstOption(sec, "ad_gpo_access_control"); ok && v != "" {
 		lv := strings.ToLower(v)
-		if lv != "permissive" && lv != "enforcing" {
-			msg := fmt.Sprintf("CONFIGURATION ERROR: 'ad_gpo_access_control = %s' is invalid. Allowed values are 'permissive' or 'enforcing'. SSSD may refuse to start or fall back to permissive mode.", v)
+		if lv != "disabled" && lv != "permissive" && lv != "enforcing" {
+			msg := fmt.Sprintf("CONFIGURATION ERROR: 'ad_gpo_access_control = %s' is invalid. Allowed values are 'disabled', 'permissive' or 'enforcing'. SSSD may refuse to start or fall back to permissive mode.", v)
 			addConfigFinding(report, SevError, "gpo", msg, "sssd.conf", prefix+"ad_gpo_access_control", line, "ad_gpo_access_control = "+v)
 		}
 	}

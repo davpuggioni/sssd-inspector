@@ -120,11 +120,25 @@ func TestMatchKBArticles_Success(t *testing.T) {
 		t.Fatalf("Failed to match mock KB article against log evidence")
 	}
 
-	if report.MatchedTIDs[0].TIDID != "TID-TEST-01" {
-		t.Errorf("Expected TID-TEST-01, got %s", report.MatchedTIDs[0].TIDID)
+	// The corpus is the union of the embedded articles and the external
+	// drop-zone, so the custom article must be *present* (not necessarily
+	// first: the embedded TID-000020793 covers the same log pattern).
+	var matched *TIDArticle
+	for i := range report.MatchedTIDs {
+		if report.MatchedTIDs[i].TIDID == "TID-TEST-01" {
+			matched = &report.MatchedTIDs[i]
+			break
+		}
+	}
+	if matched == nil {
+		ids := make([]string, 0, len(report.MatchedTIDs))
+		for _, a := range report.MatchedTIDs {
+			ids = append(ids, a.TIDID)
+		}
+		t.Fatalf("Expected TID-TEST-01 among the matches, got %v", ids)
 	}
 
-	if len(report.MatchedTIDs[0].Evidence) == 0 {
+	if len(matched.Evidence) == 0 {
 		t.Errorf("Failed to extract log evidence for matched KB article")
 	}
 }

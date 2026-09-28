@@ -88,6 +88,9 @@ func buildTextReport(report ReportData) string {
 		sb.WriteString(fmt.Sprintf("[+] PAM pam_sss.so:    %v\n", report.PamSssInstalled))
 	}
 	sb.WriteString(fmt.Sprintf("[+] NSSwitch valid:    %v\n", report.NsswitchValid))
+	if report.HostsFileStatus != "" {
+		sb.WriteString(fmt.Sprintf("[+] Hosts File:        %s\n", report.HostsFileStatus))
+	}
 
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
 	sb.WriteString(fmt.Sprintf("[+] SSSD AD Provider:  %v\n", report.ADProviderMode))

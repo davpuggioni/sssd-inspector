@@ -61,6 +61,15 @@ func runHybridCLI(args []string, stdout, stderr io.Writer) (int, bool) {
 		return 0, true
 	}
 
+	// Generate catalog from upstream man pages / API files
+	if *opts.GenCatalog != "" {
+		if err := RunGenerateCatalog(*opts.GenCatalog); err != nil {
+			fmt.Fprintf(stderr, "Catalog generation failed: %v\n", err)
+			return 1, true
+		}
+		return 0, true
+	}
+
 	// Raw SSSD log mode: analyze *.log files directly (e.g. /var/log/sssd).
 	// Handled means handled==true so the GUI is NEVER launched for it — an
 	// unhandled invocation would block forever in launchGUI() without a display.

@@ -234,15 +234,69 @@ func analyzeNSSwitch(dirPath string, report *ReportData) {
 }
 
 func analyzeHosts(dirPath string, report *ReportData) {
+	// Look for /etc/hosts inside supportconfig bundles (network.txt is where
+	// net_info_namespace writes it, with etc.txt/sssd.txt as fallbacks) or a
+	// standalone "hosts" file (test fixtures, raw directories).
+	content, status, _ := locateConfFile(dirPath, []string{"network.txt", "etc.txt", "sssd.txt"}, "/etc/hosts")
+
+	switch status {
+	case ConfMissingHost:
+		report.HostsFileStatus = HostsStatusMissingHost
+		report.HostsIssues = append(report.HostsIssues, "/etc/hosts does not exist on the analysed host")
+		report.Problems = append(report.Problems, "[HOSTS] /etc/hosts is missing from the system. Without /etc/hosts, localhost and the local hostname rely entirely on DNS resolution.")
+		return
+
+	case ConfAbsent:
+		report.HostsFileStatus = HostsStatusNotCollected
+		// The supportconfig did not collect /etc/hosts (or the section was omitted).
+		// We explicitly do NOT claim the file is malformed.
+		return
+
+	case ConfPresent:
+		report.HostsFileStatus = HostsStatusPresent
+	}
+
 	hasLocalhost := false
-	scanFiles(dirPath, []string{"hosts"}, func(line string) {
-		if strings.Contains(line, "127.0.0.1") {
+	hasHostname := false
+	shortHost := report.Hostname
+	if idx := strings.Index(shortHost, "."); idx > 0 {
+		shortHost = shortHost[:idx]
+	}
+
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		ip := fields[0]
+		aliases := fields[1:]
+
+		// Loopback check
+		if ip == "127.0.0.1" || ip == "::1" {
 			hasLocalhost = true
 		}
-	})
+		for _, a := range aliases {
+			if strings.EqualFold(a, "localhost") || strings.EqualFold(a, "localhost.localdomain") {
+				hasLocalhost = true
+			}
+			if report.Hostname != "" && (strings.EqualFold(a, report.Hostname) || strings.EqualFold(a, shortHost)) {
+				hasHostname = true
+			}
+		}
+	}
+
 	if !hasLocalhost {
 		report.HostsIssues = append(report.HostsIssues, "Missing 127.0.0.1 loopback entry")
 		report.Problems = append(report.Problems, "Malformed /etc/hosts file.")
+	}
+
+	if report.Hostname != "" && !hasHostname && hasLocalhost {
+		// Only warn if the host has an identity and wasn't found in hosts
+		report.Warnings = append(report.Warnings, fmt.Sprintf("[HOSTS] System hostname '%s' is not mapped to an IP in /etc/hosts. Kerberos ticket issuance and AD join verification work best when the local hostname resolves consistently.", report.Hostname))
 	}
 }
 

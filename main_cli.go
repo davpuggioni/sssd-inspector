@@ -53,6 +53,15 @@ func dispatchCLI(rawArgs, positional []string, opts *cliOptions, stdout, stderr 
 		return 0
 	}
 
+	// Generate catalog from upstream man pages / API files
+	if *opts.GenCatalog != "" {
+		if err := RunGenerateCatalog(*opts.GenCatalog); err != nil {
+			fmt.Fprintf(stderr, "Catalog generation failed: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
 	// Compare mode: differential analysis between two supportconfigs
 	if *opts.Compare != "" {
 		parts := strings.SplitN(*opts.Compare, ":", 2)

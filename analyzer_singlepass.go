@@ -6,10 +6,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -560,45 +557,4 @@ func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles 
 			report.MatchedTIDs = append(report.MatchedTIDs, *c.article)
 		}
 	}
-}
-
-// loadKBArticles loads all KB article JSON files for single-pass scanning
-func loadKBArticles(dirPath string) []TIDArticle {
-	var kbArticles []TIDArticle
-	kbDir := "kb_articles"
-
-	// Try executable-relative path first
-	exePath, err := os.Executable()
-	if err == nil {
-		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
-		if _, err := os.Stat(exeDir); !os.IsNotExist(err) {
-			kbDir = exeDir
-		}
-	}
-
-	if _, err := os.Stat(kbDir); os.IsNotExist(err) {
-		return nil
-	}
-
-	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
-	if err != nil || len(files) == 0 {
-		return nil
-	}
-
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			continue
-		}
-		var article TIDArticle
-		if err := json.Unmarshal(content, &article); err != nil {
-			continue
-		}
-		// Bridge both supported schemas (curated + scraper) into a
-		// uniform TIDArticle.
-		normalizeTIDArticle(&article)
-		kbArticles = append(kbArticles, article)
-	}
-
-	return kbArticles
 }

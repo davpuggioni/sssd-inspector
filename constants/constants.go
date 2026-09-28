@@ -66,24 +66,26 @@ const (
 // CLI constants
 const (
 	// CLI flags
-	FlagVersion   = "v"
-	FlagAnalyze   = "analyze"
-	FlagTXT       = "txt"
-	FlagHTML      = "html"
-	FlagAnonymize = "anonymize"
-	FlagJSON      = "json"
-	FlagCompare   = "compare"
-	FlagLogDir    = "logdir"
+	FlagVersion    = "v"
+	FlagAnalyze    = "analyze"
+	FlagTXT        = "txt"
+	FlagHTML       = "html"
+	FlagAnonymize  = "anonymize"
+	FlagJSON       = "json"
+	FlagCompare    = "compare"
+	FlagLogDir     = "logdir"
+	FlagGenCatalog = "gen-catalog"
 
 	// Flag descriptions
-	DescVersion   = "Print program version"
-	DescAnalyze   = "Path to the supportconfig directory or log file"
-	DescTXT       = "Generate a TXT report"
-	DescHTML      = "Generate an HTML report"
-	DescAnonymize = "Redact PII (IPs, Domains) from the report"
-	DescJSON      = "Generate a JSON report (structured, machine-readable)"
-	DescCompare   = "Compare two supportconfig paths (format: pathA:pathB)"
-	DescLogDir    = "Analyze raw SSSD logs from a directory or file (e.g., /var/log/sssd)"
+	DescVersion    = "Print program version"
+	DescAnalyze    = "Path to the supportconfig directory or log file"
+	DescTXT        = "Generate a TXT report"
+	DescHTML       = "Generate an HTML report"
+	DescAnonymize  = "Redact PII (IPs, Domains) from the report"
+	DescJSON       = "Generate a JSON report (structured, machine-readable)"
+	DescCompare    = "Compare two supportconfig paths (format: pathA:pathB)"
+	DescLogDir     = "Analyze raw SSSD logs from a directory or file (e.g., /var/log/sssd)"
+	DescGenCatalog = "Generate sssd_catalog/catalog.{json,md} from upstream man pages and API definitions"
 
 	// Default behavior
 	DefaultGenerateBothFormats = true
