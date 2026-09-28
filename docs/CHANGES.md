@@ -1,5 +1,44 @@
 # Implementation Summary
 
+## 2026-09-28 — fix the provider/* section false positives on a real LDAP domain
+
+A second review of a real supportconfig (SLES 15 SP7, SSSD 2.10.2, `id_provider = ldap`)
+surfaced two more false positives, both regressions of the previous pass.
+
+### `ldap_group_*` / `ldap_user_member_of` rejected inside `[domain/NAME]`
+The report claimed four options were "only valid in [provider/ad/id],
+[provider/ipa/id], [provider/ldap/id]". Those section names come from the API
+definitions (`sssd.api.d/*.conf`), which name SSSD's internal configuration
+hierarchy — an sssd.conf has no `[provider/...]` section at all. The options
+affected are declared *only* by the API files, so the man-page pass never
+reached them and their `provider/*` sections were the only ones recorded,
+making the family comparison fail. `normalizeAPISection` now maps the API
+headers to their real sssd.conf names (`provider/ad/id` -> `domain/ad/id`,
+`provider` -> `domain`); no `provider/` section survives generation. The
+previously fixed `ldap_uri` had escaped the bug only because the man pages also
+declared it.
+
+### `id_provider = files` reported as a fatal CONFIGURATION ERROR
+`validateDomainStructure` compared against a hardcoded literal that had drifted
+from the documentation and did not contain `files`, so a legitimate
+`[domain/files]` section produced a `SevError` finding, a `problems` entry and
+a depressed health score. The accepted values now come from the embedded
+catalog via `idProviderList`, with `fallbackIdProviders` used only when the
+catalog is unavailable; the list can no longer drift from the documentation.
+
+On the reported configuration the findings drop from 7 to 2, and both remaining
+ones are genuine: `reconnection_retries` in `[nss]` and `ldap_group_number`,
+neither of which is an SSSD option.
+
+### Tests
+`TestNormalizeAPISection`, `TestCatalog_LdapGroupOptionsValidInDomainSection`
+(the catalog shape plus the end-to-end LDAP configuration),
+`TestCatalog_IdProviderFilesIsAccepted` and `TestIdProviderList` (both the
+catalog-derived list and the fallback). An earlier version of the
+`id_provider` test did not actually guard the fallback path and passed against
+the reverted code; extracting `idProviderList` made it testable, and a mutation
+check now confirms the test fails when `files` is removed from the fallback.
+
 ## 2026-09-28 — catalog section awareness, provenance, false-positive fixes
 
 A user review of a real supportconfig report found that the catalog validator,

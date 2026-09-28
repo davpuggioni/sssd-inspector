@@ -362,6 +362,7 @@ export namespace main {
 	    ad_domain: string;
 	    hostname: string;
 	    config_findings: ConfigFinding[];
+	    catalog_provenance?: string;
 	    sssd_log_errors: SSSDLogError[];
 	    sssd_config_snippet: string;
 	    mac_denial_examples: string[];
@@ -414,6 +415,7 @@ export namespace main {
 	        this.ad_domain = source["ad_domain"];
 	        this.hostname = source["hostname"];
 	        this.config_findings = this.convertValues(source["config_findings"], ConfigFinding);
+	        this.catalog_provenance = source["catalog_provenance"];
 	        this.sssd_log_errors = this.convertValues(source["sssd_log_errors"], SSSDLogError);
 	        this.sssd_config_snippet = source["sssd_config_snippet"];
 	        this.mac_denial_examples = source["mac_denial_examples"];

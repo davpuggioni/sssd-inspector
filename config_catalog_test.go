@@ -441,3 +441,119 @@ func TestWrongSectionReason(t *testing.T) {
 		t.Error("an option without section data must never be reported")
 	}
 }
+
+// TestIdProviderList pins the source of truth for the accepted id_provider
+// values. An earlier version kept a hardcoded literal that drifted from the
+// documentation and rejected "files"; both the catalog-derived list and the
+// fallback must contain it.
+func TestIdProviderList(t *testing.T) {
+	allowed, list := idProviderList()
+	for _, want := range []string{"ad", "ipa", "ldap", "proxy", "simple", "files"} {
+		if !allowed[want] {
+			t.Errorf("id_provider %q is not accepted; list = %q", want, list)
+		}
+	}
+	if allowed["nosuchprovider"] {
+		t.Error("an unknown id_provider must not be accepted")
+	}
+	// The fallback used when the catalog is unavailable must agree.
+	fallback := map[string]bool{}
+	for _, v := range fallbackIdProviders {
+		fallback[v] = true
+	}
+	for _, want := range []string{"ad", "ipa", "ldap", "proxy", "simple", "files"} {
+		if !fallback[want] {
+			t.Errorf("fallback list is missing %q: %v", want, fallbackIdProviders)
+		}
+	}
+}
+
+// TestNormalizeAPISection pins the mapping from the internal API section names
+// to the names that actually appear in sssd.conf.
+func TestNormalizeAPISection(t *testing.T) {
+	cases := map[string]string{
+		"provider":         "domain",
+		"provider/ad":      "domain/ad",
+		"provider/ad/id":   "domain/ad/id",
+		"provider/ldap/id": "domain/ldap/id",
+		"domain":           "domain",
+		"sssd":             "sssd",
+		"pam":              "pam",
+	}
+	for in, want := range cases {
+		if got := normalizeAPISection(in); got != want {
+			t.Errorf("normalizeAPISection(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestCatalog_LdapGroupOptionsValidInDomainSection is the regression guard for
+// the false positives reported on a real LDAP domain: ldap_group_member,
+// ldap_group_name, ldap_group_object_class and ldap_user_member_of are
+// declared only by the API definitions, whose "[provider/*/id]" section names
+// do not exist in sssd.conf, so they were rejected inside [domain/NAME].
+func TestCatalog_LdapGroupOptionsValidInDomainSection(t *testing.T) {
+	cat, err := loadEmbeddedCatalog()
+	if err != nil {
+		t.Fatalf("embedded catalog: %v", err)
+	}
+	for _, opt := range []string{"ldap_group_member", "ldap_group_name", "ldap_group_object_class", "ldap_user_member_of"} {
+		m, ok := cat.Options[opt]
+		if !ok {
+			t.Errorf("%s is missing from the catalog", opt)
+			continue
+		}
+		if len(m.Sections) == 0 {
+			t.Errorf("%s has no section, so it can never validate", opt)
+		}
+		for _, s := range m.Sections {
+			if sectionFamily(s) != "domain" {
+				t.Errorf("%s section %q is not in the domain family: %v", opt, s, m.Sections)
+			}
+		}
+	}
+	// The end-to-end shape of the reported configuration.
+	cfg := "[domain/LDAP]\n" +
+		"id_provider = ldap\n" +
+		"ldap_uri = ldaps://ldap.example.com:636/\n" +
+		"ldap_schema = rfc2307bis\n" +
+		"ldap_user_member_of = GroupMembership\n" +
+		"ldap_group_search_base = ou=Groups,dc=example,dc=com\n" +
+		"ldap_group_object_class = posixGroup\n" +
+		"ldap_group_name = cn\n" +
+		"ldap_group_member = member\n"
+	r := catalogFindings(t, cfg)
+	for _, f := range r.ConfigFindings {
+		t.Errorf("valid LDAP configuration produced a finding [%s]: %s", f.Category, f.Message)
+	}
+}
+
+// TestCatalog_IdProviderFilesIsAccepted pins the second false positive from the
+// same report: id_provider = files was rejected by a hardcoded literal that had
+// drifted from the documentation. The accepted list now comes from the catalog.
+func TestCatalog_IdProviderFilesIsAccepted(t *testing.T) {
+	parsed := parseSssdConfig("[sssd]\ndomains = files,LDAP\n\n[domain/files]\nid_provider = files\n\n[domain/LDAP]\nid_provider = ldap\n")
+	rep := &ReportData{}
+	validateDomainStructure(parsed, rep)
+	for _, f := range rep.ConfigFindings {
+		if strings.Contains(f.Message, "id_provider") {
+			t.Errorf("valid id_provider rejected: %s", f.Message)
+		}
+	}
+	// A genuinely invalid provider must still be an error.
+	bad := parseSssdConfig("[domain/x]\nid_provider = nosuchprovider\n")
+	rep2 := &ReportData{}
+	validateDomainStructure(bad, rep2)
+	found := false
+	for _, f := range rep2.ConfigFindings {
+		if strings.Contains(f.Message, "invalid id_provider") {
+			found = true
+			if f.Severity != SevError {
+				t.Errorf("invalid id_provider severity = %v, want SevError", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("an invalid id_provider must still be reported as an error")
+	}
+}

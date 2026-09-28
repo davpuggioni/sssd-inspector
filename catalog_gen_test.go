@@ -173,9 +173,16 @@ func TestRunGenerateCatalog_FromAPIConfAndXML(t *testing.T) {
 	if got := cat.Options["ad_gpo_access_control"].Doc; !strings.Contains(got, "GPO-based access control") {
 		t.Errorf("ad_gpo_access_control doc = %q, want the XML prose", got)
 	}
-	// Sections and sources are tracked and sorted.
-	if _, ok := cat.Sections["provider/ad"]; !ok {
-		t.Errorf("provider/ad section is missing: %v", cat.Sections)
+	// Sections and sources are tracked and sorted. The API files name the
+	// provider sections "[provider/ad]", but in sssd.conf those settings live
+	// in "[domain/ad]", so the generator normalises the name.
+	if _, ok := cat.Sections["domain/ad"]; !ok {
+		t.Errorf("domain/ad section is missing: %v", cat.Sections)
+	}
+	for s := range cat.Sections {
+		if strings.HasPrefix(s, "provider") {
+			t.Errorf("section %q was not normalised to its sssd.conf name", s)
+		}
 	}
 	for i := 1; i < len(cat.Sources); i++ {
 		if cat.Sources[i-1] > cat.Sources[i] {

@@ -129,8 +129,38 @@ func sectionKind(name string) string {
 //
 // These checks run for every provider type, not just AD, so a misconfigured
 // LDAP/IPA/proxy domain is flagged before log analysis.
+// fallbackIdProviders is the id_provider list used when the embedded catalog is
+// unavailable or carries no enumeration. "files" belongs here: it is documented
+// and a real [domain/files] section uses it.
+var fallbackIdProviders = []string{"ad", "ipa", "ldap", "proxy", "simple", "files"}
+
+// idProviderList returns the accepted id_provider values and a human readable
+// list for the error message.
+//
+// The values come from the embedded option catalog rather than from a literal
+// baked into the code: the literal drifted from the documentation and rejected
+// "files", so a correct [domain/files] section was reported as a fatal
+// CONFIGURATION ERROR and sank the health score. Deriving the list from the
+// single source of truth removes the possibility of drift.
+func idProviderList() (map[string]bool, string) {
+	if cat, err := loadEmbeddedCatalog(); err == nil && cat != nil {
+		if opt, ok := cat.Options["id_provider"]; ok && len(opt.Values) > 0 {
+			allowed := make(map[string]bool, len(opt.Values))
+			for _, v := range opt.Values {
+				allowed[strings.ToLower(v)] = true
+			}
+			return allowed, strings.Join(opt.Values, ", ")
+		}
+	}
+	allowed := make(map[string]bool, len(fallbackIdProviders))
+	for _, v := range fallbackIdProviders {
+		allowed[v] = true
+	}
+	return allowed, strings.Join(fallbackIdProviders, ", ")
+}
+
 func validateDomainStructure(cfg *ParsedConfig, report *ReportData) {
-	allowedProviders := map[string]bool{"ad": true, "ipa": true, "ldap": true, "proxy": true, "simple": true}
+	allowedProviders, provList := idProviderList()
 	for _, name := range cfg.Order {
 		sec := cfg.Sections[name]
 		if sec.Kind != "domain" {
@@ -138,12 +168,12 @@ func validateDomainStructure(cfg *ParsedConfig, report *ReportData) {
 		}
 		// id_provider must be present and valid.
 		if vals := sec.Options["id_provider"]; len(vals) == 0 {
-			msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' is missing the mandatory 'id_provider' option. SSSD will not start this domain until a provider (ad, ipa, ldap, proxy, simple) is set.", strings.TrimPrefix(name, "domain/"))
+			msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' is missing the mandatory 'id_provider' option. SSSD will not start this domain until a provider (%s) is set.", strings.TrimPrefix(name, "domain/"), provList)
 			addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", 0, "")
 		} else {
 			prov := strings.ToLower(strings.TrimSpace(strings.Split(vals[0].Value, ",")[0]))
 			if !allowedProviders[prov] {
-				msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' has invalid id_provider '%s'. Valid values are: ad, ipa, ldap, proxy, simple.", strings.TrimPrefix(name, "domain/"), vals[0].Value)
+				msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' has invalid id_provider '%s'. Valid values are: %s.", strings.TrimPrefix(name, "domain/"), vals[0].Value, provList)
 				addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", vals[0].Line, "id_provider = "+vals[0].Value)
 			}
 		}

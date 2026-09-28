@@ -166,6 +166,31 @@ func RunGenerateCatalog(sourceDir string) error {
 }
 
 // parseAPIConfigs parses sssd.api.conf and sssd.api.d/*.conf
+// normalizeAPISection maps a section header from the upstream API definitions
+// (sssd.api.conf, sssd.api.d/*.conf) to the section name that actually appears
+// in sssd.conf.
+//
+// The API files name the provider sections after SSSD's internal
+// configuration hierarchy -- "[provider/ad/id]", "[provider/ldap/sudo]" -- but
+// an sssd.conf has no "[provider/...]" section: the same settings are written
+// under the domain section as "[domain/ad/id]", "[domain/ldap/sudo]", or in the
+// common case simply "[domain/NAME]". Without this mapping the validator
+// rejected ldap_group_member, ldap_group_name, ldap_group_object_class and
+// ldap_user_member_of inside [domain/...], because those options are only
+// declared by the API files and therefore only carried "provider/*" sections.
+func normalizeAPISection(section string) string {
+	if section == "provider" {
+		return "domain"
+	}
+	if strings.HasPrefix(section, "provider/") {
+		return "domain/" + strings.TrimPrefix(section, "provider/")
+	}
+	return section
+}
+
+// parseAPIConfigs parses the upstream sssd.api.conf and sssd.api.d/*.conf
+// option definitions. These are authoritative for option names, types and
+// defaults.
 func parseAPIConfigs(sourceDir string, catalog *SssdCatalog, sources map[string]bool) {
 	var confFiles []string
 	_ = filepath.WalkDir(sourceDir, func(path string, d fs.DirEntry, err error) error {
@@ -193,7 +218,7 @@ func parseAPIConfigs(sourceDir string, catalog *SssdCatalog, sources map[string]
 				continue
 			}
 			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-				curSection = strings.Trim(line, "[]")
+				curSection = normalizeAPISection(strings.Trim(line, "[]"))
 				if _, ok := catalog.Sections[curSection]; !ok {
 					catalog.Sections[curSection] = []string{}
 				}
