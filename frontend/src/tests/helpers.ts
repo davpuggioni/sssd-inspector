@@ -196,6 +196,12 @@ export function mockBackend(overrides: Record<string, unknown> = {}) {
     testRulesAgainst: vi.fn(async () => makeDryRun()),
     getCatalogInfo: vi.fn(async () => makeCatalog()),
     openDefinitionsRoot: vi.fn(async () => undefined),
+    openCatalogFile: vi.fn(async () => '/tmp/catalog.json'),
+    installCatalog: vi.fn(async (_path: string, scope: string) => ({
+      path: '/home/u/.sssd-inspector/catalog.json', scope, saved: true, bytes: 250086,
+      backup: '/home/u/.sssd-inspector/catalog.json.bak',
+      validation: { label: 'valid', valid: true, rule_count: 0, rules: [], diagnostics: [] },
+    })),
     onAnalyzeProgress: vi.fn((cb: (message: string, percentage: number) => void) => {
       events.progress.push(cb);
       return () => undefined;

@@ -6,7 +6,11 @@ export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
 
 export function GetCatalogInfo():Promise<main.CatalogInfo>;
 
+export function InstallCatalog(arg1:string,arg2:string):Promise<main.DefinitionSaveResult>;
+
 export function ListDefinitions():Promise<main.DefinitionsInventory>;
+
+export function OpenCatalogFile():Promise<string>;
 
 export function OpenDefinitionsRoot(arg1:string):Promise<void>;
 

@@ -537,6 +537,52 @@ func ReadRuleYAML(scope string) (RuleDocument, error) {
 	return doc, nil
 }
 
+// InstallCatalog copies a generated catalog.json into a definitions root so it
+// becomes the catalog the analysis validates sssd.conf against.
+//
+// It is the same write as any other definition file: the document is decoded
+// and accepted only if it is usable (decodeCatalog, the same validation the
+// loader applies), the write is atomic and the previous content is kept as
+// catalog.json.bak. A file that would be skipped on load is refused here too —
+// installing an override that silently does nothing is the failure mode this
+// service exists to prevent — and because the cache is keyed by content, the
+// next analysis picks the new catalog up without a restart.
+func InstallCatalog(path, scope string) (DefinitionSaveResult, error) {
+	clean := strings.TrimSpace(path)
+	if clean == "" {
+		return DefinitionSaveResult{}, fmt.Errorf("no catalog file selected")
+	}
+	raw, err := os.ReadFile(clean)
+	if err != nil {
+		return DefinitionSaveResult{}, fmt.Errorf("cannot read %s: %w", clean, err)
+	}
+	if _, err := decodeCatalog(raw, clean); err != nil {
+		return DefinitionSaveResult{}, fmt.Errorf("%s cannot be used as a catalog override: %w", clean, err)
+	}
+
+	root, resolved, err := scopeRoot(scope)
+	if err != nil {
+		return DefinitionSaveResult{}, err
+	}
+	res := DefinitionSaveResult{Path: filepath.Join(root, CatalogOverrideFileName), Scope: resolved}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return res, fmt.Errorf("cannot create %s: %w%s", root, err, writeHint(root))
+	}
+	if previous, readErr := os.ReadFile(res.Path); readErr == nil {
+		backup := res.Path + ".bak"
+		if err := os.WriteFile(backup, previous, 0o644); err != nil {
+			return res, fmt.Errorf("cannot write backup %s: %w%s", backup, err, writeHint(root))
+		}
+		res.Backup = backup
+	}
+	if err := writeFileAtomic(res.Path, raw); err != nil {
+		return res, err
+	}
+	res.Saved = true
+	res.Bytes = len(raw)
+	return res, nil
+}
+
 // writeHint appends an actionable hint when a write into the system-wide root
 // failed: it is the one failure a normal user cannot diagnose from "permission
 // denied" alone.

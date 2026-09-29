@@ -1,18 +1,22 @@
-// CatalogPanel — the SSSD option catalog in effect.
+// CatalogPanel — the SSSD option catalog in effect, and the way to replace it.
 //
-// Read-only by design: the catalog decides what "valid option" means for every
-// configuration finding, so the panel's job is to state which file produced
-// that verdict (embedded, or an override in a definitions root) and where an
-// override may be dropped.
-import type { CatalogInfo } from '../../api/backend';
+// Read-only about the catalog itself: the panel's job is to state which file
+// produced the verdict (embedded, or an override in a definitions root) and
+// where an override may come from. Installing one is a service operation
+// (InstallCatalog), validated with the loader's own decoder, so an unusable
+// catalog is refused instead of silently doing nothing.
+import type { CatalogInfo, DefinitionSaveResult } from '../../api/backend';
 import { DiagnosticsList } from '../report/DiagnosticsList';
 
 export interface CatalogPanelProps {
   catalog: CatalogInfo | null;
   loading: boolean;
+  installing: boolean;
+  lastInstall: DefinitionSaveResult | null;
+  onInstall: (scope: 'user' | 'system') => void;
 }
 
-export function CatalogPanel({ catalog, loading }: CatalogPanelProps) {
+export function CatalogPanel({ catalog, loading, installing, lastInstall, onInstall }: CatalogPanelProps) {
   if (loading && catalog === null) {
     return <p className="studio-empty">Loading catalog information…</p>;
   }
@@ -81,7 +85,41 @@ export function CatalogPanel({ catalog, loading }: CatalogPanelProps) {
             </tr>
           ) : null}
         </tbody>
+
       </table>
+
+      <div className="studio-toolbar">
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={installing}
+          onClick={() => onInstall('user')}
+          title="Choose a generated catalog.json and install it for your user"
+        >
+          {installing ? 'Installing…' : 'Install catalog (user)'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={installing}
+          onClick={() => onInstall('system')}
+          title="Install for the whole system (needs root)"
+        >
+          Install for system
+        </button>
+      </div>
+
+      {lastInstall !== null ? (
+        <div
+          className={`studio-verdict ${lastInstall.saved ? 'studio-verdict-valid' : 'studio-verdict-invalid'}`}
+          data-testid="catalog-install-result"
+        >
+          {lastInstall.saved
+            ? `Installed to ${lastInstall.path} (${lastInstall.bytes} bytes).`
+            : `Not installed: ${lastInstall.path}`}
+          {lastInstall.backup ? ` Previous catalog kept as ${lastInstall.backup}.` : ''}
+        </div>
+      ) : null}
 
       {diagnostics.length > 0 ? (
         <>

@@ -19,6 +19,8 @@ import (
 	"os"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"sssd-inspector/constants"
 )
 
 // browserOpenURLFn opens a URL (here: a file:// directory) with the desktop's
@@ -48,6 +50,28 @@ func (a *App) ValidateRuleYAML(content string) RuleValidationResult {
 // A scope without a rules.yaml yet is not an error: Exists is false.
 func (a *App) ReadRuleYAML(scope string) (RuleDocument, error) {
 	return ReadRuleYAML(scope)
+}
+
+// OpenCatalogFile opens a file chooser for a generated catalog.json, so
+// InstallCatalog gets a path from the OS dialog instead of a typed one.
+func (a *App) OpenCatalogFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("cannot open the file browser: the GUI is not running")
+	}
+	return openFileDialogFn(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select a generated catalog.json",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Catalog (catalog.json)", Pattern: "catalog.json"},
+			{DisplayName: constants.FilterAllFiles, Pattern: constants.PatternAllFiles},
+		},
+	})
+}
+
+// InstallCatalog installs a generated catalog.json as the override for a scope.
+// The document is validated with the loader's own decoder, the write is atomic
+// and the previous catalog is kept as catalog.json.bak.
+func (a *App) InstallCatalog(path string, scope string) (DefinitionSaveResult, error) {
+	return InstallCatalog(path, scope)
 }
 
 // Validation, and the previous content is preserved as rules.yaml.bak.

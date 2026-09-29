@@ -62,9 +62,16 @@ export function DefinitionsStudio({ status, goToAnalysis, path }: DefinitionsStu
           <h2>SSSD option catalog</h2>
           <p className="panel-note">
             The offline reference the analysis uses to validate sssd.conf against a specific
-            upstream release.
+            upstream release. Install a generated <code>catalog.json</code> to validate against a
+            newer one; an unusable file is refused.
           </p>
-          <CatalogPanel catalog={inventory.catalog} loading={inventory.loading} />
+          <CatalogPanel
+            catalog={inventory.catalog}
+            loading={inventory.loading}
+            installing={inventory.installing}
+            lastInstall={inventory.lastInstall}
+            onInstall={inventory.installCatalog}
+          />
         </section>
       </div>
     </div>

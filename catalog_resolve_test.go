@@ -248,3 +248,142 @@ func TestListDefinitionsReportsABrokenOverride(t *testing.T) {
 	}
 	t.Errorf("no override diagnostic in the inventory for %s; got %+v", path, inv.Diagnostics)
 }
+
+// TestInstallCatalogMakesTheOverrideEffective is the point of the operation:
+// installing a catalog must change what the analysis validates against, not
+// merely copy a file somewhere.
+func TestInstallCatalogMakesTheOverrideEffective(t *testing.T) {
+	userRoot := t.TempDir()
+	setUserDefinitionsRoot(t, userRoot)
+	setSystemDefinitionsRoot(t, t.TempDir())
+
+	// A source catalog outside the definitions roots, as the file chooser
+	// would hand it over.
+	source := filepath.Join(t.TempDir(), "catalog.json")
+	if err := os.WriteFile(source, []byte(testCatalogJSON(t, "9.9.9")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := InstallCatalog(source, "user")
+	if err != nil {
+		t.Fatalf("InstallCatalog: %v", err)
+	}
+	if !res.Saved || res.Scope != ScopeUser {
+		t.Fatalf("result = %+v, want a saved user-scope catalog", res)
+	}
+	if res.Path != filepath.Join(userRoot, CatalogOverrideFileName) {
+		t.Errorf("Path = %q, want %q", res.Path, filepath.Join(userRoot, CatalogOverrideFileName))
+	}
+
+	cat, resolution, diags := loadOptionCatalog()
+	if cat == nil || cat.Version != "9.9.9" {
+		t.Fatalf("effective catalog after install = %+v, want the installed 9.9.9", cat)
+	}
+	if resolution.Embedded || resolution.Scope != ScopeUser {
+		t.Errorf("resolution = %+v, want the user override", resolution)
+	}
+	if len(diags) != 0 {
+		t.Errorf("diagnostics = %+v, want none after a clean install", diags)
+	}
+}
+
+// TestInstallCatalogRefusesAnUnusableDocument: a file the loader would skip must
+// never be installed, otherwise the user believes in a catalog that does
+// nothing. Nothing is written in that case.
+func TestInstallCatalogRefusesAnUnusableDocument(t *testing.T) {
+	userRoot := t.TempDir()
+	setUserDefinitionsRoot(t, userRoot)
+	setSystemDefinitionsRoot(t, t.TempDir())
+
+	for _, tc := range []struct{ name, body string }{
+		{"malformed", "{ not json"},
+		{"no options", `{"version":"9.9","options":{},"sections":{}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "catalog.json")
+			if err := os.WriteFile(source, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			res, err := InstallCatalog(source, "user")
+			if err == nil {
+				t.Fatalf("InstallCatalog accepted an unusable catalog: %+v", res)
+			}
+			if !strings.Contains(err.Error(), "cannot be used as a catalog override") {
+				t.Errorf("error = %v, want it to say the file was refused", err)
+			}
+			if _, statErr := os.Stat(filepath.Join(userRoot, CatalogOverrideFileName)); !os.IsNotExist(statErr) {
+				t.Error("a refused catalog was written to the definitions root")
+			}
+		})
+	}
+}
+
+// TestInstallCatalogKeepsThePreviousCatalog: the override is the one file a
+// user cannot regenerate on an air-gapped host, so the previous one is backed
+// up like a rules file.
+func TestInstallCatalogKeepsThePreviousCatalog(t *testing.T) {
+	userRoot := t.TempDir()
+	setUserDefinitionsRoot(t, userRoot)
+	setSystemDefinitionsRoot(t, t.TempDir())
+
+	first := filepath.Join(t.TempDir(), "first.json")
+	if err := os.WriteFile(first, []byte(testCatalogJSON(t, "2.13.0")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallCatalog(first, "user"); err != nil {
+		t.Fatalf("first install: %v", err)
+	}
+
+	second := filepath.Join(t.TempDir(), "second.json")
+	if err := os.WriteFile(second, []byte(testCatalogJSON(t, "2.15.0")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := InstallCatalog(second, "user")
+	if err != nil {
+		t.Fatalf("second install: %v", err)
+	}
+	if res.Backup != res.Path+".bak" {
+		t.Errorf("Backup = %q, want %q", res.Backup, res.Path+".bak")
+	}
+	if got := readFileString(t, res.Backup); got != testCatalogJSON(t, "2.13.0") {
+		t.Errorf("backup content = %.40q, want the previously installed catalog", got)
+	}
+	if got := readFileString(t, res.Path); got != testCatalogJSON(t, "2.15.0") {
+		t.Errorf("installed content = %.40q, want the new catalog", got)
+	}
+}
+
+// TestInstallCatalogScopeErrors: the same scope contract as SaveRuleYAML, and
+// an empty selection is a refusal rather than a silent success.
+func TestInstallCatalogScopeErrors(t *testing.T) {
+	setUserDefinitionsRoot(t, t.TempDir())
+	setSystemDefinitionsRoot(t, t.TempDir())
+	source := filepath.Join(t.TempDir(), "catalog.json")
+	if err := os.WriteFile(source, []byte(testCatalogJSON(t, "2.15.0")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := InstallCatalog(source, ""); err == nil {
+		t.Error("InstallCatalog accepted an empty scope")
+	} else if !strings.Contains(err.Error(), "user") || !strings.Contains(err.Error(), "system") {
+		t.Errorf("error = %v, want it to name the accepted scopes", err)
+	}
+	if _, err := InstallCatalog("", "user"); err == nil {
+		t.Error("InstallCatalog accepted an empty file selection")
+	} else if !strings.Contains(err.Error(), "no catalog file selected") {
+		t.Errorf("error = %v, want it to say no file was chosen", err)
+	}
+	if _, err := InstallCatalog(filepath.Join(t.TempDir(), "missing.json"), "user"); err == nil {
+		t.Error("InstallCatalog accepted a path that does not exist")
+	}
+}
+
+// readFileString is a small test helper for asserting exact file content.
+func readFileString(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(raw)
+}

@@ -43,6 +43,32 @@ output renders in the UI. Both scenes pass 7/7 markers; the screenshots carry
 manual pass on a workstation, and the guide says so.
 
 
+## 2026-09-29 — M3 closing: install a catalog override from the Studio
+
+`InstallCatalog(path, scope)` copies a generated `catalog.json` into a
+definitions root, so replacing the catalog no longer means "know the path and
+copy the file by hand". The OS chooser (`OpenCatalogFile`) hands it the path.
+
+It reuses the machinery that already exists rather than adding a second way to
+write definitions: the document is decoded with `decodeCatalog` — the loader's
+own validation — so a file that would be skipped on load is **refused** (nothing
+is written, the error names the reason), the write is atomic, and the previous
+catalog is kept as `catalog.json.bak`. Because the override cache is keyed by
+content, the next analysis picks the new catalog up without restarting.
+
+The Studio's catalog panel gained "Install catalog (user)" and "Install for
+system" (the latter needs root, and the service returns the same actionable
+hint as the rules editor). After a successful install the panel reloads, so it
+cannot keep claiming the release that was in effect before.
+
+`TestInstallCatalogMakesTheOverrideEffective` is the test that matters: after
+installing a 9.9.9 catalog, `loadOptionCatalog` must return it — an install
+that did not change the effective catalog would be a copy, not a feature.
+Refusal, backup and scope errors are covered alongside it, plus five frontend
+cases (install per scope, cancelled chooser, refused install, service failure).
+70 frontend tests in total.
+
+
 ## 2026-09-29 — M3: the option catalog can be overridden, KB evidence ships, the legacy JavaScript is gone
 
 Three follow-ups from M0–M2, each closing a gap those milestones documented

@@ -372,9 +372,11 @@ The first candidate that exists **and parses** wins; the report's
 an empty `options` map is **reported as a diagnostic and skipped** — validation
 continues against the embedded catalog rather than silently disappearing.
 `-definitions-info` lists the candidate paths and names the catalog in effect;
-the Definitions Studio shows the same, and "Open user folder" takes you straight
-to where to drop the file. The cache is keyed by content, so an edited catalog
-takes effect on the next analysis without restarting the application.
+the Definitions Studio shows the same and can **install** a generated
+`catalog.json` for you (`InstallCatalog`: refused if unusable, previous copy kept
+as `catalog.json.bak`), with "Open user folder" for the manual route. The cache
+is keyed by content, so an edited catalog takes effect on the next analysis
+without restarting the application.
 
 ### Output
 
@@ -428,7 +430,10 @@ the same Go service the `-definitions-info`, `-validate-rules` and
   fire, and on which evidence line, without writing anything. The target is
   prefilled with the archive the analysis view is holding.
 - **SSSD option catalog** — which release the configuration is validated
-  against, and where to drop a `catalog.json` to override it.
+  against, and **Install catalog** to replace it with a generated
+  `catalog.json` (user scope, or system with root). An unusable file is
+  refused, the previous catalog is kept as `catalog.json.bak`, and the panel
+  reloads so it cannot keep claiming the old release.
 
 ### Keyboard Shortcuts
 

@@ -10,7 +10,9 @@
 import {
   Analyze,
   GetCatalogInfo,
+  InstallCatalog,
   ListDefinitions,
+  OpenCatalogFile,
   OpenDefinitionsRoot,
   OpenFileBrowser,
   ReadRuleYAML,
@@ -149,6 +151,18 @@ export async function testRulesAgainst(targetPath: string): Promise<RuleTestResu
 export async function getCatalogInfo(): Promise<CatalogInfo> {
   requireBackend();
   return GetCatalogInfo();
+}
+
+/** OS file chooser for a generated catalog.json. */
+export async function openCatalogFile(): Promise<string> {
+  requireBackend();
+  return OpenCatalogFile();
+}
+
+/** Installs a generated catalog.json as the override for a scope. */
+export async function installCatalog(path: string, scope: DefinitionScope): Promise<DefinitionSaveResult> {
+  requireBackend();
+  return InstallCatalog(path, scope);
 }
 
 export async function openDefinitionsRoot(scope: DefinitionScope): Promise<void> {

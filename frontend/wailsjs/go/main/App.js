@@ -10,8 +10,16 @@ export function GetCatalogInfo() {
   return window['go']['main']['App']['GetCatalogInfo']();
 }
 
+export function InstallCatalog(arg1, arg2) {
+  return window['go']['main']['App']['InstallCatalog'](arg1, arg2);
+}
+
 export function ListDefinitions() {
   return window['go']['main']['App']['ListDefinitions']();
+}
+
+export function OpenCatalogFile() {
+  return window['go']['main']['App']['OpenCatalogFile']();
 }
 
 export function OpenDefinitionsRoot(arg1) {

@@ -249,6 +249,19 @@ falls back to the embedded catalog, and the report's `CatalogProvenance` states
 the release the claims are based on, with the override path appended when one
 is in effect.
 
+### InstallCatalog
+
+**Signature**: `InstallCatalog(path string, scope string) (DefinitionSaveResult, error)`
+plus `OpenCatalogFile() (string, error)` (the OS chooser).
+
+**Description**: Installs a generated `catalog.json` as the override for a
+scope, so replacing the catalog does not mean copying a file by hand. The
+document is decoded with `decodeCatalog` — the loader's own validation — so a
+file that would be skipped on load is **refused** and nothing is written; the
+write is atomic and the previous catalog is kept as `catalog.json.bak`. The
+override cache is keyed by content, so the next analysis picks it up without a
+restart.
+
 ### OpenDefinitionsRoot
 
 **Signature**: `OpenDefinitionsRoot(scope string) error`

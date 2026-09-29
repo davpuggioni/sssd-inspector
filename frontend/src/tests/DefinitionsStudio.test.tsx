@@ -75,15 +75,70 @@ describe('DefinitionsStudio — inventory', () => {
   });
 
 
+  it('installs a catalog override for the user scope and refreshes', async () => {
+    const user = userEvent.setup();
+    render(<Studio />);
+    await waitFor(() => expect(backend.getCatalogInfo).toHaveBeenCalled());
+    const listCalls = backend.listDefinitions.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: 'Install catalog (user)' }));
+
+    await waitFor(() => expect(backend.openCatalogFile).toHaveBeenCalled());
+    expect(backend.installCatalog).toHaveBeenCalledWith('/tmp/catalog.json', 'user');
+    const result = await screen.findByTestId('catalog-install-result');
+    expect(result).toHaveTextContent('Installed to /home/u/.sssd-inspector/catalog.json');
+    expect(result).toHaveTextContent('catalog.json.bak');
+    // The inventory must be reloaded, or the panel would keep showing the
+    // catalog that was in effect before the install.
+    await waitFor(() => expect(backend.listDefinitions.mock.calls.length).toBeGreaterThan(listCalls));
+  });
+
+  it('installs for the system scope when asked', async () => {
+    const user = userEvent.setup();
+    render(<Studio />);
+    await user.click(await screen.findByRole('button', { name: 'Install for system' }));
+    expect(backend.installCatalog).toHaveBeenCalledWith('/tmp/catalog.json', 'system');
+  });
+
+  it('does nothing when the file chooser is cancelled', async () => {
+    const user = userEvent.setup();
+    backend.openCatalogFile.mockResolvedValue('');
+    render(<Studio />);
+    await user.click(await screen.findByRole('button', { name: 'Install catalog (user)' }));
+    await waitFor(() => expect(backend.openCatalogFile).toHaveBeenCalled());
+    expect(backend.installCatalog).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('catalog-install-result')).toBeNull();
+  });
+
+  it('reports a refused install instead of claiming success', async () => {
+    const user = userEvent.setup();
+    backend.installCatalog.mockResolvedValue({ path: '/home/u/.sssd-inspector/catalog.json', scope: 'user', saved: false, bytes: 0, backup: '', validation: { label: 'invalid', valid: false, rule_count: 0, rules: [], diagnostics: [] } });
+    render(<Studio />);
+    await user.click(await screen.findByRole('button', { name: 'Install catalog (user)' }));
+    const result = await screen.findByTestId('catalog-install-result');
+    expect(result).toHaveTextContent('Not installed');
+    expect(result).toHaveClass('studio-verdict-invalid');
+  });
+
+  it('surfaces an install failure from the service', async () => {
+    const user = userEvent.setup();
+    backend.installCatalog.mockRejectedValue(new Error('/tmp/catalog.json cannot be used as a catalog override: contains no options'));
+    render(<Studio />);
+    await user.click(await screen.findByRole('button', { name: 'Install catalog (user)' }));
+    await waitFor(() => expect(screen.getByTestId('status-message')).toHaveTextContent('contains no options'));
+    expect(screen.queryByTestId('catalog-install-result')).toBeNull();
+  });
+
+});
   it('opens the definitions folder of the chosen scope', async () => {
     const user = userEvent.setup();
+
     render(<Studio />);
     await user.click(screen.getByRole('button', { name: 'Open user folder' }));
     expect(backend.openDefinitionsRoot).toHaveBeenCalledWith('user');
     await user.click(screen.getByRole('button', { name: 'Open system folder' }));
     expect(backend.openDefinitionsRoot).toHaveBeenCalledWith('system');
   });
-});
 
 describe('DefinitionsStudio — rule editor', () => {
   it('loads the current document of the selected scope', async () => {
