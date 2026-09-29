@@ -1,5 +1,73 @@
 # Implementation Summary
 
+## 2026-09-29 — M3: the option catalog can be overridden, KB evidence ships, the legacy JavaScript is gone
+
+Three follow-ups from M0–M2, each closing a gap those milestones documented
+instead of hiding.
+
+### Catalog override (the M1 scope deviation)
+`CatalogInfo` was read-only because the embedded catalog is build-time and no
+override precedence existed, so `ImportCatalog` would have been a dead feature.
+Now a `catalog.json` dropped in a definitions root overrides the embedded
+catalog, with the rules loader's precedence (per-user before per-system) and the
+embedded copy as the fallback — a build stays pinned to a release, but a support
+engineer on a newer distro can validate against the release the customer runs.
+
+`catalog_resolve.go` owns the resolution and one `decodeCatalog` validates both
+layers, so an override can never be accepted for being "close enough". A broken
+override (unreadable, malformed, or an empty options map) is a **diagnostic plus
+a fallback**, never a half-applied state: validation continues against the
+embedded catalog and the report states which release it actually used. Parsed
+overrides are cached by content hash, so an edit takes effect on the next
+analysis without restarting the GUI. `GetCatalogInfo` now reports `effective`,
+`using_override`, `override_paths` and `diagnostics`; `-definitions-info` lists
+the override locations and names the catalog in effect; the Studio's catalog
+panel shows the same, and the inventory gained a `catalog` kind.
+
+`TestCatalogOverrideChangesValidation` is the test that matters: with an
+override that does not know `ldap_uri`, the analysis must start flagging it —
+an override that only changes the display would be a lie.
+
+### KB evidence
+`TIDArticle.Evidence` was `json:"-"`, so the log lines that made a KB article
+match never reached the report and the "Evidence Found" block could not render.
+They are ordinary log excerpts and `anonymizeReport` already scrubbed them, so
+they now ship (`evidence,omitempty`) and the block is back. The anonymization
+test pins **parity** with the other log excerpts rather than inventing a
+stronger guarantee: a subdomain of the search domain (`dc01.example.com`)
+survives anonymization everywhere in the report today, and narrowing that mask
+is a separate, report-wide decision.
+
+### Legacy JavaScript
+`config/constants.js`, `config/FrontendConfig.js`, `utils/validators.js`,
+`utils/helpers.js`, `components/UIComponents.js` and the browser test-runner are
+deleted. What was used moved to `config/ui.ts` (nine strings, the zoom bounds,
+the accepted extensions) and `utils/fileValidation.ts`; the drag & drop and
+Wails event coverage moved into `App.test.tsx`, which drives the real
+components through a backend stub that records the registered callbacks.
+
+Porting `validateFileExtension` surfaced a bug: it took the substring from the
+**last** dot and compared it against `['.txz', '.tar.xz']`, so
+`supportconfig.tar.xz` reduced to `.xz` and the GUI refused the most common
+supportconfig filename its own file dialog offers. It now matches the longest
+supported suffix, and an already-extracted supportconfig directory is accepted
+because the analysis supports directories.
+
+The porting also surfaced a real UI defect: a progress event arriving after the
+analysis promise resolved (Wails can deliver the final 100% tick late) left the
+progress panel stuck over a finished report. `useAnalysis` now ignores progress
+outside an active run, with a regression test.
+
+### Tests
+`catalog_resolve_test.go` (precedence, fallback + diagnostic, empty-catalog
+rejection, content-keyed cache, `GetCatalogInfo`, inventory),
+`analyzer_config_catalog_e2e_test.go` (an override really changes validation; a
+broken override reaches the report), `kb_evidence_test.go` (JSON round trip,
+omission when empty, anonymization parity) and 16 new vitest cases — 51 in
+total, all green, plus the full Go suite on both build tags.
+
+
+
 ## 2026-09-29 — Definitions Studio M2: the GUI is React + TypeScript, and the Studio exists
 
 M1 built the service and the CLI surface but left the rules editor with nothing

@@ -43,7 +43,14 @@ type SSSDLogError struct {
 	Examples    []string `json:"examples"`
 }
 
-// TIDArticle represents a dynamically loaded Knowledge Base article
+// TIDArticle represents a dynamically loaded Knowledge Base article.
+//
+// Evidence holds the log lines that triggered the match and IS shipped in the
+// report: "which line matched?" is the question that turns a TID link into a
+// diagnosis. It used to be tagged `json:"-"`, which is why the "Evidence
+// Found" block in the GUI could never render. The lines are ordinary log
+// excerpts, and anonymizeReport scrubs them exactly like
+// SSSDLogError.Examples and TimelineEvent.RawLog.
 type TIDArticle struct {
 	TIDID          string   `json:"tid_id"`
 	Title          string   `json:"title"`
@@ -51,7 +58,7 @@ type TIDArticle struct {
 	Description    string   `json:"description"`
 	LogPatterns    []string `json:"log_patterns"`
 	ConfigPatterns []string `json:"config_patterns"`
-	Evidence       []string `json:"-"` // Log lines that triggered the match
+	Evidence       []string `json:"evidence,omitempty"` // Log lines that triggered the match
 
 	// Fields from the kbscraper JSON schema (raw scraped SUSE KB articles).
 	// These are ingestion-only: they carry the article content but do not

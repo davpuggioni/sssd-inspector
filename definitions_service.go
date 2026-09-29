@@ -81,6 +81,8 @@ const (
 	KindRules DefinitionKind = "rules"
 	// KindKBArticles is a knowledge-base article directory.
 	KindKBArticles DefinitionKind = "kb-articles"
+	// KindCatalog is an option-catalog override file.
+	KindCatalog DefinitionKind = "catalog"
 )
 
 // DefinitionFileInfo describes one discovery location for one definition kind:
@@ -95,9 +97,12 @@ type DefinitionFileInfo struct {
 	Writable     bool            `json:"writable"`
 	RuleCount    int             `json:"rule_count"`
 	ArticleCount int             `json:"article_count"`
-	SizeBytes    int64           `json:"size_bytes,omitempty"`
-	ModTime      string          `json:"mod_time,omitempty"`
-	Diagnostics  []Diagnostic    `json:"diagnostics,omitempty"`
+	// OptionCount is the number of sssd.conf options in a catalog override
+	// (the only kind that carries options).
+	OptionCount int          `json:"option_count,omitempty"`
+	SizeBytes   int64        `json:"size_bytes,omitempty"`
+	ModTime     string       `json:"mod_time,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 }
 
 // DefinitionsInventory answers "where does the inspector look for my
@@ -127,6 +132,19 @@ type CatalogInfo struct {
 	SectionCount int      `json:"section_count"`
 	Available    bool     `json:"available"`
 	Error        string   `json:"error,omitempty"`
+
+	// Effective names the catalog actually in use: "embedded" or the override
+	// file path. Without it the Studio would describe the embedded release
+	// while the analysis validated against an override.
+	Effective string `json:"effective"`
+	// UsingOverride is Effective != "embedded".
+	UsingOverride bool `json:"using_override"`
+	// OverridePaths are the locations searched for an override, in precedence
+	// order, so a user can be told where to drop one.
+	OverridePaths []string `json:"override_paths,omitempty"`
+	// Diagnostics carries overrides that were skipped (unreadable, malformed,
+	// empty). A skipped override is reported, never silent.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 }
 
 // RuleValidationResult is the verdict on one rules document. Valid is false
@@ -253,6 +271,14 @@ func ListDefinitions() DefinitionsInventory {
 	}
 	for _, d := range externalKBDirs() {
 		fi := describeDefinitionPath(d, KindKBArticles)
+		inv.Files = append(inv.Files, fi)
+		perLocation = append(perLocation, fi.Diagnostics...)
+	}
+	// The catalog override locations belong here too: "where do I drop a
+	// catalog for a newer SSSD release?" is the same question the other rows
+	// answer, and a broken override is a report the user must see.
+	for _, p := range catalogOverrideCandidates() {
+		fi := describeOverrideCatalog(p)
 		inv.Files = append(inv.Files, fi)
 		perLocation = append(perLocation, fi.Diagnostics...)
 	}
@@ -601,19 +627,31 @@ func resolveDefinitionTarget(path string) (string, func(), error) {
 // operation (-gen-catalog) that reads upstream man pages and writes into the
 // repository, so it is deliberately not offered as a user-facing action.
 func GetCatalogInfo() CatalogInfo {
-	cat, err := loadEmbeddedCatalog()
-	if err != nil {
-		return CatalogInfo{Available: false, Error: err.Error()}
+	// The same resolution the analysis uses, so the Studio answers "which
+	// release am I validated against?" with the answer that was applied, not
+	// with the answer the embedded copy implies.
+	cat, res, diags := loadOptionCatalog()
+	info := CatalogInfo{
+		Effective:     res.effective(),
+		UsingOverride: !res.Embedded && res.Path != "",
+		OverridePaths: catalogOverrideCandidates(),
+		Diagnostics:   diags,
 	}
-	return CatalogInfo{
-		Source:       cat.Source,
-		Version:      cat.Version,
-		Generated:    cat.Generated,
-		Sources:      cat.Sources,
-		OptionCount:  len(cat.Options),
-		SectionCount: len(cat.Sections),
-		Available:    true,
+	if cat == nil {
+		info.Available = false
+		if len(diags) == 0 {
+			info.Error = "no option catalog available (the embedded copy is broken)"
+		}
+		return info
 	}
+	info.Source = cat.Source
+	info.Version = cat.Version
+	info.Generated = cat.Generated
+	info.Sources = cat.Sources
+	info.OptionCount = len(cat.Options)
+	info.SectionCount = len(cat.Sections)
+	info.Available = true
+	return info
 }
 
 // --- Text rendering (CLI front-end) ---------------------------------------
@@ -661,6 +699,11 @@ func definitionStatus(f DefinitionFileInfo) string {
 		return "not present"
 	case f.Kind == KindRules:
 		return fmt.Sprintf("%d rule(s)", f.RuleCount)
+	case f.Kind == KindCatalog:
+		if len(f.Diagnostics) > 0 {
+			return "unusable"
+		}
+		return fmt.Sprintf("%d option(s)", f.OptionCount)
 	default:
 		return fmt.Sprintf("%d article(s)", f.ArticleCount)
 	}
@@ -699,6 +742,19 @@ func RenderDefinitionsInventory(inv DefinitionsInventory) string {
 			f.Scope, f.Kind, f.Path, definitionStatus(f), writableLabel(f.Writable)))
 	}
 	sb.WriteString(fmt.Sprintf("\nLoaded: %d rule(s), %d KB article(s)\n", inv.RuleCount, inv.ArticleCount))
+	// Name the catalog in effect: it decides what "valid option" means for
+	// every configuration finding in the report.
+	if cat, res, _ := loadOptionCatalog(); cat != nil {
+		version := cat.Version
+		if version == "" {
+			version = "unknown"
+		}
+		origin := "embedded in the binary"
+		if !res.Embedded {
+			origin = "override"
+		}
+		sb.WriteString(fmt.Sprintf("Option catalog: SSSD %s, %d option(s) (%s)\n", version, len(cat.Options), origin))
+	}
 	if len(inv.Rules) > 0 {
 		sb.WriteString("\nRules loaded:\n")
 		for _, ri := range inv.Rules {

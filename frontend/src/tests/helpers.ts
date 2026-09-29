@@ -2,7 +2,7 @@
 // tests. The fixtures mirror the generated Wails models, so a test failure
 // means the UI disagrees with the Go payloads.
 import { vi } from 'vitest';
-import type { DefinitionsInventory, RuleTestResult, RuleValidationResult, ReportData } from '../api/backend';
+import type { CatalogInfo, DefinitionsInventory, RuleTestResult, RuleValidationResult, ReportData } from '../api/backend';
 
 /** Minimal ReportData with the fields the report view actually reads. */
 export function makeReport(overrides: Partial<ReportData> = {}): ReportData {
@@ -89,6 +89,7 @@ export function makeReport(overrides: Partial<ReportData> = {}): ReportData {
         created: '',
         changed: '',
         additional_information: '',
+        evidence: ['Aug 18 10:00:00 host01 sssd: rc4-hmac rejected by dc01'],
       },
     ],
     timeline: [
@@ -149,9 +150,39 @@ export function makeDryRun(): RuleTestResult {
   } as unknown as RuleTestResult;
 }
 
+/** CatalogInfo fixture: the embedded catalog is the default, no override. */
+export function makeCatalog(overrides: Partial<CatalogInfo> = {}): CatalogInfo {
+  return {
+    source: 'SSSD upstream',
+    version: '2.9',
+    generated: '2026-01-01',
+    option_count: 120,
+    section_count: 8,
+    available: true,
+    effective: 'embedded',
+    using_override: false,
+    override_paths: ['/home/u/.sssd-inspector/catalog.json'],
+    ...overrides,
+  } as unknown as CatalogInfo;
+}
+
+/**
+ * Event handlers the shell registered with the backend. The Wails runtime
+ * delivers progress, definition warnings and OS drops through callbacks, so a
+ * test that wants to exercise them has to reach the function the component
+ * handed over — this registry is that seam.
+ */
+export interface BackendEventRegistry {
+  progress: Array<(message: string, percentage: number) => void>;
+  definitionsWarning: Array<(diagnostics: Array<{ file: string; line?: number; message: string; severity: number }>) => void>;
+  fileDrop: Array<(paths: string[]) => void>;
+}
+
 /** Backend stub: every call resolves to a benign default unless overridden. */
 export function mockBackend(overrides: Record<string, unknown> = {}) {
+  const events: BackendEventRegistry = { progress: [], definitionsWarning: [], fileDrop: [] };
   return {
+    events,
     backendAvailable: vi.fn(() => true),
     analyze: vi.fn(async () => makeReport()),
     openFileBrowser: vi.fn(async () => ''),
@@ -163,11 +194,20 @@ export function mockBackend(overrides: Record<string, unknown> = {}) {
     readRuleYaml: vi.fn(async () => ({ path: '/home/u/.sssd-inspector/rules.yaml', scope: 'user', exists: false, bytes: 0, content: '' })),
     saveRuleYaml: vi.fn(async () => ({ path: '/home/u/.sssd-inspector/rules.yaml', scope: 'user', saved: true, bytes: 10, validation: makeValidation(true) })),
     testRulesAgainst: vi.fn(async () => makeDryRun()),
-    getCatalogInfo: vi.fn(async () => ({ source: 'embedded', version: '2.9', generated: '2026-01-01', option_count: 120, section_count: 8, available: true })),
+    getCatalogInfo: vi.fn(async () => makeCatalog()),
     openDefinitionsRoot: vi.fn(async () => undefined),
-    onAnalyzeProgress: vi.fn(() => () => undefined),
-    onDefinitionsWarning: vi.fn(() => () => undefined),
-    onFileDrop: vi.fn(() => true),
+    onAnalyzeProgress: vi.fn((cb: (message: string, percentage: number) => void) => {
+      events.progress.push(cb);
+      return () => undefined;
+    }),
+    onDefinitionsWarning: vi.fn((cb: (diagnostics: never[]) => void) => {
+      events.definitionsWarning.push(cb as never);
+      return () => undefined;
+    }),
+    onFileDrop: vi.fn((cb: (paths: string[]) => void) => {
+      events.fileDrop.push(cb);
+      return true;
+    }),
     severityLabel: (severity: number | undefined) => (['warning', 'error', 'critical'] as const)[severity ?? 0] ?? 'warning',
     CANCELLED: 'cancelled',
     SCOPE_USER: 'user',

@@ -60,4 +60,17 @@ describe('ReportView', () => {
     expect(screen.getByText(/Temporal Clusters/)).toBeInTheDocument();
     expect(screen.getByText(/12 occurrences between/)).toBeInTheDocument();
   });
+
+  it('shows the log line that made a knowledge base article match', () => {
+    render(<ReportView report={makeReport()} />);
+    expect(screen.getByText('Evidence Found')).toBeInTheDocument();
+    expect(screen.getByText(/rc4-hmac rejected by dc01/)).toBeInTheDocument();
+  });
+
+  it('omits the evidence block for an article matched without log evidence', () => {
+    const report = makeReport();
+    delete (report.matched_tids[0] as { evidence?: string[] }).evidence;
+    render(<ReportView report={report} />);
+    expect(screen.queryByText('Evidence Found')).toBeNull();
+  });
 });

@@ -26,6 +26,24 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class Diagnostic {
+	    file: string;
+	    line?: number;
+	    message: string;
+	    severity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.line = source["line"];
+	        this.message = source["message"];
+	        this.severity = source["severity"];
+	    }
+	}
 	export class CatalogInfo {
 	    source: string;
 	    version: string;
@@ -35,6 +53,10 @@ export namespace main {
 	    section_count: number;
 	    available: boolean;
 	    error?: string;
+	    effective: string;
+	    using_override: boolean;
+	    override_paths?: string[];
+	    diagnostics?: Diagnostic[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogInfo(source);
@@ -50,7 +72,29 @@ export namespace main {
 	        this.section_count = source["section_count"];
 	        this.available = source["available"];
 	        this.error = source["error"];
+	        this.effective = source["effective"];
+	        this.using_override = source["using_override"];
+	        this.override_paths = source["override_paths"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ConfigFinding {
 	    severity: number;
@@ -208,24 +252,6 @@ export namespace main {
 		    return a;
 		}
 	}
-	export class Diagnostic {
-	    file: string;
-	    line?: number;
-	    message: string;
-	    severity: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new Diagnostic(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.file = source["file"];
-	        this.line = source["line"];
-	        this.message = source["message"];
-	        this.severity = source["severity"];
-	    }
-	}
 	export class DefinitionFileInfo {
 	    path: string;
 	    kind: string;
@@ -235,6 +261,7 @@ export namespace main {
 	    writable: boolean;
 	    rule_count: number;
 	    article_count: number;
+	    option_count?: number;
 	    size_bytes?: number;
 	    mod_time?: string;
 	    diagnostics?: Diagnostic[];
@@ -253,6 +280,7 @@ export namespace main {
 	        this.writable = source["writable"];
 	        this.rule_count = source["rule_count"];
 	        this.article_count = source["article_count"];
+	        this.option_count = source["option_count"];
 	        this.size_bytes = source["size_bytes"];
 	        this.mod_time = source["mod_time"];
 	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
@@ -548,6 +576,7 @@ export namespace main {
 	    description: string;
 	    log_patterns: string[];
 	    config_patterns: string[];
+	    evidence?: string[];
 	    kb_id: string;
 	    plain_text: string;
 	    situation: string;
@@ -571,6 +600,7 @@ export namespace main {
 	        this.description = source["description"];
 	        this.log_patterns = source["log_patterns"];
 	        this.config_patterns = source["config_patterns"];
+	        this.evidence = source["evidence"];
 	        this.kb_id = source["kb_id"];
 	        this.plain_text = source["plain_text"];
 	        this.situation = source["situation"];

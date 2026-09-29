@@ -1,8 +1,11 @@
-// CatalogPanel — the embedded offline SSSD option catalog.
+// CatalogPanel — the SSSD option catalog in effect.
 //
-// Read-only (GetCatalogInfo): the catalog ships with the binary, so the Studio
-// can only show which release its configuration claims are based on.
+// Read-only by design: the catalog decides what "valid option" means for every
+// configuration finding, so the panel's job is to state which file produced
+// that verdict (embedded, or an override in a definitions root) and where an
+// override may be dropped.
 import type { CatalogInfo } from '../../api/backend';
+import { DiagnosticsList } from '../report/DiagnosticsList';
 
 export interface CatalogPanelProps {
   catalog: CatalogInfo | null;
@@ -17,38 +20,76 @@ export function CatalogPanel({ catalog, loading }: CatalogPanelProps) {
     return <p className="studio-empty">Catalog information unavailable.</p>;
   }
 
+  const diagnostics = catalog.diagnostics ?? [];
+  const overridePaths = catalog.override_paths ?? [];
+
   return (
-    <table className="studio-table">
-      <tbody>
-        <tr>
-          <th>Source</th>
-          <td>
-            {catalog.available ? 'available' : 'unavailable'}
-            {catalog.source ? ` — ${catalog.source}` : ''}
-          </td>
-        </tr>
-        <tr><th>Upstream release</th><td>{catalog.version || 'unknown'}</td></tr>
-        <tr><th>Generated</th><td>{catalog.generated || 'unknown'}</td></tr>
-        <tr>
-          <th>Contents</th>
-          <td>
-            {catalog.option_count} options in {catalog.section_count} sections
-          </td>
-        </tr>
-        {catalog.sources && catalog.sources.length > 0 ? (
+    <>
+      <table className="studio-table">
+        <tbody>
           <tr>
-            <th>Upstream sources</th>
-            <td>{catalog.sources.join(', ')}</td>
+            <th>In effect</th>
+            <td>
+              {catalog.available ? (
+                <>
+                  {catalog.using_override ? 'override' : 'embedded in the binary'}{' '}
+                  {catalog.effective !== 'embedded' && (
+                    <code className="studio-path">{catalog.effective}</code>
+                  )}
+                </>
+              ) : (
+                'unavailable'
+              )}
+            </td>
           </tr>
-        ) : null}
-        {catalog.error ? (
           <tr>
-            <th>Error</th>
-            <td>{catalog.error}</td>
+            <th>Upstream release</th>
+            <td>{catalog.version || 'unknown'}</td>
           </tr>
-        ) : null}
-      </tbody>
-    </table>
+          <tr>
+            <th>Generated</th>
+            <td>{catalog.generated || 'unknown'}</td>
+          </tr>
+          <tr>
+            <th>Contents</th>
+            <td>{catalog.option_count} options in {catalog.section_count} sections</td>
+          </tr>
+          {catalog.sources && catalog.sources.length > 0 ? (
+            <tr>
+              <th>Documentation sources</th>
+              <td>{catalog.sources.length} ({catalog.sources.slice(0, 3).join(', ')}{catalog.sources.length > 3 ? ', …' : ''})</td>
+            </tr>
+          ) : null}
+          {overridePaths.length > 0 ? (
+            <tr>
+              <th>Override locations</th>
+              <td>
+                {overridePaths.map((path) => (
+                  <div className="studio-path" key={path}>{path}</div>
+                ))}
+                <div className="studio-empty">
+                  Drop a generated <code>catalog.json</code> in one of these to validate against a
+                  newer SSSD release; the first one present wins.
+                </div>
+              </td>
+            </tr>
+          ) : null}
+          {catalog.error ? (
+            <tr>
+              <th>Error</th>
+              <td>{catalog.error}</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      {diagnostics.length > 0 ? (
+        <>
+          <h3>Skipped catalog override</h3>
+          <DiagnosticsList diagnostics={diagnostics} />
+        </>
+      ) : null}
+    </>
   );
 }
 

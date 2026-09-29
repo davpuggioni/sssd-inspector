@@ -57,11 +57,13 @@ npm test          # vitest run (jsdom + Testing Library)
 ```
 
 `src/tests/` holds the vitest suites: the bridge guard (`backend.test.ts`), the
-report view (`ReportView.test.tsx`) and the Definitions Studio
-(`DefinitionsStudio.test.tsx`). Backend calls are mocked through
-`api/backend.ts` (see `src/tests/helpers.ts`), so the components are tested
-against the generated Wails payloads. The older plain-JavaScript suites under
-`tests/` still run in the browser via `tests/test-runner.html`.
+report view (`ReportView.test.tsx`), the Definitions Studio
+(`DefinitionsStudio.test.tsx`), the whole shell including Wails events and OS
+drag & drop (`App.test.tsx`) and the archive check (`fileValidation.test.ts`).
+Backend calls are mocked through `api/backend.ts` (see `src/tests/helpers.ts`),
+so the components are tested against the generated Wails payloads, and the stub
+records the event callbacks so a test can fire `analyze-progress`,
+`definitions-warning` or a file drop.
 
 ## Development Workflow
 
@@ -125,10 +127,10 @@ const { report, run } = useAnalysis(status);
 return <ReportView report={report} />;
 ```
 
-Legacy JavaScript modules (`config/constants.js`, `utils/validators.js`,
-`components/UIComponents.js`) are still available; wrap them in
-`src/utils/fileValidation.ts` rather than forking their logic, so the browser
-test-runner and the React UI keep testing the same implementation.
+Everything is TypeScript. The only JavaScript left is
+`components/CorrelationGraph.js` (a self-contained SVG renderer mounted through
+a ref); everything else lives in `src/` as `.ts`/`.tsx` with `strict` types
+from the generated Wails models.
 
 ### Component Structure
 Each component follows a consistent structure:

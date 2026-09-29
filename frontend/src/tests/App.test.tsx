@@ -5,9 +5,10 @@
 // screen. A regression in the wiring (state, effects, events) fails here
 // rather than in a window nobody can inspect.
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { mockBackend } from './helpers';
+import { mockBackend, makeReport } from './helpers';
+import type { ReportData } from '../api/backend';
 
 const backend = mockBackend();
 vi.mock('../api/backend', () => backend);
@@ -124,6 +125,94 @@ describe('App — analysis flow', () => {
     await user.click(screen.getByRole('button', { name: 'Analyze' }));
     expect(screen.getByRole('button', { name: 'Analyze...' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Analysis Report' })).toBeNull();
+  });
+});
+
+
+// App — Wails events and OS drag & drop.
+//
+// These replace the legacy browser test-runner suites, which exercised the
+// same behaviours by hand-rolling fake runtime objects. Here the shell runs
+// for real and the registered callbacks are fired directly.
+describe('App — Wails events', () => {
+  it('shows analysis progress driven by the backend', async () => {
+    const user = userEvent.setup();
+    // A pending analysis keeps the shell in the "running" state, which is when
+    // the progress events are supposed to be visible.
+    backend.analyze.mockReturnValue(new Promise(() => undefined));
+    render(<App />);
+    await user.type(screen.getByLabelText('Supportconfig path'), '/tmp/supportconfig.txz');
+    await user.click(screen.getByRole('button', { name: 'Analyze' }));
+
+    act(() => backend.events.progress[0]('Scanning SSSD logs…', 42));
+    expect(await screen.findByText('Scanning SSSD logs…')).toBeInTheDocument();
+    expect(screen.getByText('42%')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '42% - Scanning SSSD logs…' })).toBeInTheDocument();
+  });
+
+  it('completes the progress readout when the analysis returns', async () => {
+    const user = userEvent.setup();
+    let settle: ((report: ReportData) => void) | undefined;
+    backend.analyze.mockReturnValue(new Promise<ReportData>((resolve) => { settle = resolve; }));
+    render(<App />);
+    await user.type(screen.getByLabelText('Supportconfig path'), '/tmp/supportconfig.txz');
+    await user.click(screen.getByRole('button', { name: 'Analyze' }));
+
+    act(() => backend.events.progress[0]('Streaming and Parsing SSSD Logs...', 85));
+    expect(await screen.findByText('85%')).toBeInTheDocument();
+
+    await act(async () => { settle?.(makeReport()); });
+    expect(await screen.findByRole('heading', { name: 'Analysis Report' })).toBeInTheDocument();
+    expect(screen.queryByText('85%')).toBeNull();
+  });
+
+  it('ignores a progress event that arrives after the run has finished', async () => {
+    const user = userEvent.setup();
+    let settle: ((report: ReportData) => void) | undefined;
+    backend.analyze.mockReturnValue(new Promise<ReportData>((resolve) => { settle = resolve; }));
+    render(<App />);
+    await user.type(screen.getByLabelText('Supportconfig path'), '/tmp/supportconfig.txz');
+    await user.click(screen.getByRole('button', { name: 'Analyze' }));
+    await act(async () => { settle?.(makeReport()); });
+    expect(await screen.findByRole('heading', { name: 'Analysis Report' })).toBeInTheDocument();
+
+    // Wails can deliver the final tick after the promise resolved: a stuck
+    // progress bar over a finished report would look like a hung application.
+    act(() => backend.events.progress[0]('Analysis complete!', 100));
+    expect(screen.queryByText('100%')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Analysis Report' })).toBeInTheDocument();
+  });
+
+  it('warns when the backend skipped definition files', async () => {
+    render(<App />);
+    act(() => backend.events.definitionsWarning[0]([
+      { file: '/home/u/.sssd-inspector/rules.yaml', line: 4, message: 'rule "x": missing patterns or message, skipped', severity: 0 },
+    ]));
+    const banner = await screen.findByTestId('status-message');
+    expect(banner).toHaveTextContent('1 definition problem(s)');
+    expect(banner).toHaveClass('status-warning');
+  });
+
+  it('fills the path field from an OS file drop', async () => {
+    render(<App />);
+    act(() => backend.events.fileDrop[0](['/tmp/dropped-supportconfig.txz']));
+    await waitFor(() => expect(screen.getByLabelText('Supportconfig path')).toHaveValue('/tmp/dropped-supportconfig.txz'));
+  });
+
+  it('warns about a dropped file the analyser cannot read', async () => {
+    render(<App />);
+    act(() => backend.events.fileDrop[0](['/tmp/notes.txt']));
+    const banner = await screen.findByTestId('status-message');
+    expect(banner).toHaveTextContent('Unsupported file format');
+    // The path is still kept: the user may have renamed by mistake.
+    expect(screen.getByLabelText('Supportconfig path')).toHaveValue('/tmp/notes.txt');
+  });
+
+  it('ignores an empty drop', async () => {
+    render(<App />);
+    act(() => backend.events.fileDrop[0]([]));
+    expect(screen.getByLabelText('Supportconfig path')).toHaveValue('');
+    expect(screen.queryByTestId('status-message')).toBeNull();
   });
 });
 

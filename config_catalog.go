@@ -21,7 +21,6 @@ package main
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -40,7 +39,9 @@ var (
 	catalogErr  error
 )
 
-// loadEmbeddedCatalog lazily parses the embedded catalog exactly once.
+// loadEmbeddedCatalog lazily parses the catalog compiled into the binary
+// exactly once. The embedded copy cannot change while the process runs, so it
+// needs no cache invalidation; overrides do (see catalog_resolve.go).
 func loadEmbeddedCatalog() (*SssdCatalog, error) {
 	catalogOnce.Do(func() {
 		raw, err := embeddedCatalogFS.ReadFile("sssd_catalog/catalog.json")
@@ -48,16 +49,7 @@ func loadEmbeddedCatalog() (*SssdCatalog, error) {
 			catalogErr = fmt.Errorf("embedded catalog unavailable: %w", err)
 			return
 		}
-		var c SssdCatalog
-		if err := json.Unmarshal(raw, &c); err != nil {
-			catalogErr = fmt.Errorf("embedded catalog is malformed: %w", err)
-			return
-		}
-		if len(c.Options) == 0 {
-			catalogErr = fmt.Errorf("embedded catalog contains no options")
-			return
-		}
-		catalogData = &c
+		catalogData, catalogErr = decodeCatalog(raw, "embedded catalog")
 	})
 	return catalogData, catalogErr
 }
@@ -77,19 +69,25 @@ func catalogOptionNames(c *SssdCatalog) []string {
 }
 
 // validateConfigAgainstCatalog checks every key of every section against the
-// embedded catalog. It is deliberately conservative: findings are SevWarning
-// (option ignored by SSSD) and never guilt-trip a working configuration.
+// option catalog in effect (an override in a definitions root, else the
+// embedded one — see catalog_resolve.go). It is deliberately conservative:
+// findings are SevWarning (option ignored by SSSD) and never guilt-trip a
+// working configuration.
 func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
-	cat, err := loadEmbeddedCatalog()
-	if err != nil || cat == nil {
-		// No catalog (broken build) -> stay silent rather than emit noise.
+	cat, res, diags := loadOptionCatalog()
+	// A skipped override is a report-level problem, not a silent detail: the
+	// analysis must be able to answer "was my catalog used?".
+	report.AddDiagnostics(diags)
+	if cat == nil {
+		// No catalog at all (broken build) -> stay silent rather than emit noise.
 		return
 	}
 	names := catalogOptionNames(cat)
 	prov := catalogProvenance(cat)
 	// Publish the audit trail on the report itself, so it is visible even when
-	// no configuration finding is raised.
-	report.CatalogProvenance = prov
+	// no configuration finding is raised. The override, when in effect, is
+	// named too: which file produced the verdict is part of the verdict.
+	report.CatalogProvenance = prov + catalogSourceNote(res)
 
 	for _, name := range cfg.Order {
 		sec := cfg.Sections[name]
@@ -181,6 +179,16 @@ func catalogProvenance(cat *SssdCatalog) string {
 	}
 	return fmt.Sprintf("[checked against the SSSD %s option catalog: %d options from %d documentation sources]",
 		version, len(cat.Options), len(cat.Sources))
+}
+
+// catalogSourceNote names the override in effect, if any. The release alone is
+// the claim; the file is the audit trail behind it, and a reader comparing two
+// reports needs both.
+func catalogSourceNote(res catalogResolution) string {
+	if res.Embedded || res.Path == "" {
+		return ""
+	}
+	return fmt.Sprintf(" (override in effect: %s)", res.Path)
 }
 
 // reportUnknownOption emits the typo finding, including the closest known

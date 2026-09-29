@@ -37,6 +37,9 @@ function fileState(info: DefinitionsInventory['files'][number]): string {
 
 export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
   const { inventory, loading, loadError, onReload, onOpenFolder } = props;
+  // The last column counts options for a catalog override and bytes for
+  // everything else, so its header follows the rows instead of lying.
+  const hasCatalog = (inventory?.files ?? []).some((info) => info.kind === 'catalog');
 
   return (
     <section className="studio-panel" aria-label="Definition inventory">
@@ -75,7 +78,7 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
                 <th>State</th>
                 <th className="num">Rules</th>
                 <th className="num">Articles</th>
-                <th className="num">Size</th>
+                <th className="num">{hasCatalog ? 'Options' : 'Size'}</th>
               </tr>
             </thead>
             <tbody>
@@ -85,9 +88,13 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
                   <td>{info.kind}</td>
                   <td className="studio-path">{info.path}</td>
                   <td>{fileState(info)}</td>
-                  <td className="num">{info.rule_count}</td>
-                  <td className="num">{info.article_count}</td>
-                  <td className="num">{info.size_bytes ? sizeLabel(info.size_bytes) : '—'}</td>
+                  <td className="num">{info.kind === 'catalog' ? '—' : info.rule_count}</td>
+                  <td className="num">{info.kind === 'catalog' ? '—' : info.article_count}</td>
+                  <td className="num">
+                    {info.kind === 'catalog'
+                      ? (info.option_count || (info.exists ? 'unusable' : '—'))
+                      : (info.size_bytes ? sizeLabel(info.size_bytes) : '—')}
+                  </td>
                 </tr>
               ))}
             </tbody>

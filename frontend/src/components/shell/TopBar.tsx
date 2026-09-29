@@ -1,7 +1,7 @@
 // TopBar — application title, view switch, analysis controls and export/zoom
 // actions. Markup and CSS classes are those of the legacy shell, plus the new
 // .tab-bar used to reach the Definitions Studio.
-import { UI, ZOOM } from '../../config/constants.js';
+import { UI, ZOOM } from '../../config/ui';
 import type { Theme } from '../../hooks/useTheme';
 
 export type TabKey = 'analysis' | 'definitions';

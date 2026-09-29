@@ -77,3 +77,73 @@ func TestAnalyzeData_AcceptsGpoAccessControlDisabled(t *testing.T) {
 		}
 	}
 }
+
+// TestCatalogOverrideChangesValidation is the decisive end-to-end property: a
+// drop-in catalog must change what the analysis ACCEPTS, not merely what the
+// Studio displays. The fixture uses ldap_uri, which the embedded catalog knows;
+// an override that does not list it must turn that into an "unknown parameter"
+// finding, and the report must name the override it validated against.
+func TestCatalogOverrideChangesValidation(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.conf": "[sssd]\nservices = nss, pam\nldap_uri = ldap://dc01.example.com\n",
+		"rpm.txt":   "sssd-2.9.4-150500.x86_64\n",
+	})
+	defer os.RemoveAll(dir)
+
+	unknown := func(r ReportData, option string) bool {
+		for _, f := range r.ConfigFindings {
+			if strings.Contains(f.Message, "unknown parameter '"+option+"'") {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Baseline: no override anywhere, so the embedded catalog decides.
+	setUserDefinitionsRoot(t, t.TempDir())
+	setSystemDefinitionsRoot(t, t.TempDir())
+	baseline := analyzeData(dir, false, nil)
+	if unknown(baseline, "ldap_uri") {
+		t.Fatalf("the embedded catalog does not know ldap_uri; the fixture is wrong:\n%+v", baseline.ConfigFindings)
+	}
+	if baseline.CatalogProvenance == "" {
+		t.Error("CatalogProvenance is empty: the report does not state what it was checked against")
+	}
+
+	// A minimal override that knows only "services": ldap_uri becomes unknown.
+	userRoot := t.TempDir()
+	setUserDefinitionsRoot(t, userRoot)
+	writeCatalogOverride(t, userRoot, testCatalogJSON(t, "0.0.0-test", "services"))
+
+	overridden := analyzeData(dir, false, nil)
+	if !unknown(overridden, "ldap_uri") {
+		t.Errorf("the override did not change validation: ldap_uri is unknown to it but was accepted.\nfindings: %+v", overridden.ConfigFindings)
+	}
+	if !strings.Contains(overridden.CatalogProvenance, "override in effect") {
+		t.Errorf("CatalogProvenance = %q, want it to name the override in effect", overridden.CatalogProvenance)
+	}
+}
+
+// TestBrokenCatalogOverrideReachesTheReport: a catalog that cannot be parsed
+// must show up in the report diagnostics — the analysis keeps working against
+// the embedded catalog, but the user is told their override was skipped.
+func TestBrokenCatalogOverrideReachesTheReport(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.conf": "[sssd]\nservices = nss, pam\n",
+		"rpm.txt":   "sssd-2.9.4-150500.x86_64\n",
+	})
+	defer os.RemoveAll(dir)
+
+	userRoot := t.TempDir()
+	setUserDefinitionsRoot(t, userRoot)
+	setSystemDefinitionsRoot(t, t.TempDir())
+	path := writeCatalogOverride(t, userRoot, "{ not json at all")
+
+	report := analyzeData(dir, false, nil)
+	for _, d := range report.Diagnostics {
+		if d.File == path && strings.Contains(d.Message, "option catalog override skipped") {
+			return
+		}
+	}
+	t.Errorf("no override diagnostic reached the report; diagnostics: %+v", report.Diagnostics)
+}

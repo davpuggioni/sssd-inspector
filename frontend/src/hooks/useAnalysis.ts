@@ -1,8 +1,8 @@
 // useAnalysis — the analysis flow: path input, browsing, run, exports, zoom and
 // progress tracking. Keeps App.tsx free of imperative Wails plumbing.
-import { useCallback, useEffect, useState } from 'react';
-import { UI, ZOOM } from '../config/constants.js';
-import { validateArchivePath } from '../utils/fileValidation.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { UI, ZOOM } from '../config/ui';
+import { validateArchivePath } from '../utils/fileValidation';
 import * as backend from '../api/backend';
 import type { ReportData } from '../api/backend';
 import type { StatusApi } from './useStatus';
@@ -48,9 +48,19 @@ export function useAnalysis(status: StatusApi): AnalysisApi {
   const [report, setReport] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.0);
+  // Whether an analysis is in flight. A ref, not state: the progress event
+  // handler must see the current value without being re-subscribed, and Wails
+  // delivers events independently of the promise that ends the run.
+  const runActive = useRef(false);
 
   // Progress events: subscribed once, so a re-render can never double-subscribe.
   useEffect(() => backend.onAnalyzeProgress((message, percentage) => {
+    // A late event must not resurrect the progress panel of a finished run:
+    // the final 100% tick can be delivered after the promise already resolved,
+    // and a stuck bar over a finished report looks like a hung application.
+    if (!runActive.current) {
+      return;
+    }
     setProgress({ message, percentage });
   }), []);
 
@@ -105,6 +115,7 @@ export function useAnalysis(status: StatusApi): AnalysisApi {
       }
 
       setBusy(true);
+      runActive.current = true;
       setProgress(INITIAL_PROGRESS);
       setReport(null);
       setError(null);
@@ -118,6 +129,7 @@ export function useAnalysis(status: StatusApi): AnalysisApi {
         setError(message);
         show(`Analysis failed: ${message}`, 'error');
       } finally {
+        runActive.current = false;
         setProgress(null);
         setBusy(false);
       }

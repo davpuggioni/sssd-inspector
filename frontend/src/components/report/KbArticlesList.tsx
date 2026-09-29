@@ -1,8 +1,8 @@
 // KbArticlesList — knowledge base articles whose patterns matched the report.
 //
-// NOTE: TIDArticle.Evidence is tagged `json:"-"` in types.go (never shipped to
-// the frontend), so the legacy "Evidence Found" block could never render. The
-// React port does not fake it; surfacing that evidence needs a backend change.
+// Evidence is the log line(s) that triggered the match (TIDArticle.Evidence,
+// capped at three by the matcher). It is the difference between "this TID might
+// apply" and "this TID applied because of this line".
 import type { TIDArticle } from '../../api/backend';
 
 export interface KbArticlesListProps {
@@ -21,6 +21,16 @@ export function KbArticlesList({ articles }: KbArticlesListProps) {
           </h4>
           <p className="tid-id">TID: {article.tid_id}</p>
           <p className="kb-description">{article.description}</p>
+          {article.evidence && article.evidence.length > 0 ? (
+            <details>
+              <summary>Evidence Found</summary>
+              <div className="kb-evidence">
+                {article.evidence.map((line, lineIndex) => (
+                  <div key={`${article.tid_id}-${lineIndex}`}>{line}</div>
+                ))}
+              </div>
+            </details>
+          ) : null}
         </div>
       ))}
     </>

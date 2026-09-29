@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useStatus } from '../hooks/useStatus';
-import { mockBackend, makeDryRun, makeInventory, makeValidation } from './helpers';
+import { mockBackend, makeCatalog, makeDryRun, makeInventory, makeValidation } from './helpers';
 
 const backend = mockBackend();
 vi.mock('../api/backend', () => backend);
@@ -31,7 +31,7 @@ beforeEach(() => {
   // otherwise leak into the next one.
   Object.assign(backend, mockBackend());
   backend.listDefinitions.mockResolvedValue(makeInventory());
-  backend.getCatalogInfo.mockResolvedValue({ source: 'embedded', version: '2.9', generated: '2026-01-01', option_count: 120, section_count: 8, available: true });
+  backend.getCatalogInfo.mockResolvedValue(makeCatalog());
   backend.readRuleYaml.mockResolvedValue({ path: '/home/u/.sssd-inspector/rules.yaml', scope: 'user', exists: true, bytes: 10, content: 'rules:\n  - name: "x"\n' });
 });
 
@@ -52,6 +52,28 @@ describe('DefinitionsStudio — inventory', () => {
     await waitFor(() => expect(screen.getByText(/Skipped input/)).toBeInTheDocument());
     expect(screen.getByText(/invalid rules file: bad indent/)).toBeInTheDocument();
   });
+
+  it('shows the catalog override in effect, not just the embedded release', async () => {
+    backend.getCatalogInfo.mockResolvedValue(makeCatalog({
+      version: '2.16.0', generated: '2026-10-01', option_count: 1, section_count: 1,
+      effective: '/home/u/.sssd-inspector/catalog.json', using_override: true,
+    }));
+    render(<Studio />);
+    await waitFor(() => expect(screen.getByText('2.16.0')).toBeInTheDocument());
+    expect(screen.getByText('override')).toBeInTheDocument();
+    expect(screen.getAllByText('/home/u/.sssd-inspector/catalog.json').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Drop a generated/)).toBeInTheDocument();
+  });
+
+  it('lists a skipped catalog override instead of hiding it', async () => {
+    backend.getCatalogInfo.mockResolvedValue(makeCatalog({
+      diagnostics: [{ file: '/home/u/.sssd-inspector/catalog.json', line: 0, message: 'option catalog override skipped: malformed — falling back to the catalog embedded in the binary', severity: 0 }],
+    }));
+    render(<Studio />);
+    await waitFor(() => expect(screen.getByText(/option catalog override skipped/)).toBeInTheDocument());
+    expect(screen.getByText('Skipped catalog override')).toBeInTheDocument();
+  });
+
 
   it('opens the definitions folder of the chosen scope', async () => {
     const user = userEvent.setup();
