@@ -83,7 +83,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		return id
 	}
 
-	addFinding := func(cat, msg, srcPath, srcKey string, srcLine int, ev string, evtCount int, sev Severity) string {
+	addFinding := func(cat, msg, srcPath, srcKey string, srcLine int, ev string, evtCount int, sev Severity, ruleID, confidence, docRef string) string {
 		id := findingID(cat, msg)
 		if _, ok := findingIndex[id]; ok {
 			return id
@@ -94,6 +94,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 			ID: id, Category: cat, Message: msg, Severity: sev,
 			SourcePath: srcPath, SourceKey: srcKey, SourceLine: srcLine,
 			Evidence: ev, EventCount: evtCount,
+			RuleID: ruleID, Confidence: confidence, DocRef: docRef,
 		})
 		return id
 	}
@@ -121,7 +122,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 	// 2. ConfigFindings
 	for i := range r.ConfigFindings {
 		f := &r.ConfigFindings[i]
-		fID := addFinding(f.Category, f.Message, f.SourcePath, f.SourceKey, f.SourceLine, f.Evidence, 0, f.Severity)
+		fID := addFinding(f.Category, f.Message, f.SourcePath, f.SourceKey, f.SourceLine, f.Evidence, 0, f.Severity, f.RuleID, f.Confidence, f.DocRef)
 
 		if f.Evidence != "" {
 			if m := entityValueRegex.FindStringSubmatch(f.Evidence); m != nil {
@@ -154,7 +155,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 	for i := range r.TemporalClusters {
 		c := &r.TemporalClusters[i]
 		msg := fmt.Sprintf("Temporal burst: %s", c.Description)
-		fID := addFinding("temporal", msg, "", "", 0, c.SampleRawLog, c.EventCount, SevWarning)
+		fID := addFinding("temporal", msg, "", "", 0, c.SampleRawLog, c.EventCount, SevWarning, "log:temporal-burst", ConfidenceLog, "")
 		for ei := range g.Entities {
 			ent := &g.Entities[ei]
 			if ent.Value != "" && strings.Contains(strings.ToLower(c.Description), strings.ToLower(ent.Value)) {
@@ -166,7 +167,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 	// 4. SSSD log errors
 	for i := range r.SSSDLogErrors {
 		e := &r.SSSDLogErrors[i]
-		fID := addFinding("log_error", e.Description, "", "", 0, "", 0, SevWarning)
+		fID := addFinding("log_error", e.Description, "", "", 0, "", 0, SevWarning, "log:log-error", ConfidenceLog, "")
 		for ei := range g.Entities {
 			ent := &g.Entities[ei]
 			if ent.Value != "" && strings.Contains(strings.ToLower(e.Description), strings.ToLower(ent.Value)) {
@@ -179,7 +180,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 	for i := range r.KBSuggestions {
 		kb := &r.KBSuggestions[i]
 		msg := fmt.Sprintf("KB suggestion: %s (%.0f%%)", kb.Title, kb.Score*100)
-		addFinding("kb_suggestion", msg, "", "", 0, kb.SampleLine, 0, SevWarning)
+		addFinding("kb_suggestion", msg, "", "", 0, kb.SampleLine, 0, SevWarning, "log:kb-suggestion", ConfidenceLog, "")
 	}
 
 	return g

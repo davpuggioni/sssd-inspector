@@ -204,5 +204,5 @@ func applyRuleScan(
 		return
 	}
 	msg := fmt.Sprintf("[RULE: %s] %s", rule.Name, rule.Message)
-	addConfigFinding(report, sev, rule.Category, msg, strings.Join(files, ","), "rule:"+rule.Name, 0, evidenceLine)
+	addConfigFindingEx(report, sev, rule.Category, msg, strings.Join(files, ","), "rule:"+rule.Name, 0, evidenceLine, "rule:"+rule.Name, ConfidenceHeuristic, "")
 }

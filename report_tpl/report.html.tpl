@@ -276,7 +276,7 @@
 		{{range .ConfigFindings}}
 			<div class="finding {{sevClass .Severity}}">
 				<div class="headline">{{.Message}}</div>
-				<div class="finding-meta">Source: {{.SourcePath}} | Key: {{.SourceKey}} | Line: {{if gt .SourceLine 0}}{{.SourceLine}}{{else}}n/a{{end}}{{if .Evidence}}<br/>Evidence: <code>{{.Evidence}}</code>{{end}}</div>
+				<div class="finding-meta">Source: {{.SourcePath}} | Key: {{.SourceKey}} | Line: {{if gt .SourceLine 0}}{{.SourceLine}}{{else}}n/a{{end}}{{if .RuleID}} | Rule: <code>{{.RuleID}}</code>{{end}}{{if .Confidence}} | Confidence: {{.Confidence}}{{end}}{{if .DocRef}} | Doc: {{.DocRef}}{{end}}{{if .Evidence}}<br/>Evidence: <code>{{.Evidence}}</code>{{end}}</div>
 			</div>
 		{{end}}
 	{{end}}

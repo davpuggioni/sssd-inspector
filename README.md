@@ -256,6 +256,15 @@ documentation and defaults, and finally falls back to compiled roff man pages
 `catalog_gen.go` (`enrichKnownEnums`) fills in the value lists that upstream
 documents only as prose.
 
+Every option is tagged with the ground-truth layer that produced it
+(`OptionMeta.Confidence`): `"api"` for `sssd.api.conf` / `sssd.api.d/*.conf`
+(authoritative for existence, types and defaults — written from the C code),
+`"man"` for DocBook XML and roff pages (authoritative for documentation,
+defaults and enumerations only), and `"curated"` for the hand-verified table
+below. `catalog.md` renders the layer next to each option
+(`sssd-ad.conf (api)`), and findings carry it as `confidence`, so a claim
+backed only by prose is visibly weaker than one backed by the API definitions.
+
 Only options that can be attributed to an `sssd.conf` section are published.
 A man page contains plenty of `<term>` elements that are **not** options — PAM
 return codes in `pam_sss(8)`, signal names in `sssd(8)`, LDAP attribute names in
@@ -273,6 +282,27 @@ tagged `"source": "curated"` in `catalog.json` to keep curated knowledge
 distinguishable from man-page knowledge. When adding one, verify the option in
 the SSSD source tree first — a false "unknown parameter" sends the reader to
 break a correct configuration.
+
+### Severity policy and semantic rules
+
+Severity is decided centrally in `config_severity.go` (`catalogSeverity`),
+not at each call site: every finding passes through one allowlist
+(`errorCapableRules`) and anything not on it is capped at `SevWarning` — SSSD
+ignores unknown or misplaced options and keeps running, so only provably fatal
+conditions (no domains, missing/invalid `id_provider`, overlapping idmap
+ranges, unresolvable KRB5 realm, ...) may escalate. Pre-existing checks keep
+their historical severity; only new rules start capped.
+
+Every finding carries an evidence contract (`rule_id`, `confidence`,
+`doc_ref`), rendered in the HTML report and the JSON output, so a false
+positive is traceable to the rule and documentation that produced it.
+
+`config_semantics.go` adds provider-aware cross-option rules the syntactic
+catalog cannot express: `ldap_uri` / `ldap_search_base` on a domain whose
+`id_provider` never speaks LDAP, bind credentials with an `auth_provider`
+that never binds, and LDAP search tuning (`ldap_schema`, `ldap_tls_*`, ...) on
+non-LDAP providers. Adding a rule means appending to `semanticRules` with a
+dedicated test.
 
 Both outputs are committed because they serve different audiences:
 

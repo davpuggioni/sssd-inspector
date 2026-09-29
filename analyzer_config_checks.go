@@ -28,14 +28,14 @@ func validateConfigStructure(cfg *ParsedConfig, report *ReportData) {
 	}
 	if domainCount == 0 {
 		msg := "CONFIGURATION ERROR: sssd.conf contains no [domain/NAME] sections. SSSD has nothing to do and will exit immediately ('No domains configured, exiting')."
-		addConfigFinding(report, SevError, "structure", msg, "sssd.conf", "[domain]", 0, "")
+		addConfigFindingEx(report, SevError, "structure", msg, "sssd.conf", "[domain]", 0, "", "structure:no-domains", ConfidenceHeuristic, "sssd.conf(5)")
 	}
 
 	// 2. The [sssd] section must enable the nss and pam responders.
 	sssdSec := cfg.Sections["sssd"]
 	if sssdSec == nil {
 		msg := "CONFIGURATION WARNING: sssd.conf has no [sssd] section. Without it, the nss and pam responders use defaults; verify they are started."
-		addConfigFinding(report, SevWarning, "structure", msg, "sssd.conf", "[sssd]", 0, "")
+		addConfigFindingEx(report, SevWarning, "structure", msg, "sssd.conf", "[sssd]", 0, "", "structure:missing-sssd-section", ConfidenceHeuristic, "sssd.conf(5)")
 		return
 	}
 	if vals, _, ok := firstOption(sssdSec, "services"); ok && vals != "" {
@@ -50,11 +50,11 @@ func validateConfigStructure(cfg *ParsedConfig, report *ReportData) {
 		}
 		if !has("nss") {
 			msg := "CONFIGURATION ERROR: 'services' in [sssd] does not include 'nss'. User/group lookups through NSS will fail."
-			addConfigFinding(report, SevError, "structure", msg, "sssd.conf", "[sssd].services", 0, "services = "+vals)
+			addConfigFindingEx(report, SevError, "structure", msg, "sssd.conf", "[sssd].services", 0, "services = "+vals, "structure:services", ConfidenceHeuristic, "sssd.conf(5)")
 		}
 		if !has("pam") {
 			msg := "CONFIGURATION ERROR: 'services' in [sssd] does not include 'pam'. PAM authentication will fail even if the domain is healthy."
-			addConfigFinding(report, SevError, "structure", msg, "sssd.conf", "[sssd].services", 0, "services = "+vals)
+			addConfigFindingEx(report, SevError, "structure", msg, "sssd.conf", "[sssd].services", 0, "services = "+vals, "structure:services", ConfidenceHeuristic, "sssd.conf(5)")
 		}
 	}
 }
@@ -132,7 +132,7 @@ func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 		}
 		if minID >= maxID {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: '%s' declares an invalid ID mapping range (%d-%d): 'ldap_idmap_range_min' must be lower than 'ldap_idmap_range_max' (which is exclusive).", sec.Name, minID, maxID)
-			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", sec.Name+".ldap_idmap_range_min", line, fmt.Sprintf("ldap_idmap_range_min = %d", minID))
+			addConfigFindingEx(report, SevError, "idmap", msg, "sssd.conf", sec.Name+".ldap_idmap_range_min", line, fmt.Sprintf("ldap_idmap_range_min = %d", minID), "idmap:invalid-range", ConfidenceHeuristic, "sssd-ldap(5)")
 			continue
 		}
 		ranges = append(ranges, idRange{domain: sec.Name, minID: minID, maxID: maxID, line: line})
@@ -146,7 +146,7 @@ func validateIDMapRanges(cfg *ParsedConfig, report *ReportData) {
 		if cur.minID < prev.maxID {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: ID mapping ranges overlap between '%s' (%d-%d) and '%s' (%d-%d). Users of the two domains can receive colliding UID/GIDs.",
 				prev.domain, prev.minID, prev.maxID, cur.domain, cur.minID, cur.maxID)
-			addConfigFinding(report, SevError, "idmap", msg, "sssd.conf", cur.domain+".ldap_idmap_range_min", cur.line, fmt.Sprintf("ldap_idmap_range_min = %d", cur.minID))
+			addConfigFindingEx(report, SevError, "idmap", msg, "sssd.conf", cur.domain+".ldap_idmap_range_min", cur.line, fmt.Sprintf("ldap_idmap_range_min = %d", cur.minID), "idmap:overlap", ConfidenceHeuristic, "sssd-ldap(5)")
 		}
 	}
 }

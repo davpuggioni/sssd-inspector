@@ -178,12 +178,12 @@ func emitDNSChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 		score++
 	}
 	if score >= 2 && (srvTimeout || resolveFail) && !emitted["dns"] {
-		addConfigFinding(report, SevError, "dns",
+		addConfigFindingEx(report, SevError, "dns",
 			"[CORRELATED ROOT CAUSE] DNS/SRV service discovery failure (sequence: "+
 				descFlags(srvTimeout, resolveFail, connectFail, offline)+
 				"). The client could not locate or reach a Domain Controller via DNS; "+
 				fmt.Sprintf("this single root explains %d separate-looking errors.", score),
-			"timeline", "sequence:dns", 0, evidence)
+			"timeline", "sequence:dns", 0, evidence, "correlate:dns-srv-failure", ConfidenceLog, "")
 		emitted["dns"] = true
 		return true
 	}
@@ -249,7 +249,7 @@ func emitKrb5Chain(links []seqLink, report *ReportData, emitted map[string]bool)
 			if len(links) > 0 {
 				ev = links[0].rawLog
 			}
-			addConfigFinding(report, sev, "krb5", msg, "timeline", "sequence:krb5", 0, ev)
+			addConfigFindingEx(report, sev, "krb5", msg, "timeline", "sequence:krb5", 0, ev, "correlate:krb5-clock-skew", ConfidenceLog, "krb5.conf(5)")
 			emitted["krb5"] = true
 			return true
 		}
@@ -278,9 +278,9 @@ func emitOverloadChain(links []seqLink, report *ReportData, emitted map[string]b
 				break
 			}
 		}
-		addConfigFinding(report, SevWarning, "ad_server",
+		addConfigFindingEx(report, SevWarning, "ad_server",
 			"[CORRELATED ROOT CAUSE] Backend overload/restart storm: watchdog terminations co-occur with oversized packets/shell limits. Consider 'ignore_group_members = true' and reviewing AD group sizes.",
-			"timeline", "sequence:overload", 0, ev)
+			"timeline", "sequence:overload", 0, ev, "correlate:backend-overload", ConfidenceLog, "")
 		emitted["overload"] = true
 		return true
 	}
@@ -309,8 +309,8 @@ func emitOfflineChain(links []seqLink, report *ReportData, emitted map[string]bo
 			break
 		}
 	}
-	addConfigFinding(report, SevError, "offline",
+	addConfigFindingEx(report, SevError, "offline",
 		"[CORRELATED ROOT CAUSE] Backend went OFFLINE and online authentication subsequently failed. Root cause is upstream connectivity/DNS (see 'dns'/'net' findings); enable cache and increase offline_credentials_expiration only after the upstream is fixed.",
-		"timeline", "sequence:offline", 0, ev)
+		"timeline", "sequence:offline", 0, ev, "correlate:offline-after-online", ConfidenceLog, "")
 	emitted["offline"] = true
 }

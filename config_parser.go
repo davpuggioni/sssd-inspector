@@ -169,18 +169,18 @@ func validateDomainStructure(cfg *ParsedConfig, report *ReportData) {
 		// id_provider must be present and valid.
 		if vals := sec.Options["id_provider"]; len(vals) == 0 {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' is missing the mandatory 'id_provider' option. SSSD will not start this domain until a provider (%s) is set.", strings.TrimPrefix(name, "domain/"), provList)
-			addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", 0, "")
+			addConfigFindingEx(report, SevError, "config", msg, "sssd.conf", name+".id_provider", 0, "", "domain:missing-id-provider", ConfidenceHeuristic, "sssd.conf(5)")
 		} else {
 			prov := strings.ToLower(strings.TrimSpace(strings.Split(vals[0].Value, ",")[0]))
 			if !allowedProviders[prov] {
 				msg := fmt.Sprintf("CONFIGURATION ERROR: domain '%s' has invalid id_provider '%s'. Valid values are: %s.", strings.TrimPrefix(name, "domain/"), vals[0].Value, provList)
-				addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".id_provider", vals[0].Line, "id_provider = "+vals[0].Value)
+				addConfigFindingEx(report, SevError, "config", msg, "sssd.conf", name+".id_provider", vals[0].Line, "id_provider = "+vals[0].Value, "domain:invalid-id-provider", ConfidenceHeuristic, "sssd.conf(5)")
 			}
 		}
 		// inherit_from is not allowed in per-domain sections.
 		if v, line, ok := firstOption(sec, "inherit_from"); ok && v != "" {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: 'inherit_from' is not permitted inside a [domain/*] section (domain '%s'). It is only valid under [sssd] to reuse a domain template. Move the setting or remove it.", strings.TrimPrefix(name, "domain/"))
-			addConfigFinding(report, SevError, "config", msg, "sssd.conf", name+".inherit_from", line, "inherit_from = "+v)
+			addConfigFindingEx(report, SevError, "config", msg, "sssd.conf", name+".inherit_from", line, "inherit_from = "+v, "domain:inherit-from", ConfidenceHeuristic, "sssd.conf(5)")
 		}
 	}
 }
@@ -228,7 +228,7 @@ func validateADConfig(cfg *ParsedConfig, report *ReportData) {
 	}
 	if hasSimpleAllow && !accessProviderSimple {
 		msg := "CONFIGURATION ERROR: 'simple_allow_users' or 'simple_allow_groups' is used in sssd.conf, but 'access_provider = simple' is not set (e.g., using 'ad'). These parameters will be ignored. Use ad_access_filter instead."
-		addConfigFinding(report, SevError, "access", msg, "sssd.conf", "simple_allow", 0, "")
+		addConfigFindingEx(report, SevError, "access", msg, "sssd.conf", "simple_allow", 0, "", "access:simple-allow-without-filter", ConfidenceHeuristic, "sssd-simple(5)")
 	}
 	if hasSimpleAllowGroups {
 		report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] 'simple_allow_groups' is active. If users authenticate but fail authorization, test by commenting it out and using 'simple_allow_users = <username>' to isolate group resolution issues.")
@@ -253,7 +253,7 @@ func validateDuplicateKeys(cfg *ParsedConfig, report *ReportData) {
 				continue
 			}
 			msg := fmt.Sprintf("CONFIGURATION ERROR: Duplicate parameter '%s' found in section %s of sssd.conf. SSSD may behave unpredictably.", key, sec.Name)
-			addConfigFinding(report, SevError, "duplicate", msg, "sssd.conf", sec.Name+"."+key, vals[1].Line, fmt.Sprintf("%s = %s", key, vals[1].Value))
+			addConfigFindingEx(report, SevError, "duplicate", msg, "sssd.conf", sec.Name+"."+key, vals[1].Line, fmt.Sprintf("%s = %s", key, vals[1].Value), "syntax:duplicate-key", ConfidenceHeuristic, "sssd.conf(5)")
 		}
 	}
 }
@@ -270,7 +270,19 @@ func firstOption(sec *SssdSection, key string) (string, int, bool) {
 
 // addConfigFinding records a structured finding and mirrors it into the legacy
 // Problems/Warnings string slices so existing text/HTML/CLI paths pick it up.
+// It is the compatibility shim over addConfigFindingEx: findings built this
+// way carry the heuristic confidence layer and no rule/doc attribution.
 func addConfigFinding(report *ReportData, sev Severity, category, message, sourcePath, sourceKey string, sourceLine int, evidence string) {
+	addConfigFindingEx(report, sev, category, message, sourcePath, sourceKey, sourceLine, evidence, "", ConfidenceHeuristic, "")
+}
+
+// addConfigFindingEx is the attributed finding constructor every validator
+// should use: ruleID names the check, confidence names the ground-truth layer
+// that decided, and docRef points at the backing documentation. Severity is
+// capped by the central policy in catalogSeverity so a weak knowledge layer
+// can never escalate a finding above SevWarning on its own.
+func addConfigFindingEx(report *ReportData, sev Severity, category, message, sourcePath, sourceKey string, sourceLine int, evidence string, ruleID, confidence, docRef string) {
+	sev = catalogSeverity(sev, confidence, ruleID)
 	report.ConfigFindings = append(report.ConfigFindings, ConfigFinding{
 		Severity:   sev,
 		Category:   category,
@@ -279,6 +291,9 @@ func addConfigFinding(report *ReportData, sev Severity, category, message, sourc
 		SourceKey:  sourceKey,
 		SourceLine: sourceLine,
 		Evidence:   evidence,
+		RuleID:     ruleID,
+		Confidence: confidence,
+		DocRef:     docRef,
 	})
 	switch sev {
 	case SevError, SevCritical:
@@ -303,7 +318,7 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 		if !report.EnumerateIssue {
 			report.EnumerateIssue = true
 			msg := "[DEPRECATION] 'enumerate = true' is set in sssd.conf. This causes severe performance issues, is deprecated for AD/IPA, and is unsupported in SSSD 2.10+."
-			addConfigFinding(report, SevWarning, "enumerate", msg, "sssd.conf", prefix+"enumerate", line, "enumerate = "+v)
+			addConfigFindingEx(report, SevWarning, "enumerate", msg, "sssd.conf", prefix+"enumerate", line, "enumerate = "+v, "ad:enumerate-deprecated", ConfidenceHeuristic, "sssd-ad(5)")
 		}
 	}
 
@@ -320,7 +335,7 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 		}
 		if isIPAddress(strings.TrimPrefix(v, ".")) {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: 'ad_domain' is set to the IP address '%s'. It must be the AD DNS domain name, not an IP.", v)
-			addConfigFinding(report, SevError, "ad_domain", msg, "sssd.conf", prefix+"ad_domain", line, "ad_domain = "+v)
+			addConfigFindingEx(report, SevError, "ad_domain", msg, "sssd.conf", prefix+"ad_domain", line, "ad_domain = "+v, "log:ad-domain-unresolvable", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 
@@ -328,7 +343,7 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 	checkServerIP := func(key string) {
 		if v, line, ok := firstOption(sec, key); ok && v != "" && isIPAddress(v) {
 			msg := fmt.Sprintf("Kerberos SPN Risk: '%s = %s' is configured as an IP address instead of a hostname. Kerberos (GSSAPI) requires hostnames to request tickets.", key, v)
-			addConfigFinding(report, SevError, "ad_server", msg, "sssd.conf", prefix+key, line, key+" = "+v)
+			addConfigFindingEx(report, SevError, "ad_server", msg, "sssd.conf", prefix+key, line, key+" = "+v, "log:ad-server-unresolvable", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 	checkServerIP("ad_server")
@@ -338,14 +353,14 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 	if realm, rLine, rOK := firstOption(sec, "krb5_realm"); rOK && realm != "" {
 		if report.AdDomain != "" && !strings.EqualFold(realm, report.AdDomain) {
 			msg := fmt.Sprintf("[CRITICAL] 'krb5_realm = %s' does not match the AD domain '%s'. Kerberos authentication against AD will fail. Fix krb5_realm (recommended: %s).", realm, report.AdDomain, strings.ToUpper(report.AdDomain))
-			addConfigFinding(report, SevCritical, "krb5_realm", msg, "sssd.conf", prefix+"krb5_realm", rLine, "krb5_realm = "+realm)
+			addConfigFindingEx(report, SevCritical, "krb5_realm", msg, "sssd.conf", prefix+"krb5_realm", rLine, "krb5_realm = "+realm, "correlate:krb5-realm-mismatch", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 
 	// ldap_sasl_mech must be GSSAPI for AD.
 	if v, line, ok := firstOption(sec, "ldap_sasl_mech"); ok && v != "" && !strings.EqualFold(v, "gssapi") {
 		msg := fmt.Sprintf("CONFIGURATION ERROR: 'ldap_sasl_mech = %s' is incompatible with the ad provider, which requires GSSAPI.", v)
-		addConfigFinding(report, SevError, "ldap_sasl_mech", msg, "sssd.conf", prefix+"ldap_sasl_mech", line, "ldap_sasl_mech = "+v)
+		addConfigFindingEx(report, SevError, "ldap_sasl_mech", msg, "sssd.conf", prefix+"ldap_sasl_mech", line, "ldap_sasl_mech = "+v, "log:unsupported-sasl-mech", ConfidenceLog, "sssd-ldap(5)")
 	}
 
 	// kerberos_method must be keytab or secrets.
@@ -353,7 +368,7 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 		lv := strings.ToLower(v)
 		if lv != "keytab" && lv != "secrets" {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: 'kerberos_method = %s' is invalid. Allowed values are 'keytab' or 'secrets'.", v)
-			addConfigFinding(report, SevError, "kerberos_method", msg, "sssd.conf", prefix+"kerberos_method", line, "kerberos_method = "+v)
+			addConfigFindingEx(report, SevError, "kerberos_method", msg, "sssd.conf", prefix+"kerberos_method", line, "kerberos_method = "+v, "log:kerberos-method-secret", ConfidenceLog, "sssd-ad(5)")
 		} else if lv == "secrets" {
 			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] 'kerberos_method = secrets' is set. SSSD will obtain the machine credentials from the secrets store; ensure the keytab principal is still valid and updateable by adcli.")
 		}
@@ -362,19 +377,19 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 	// ldap_id_mapping = false requires RFC2307 attrs.
 	if v, line, ok := firstOption(sec, "ldap_id_mapping"); ok && strings.EqualFold(v, "false") {
 		msg := "[WARNING] 'ldap_id_mapping = False' is set. AD logins will fail silently unless UNIX attributes (uidNumber, gidNumber) are manually populated in Active Directory (RFC2307)."
-		addConfigFinding(report, SevWarning, "ldap_id_mapping", msg, "sssd.conf", prefix+"ldap_id_mapping", line, "ldap_id_mapping = "+v)
+		addConfigFindingEx(report, SevWarning, "ldap_id_mapping", msg, "sssd.conf", prefix+"ldap_id_mapping", line, "ldap_id_mapping = "+v, "log:manual-id-mapping", ConfidenceLog, "sssd-ldap(5)")
 	}
 
 	// case_sensitive = True on AD is a classic "user not found" source.
 	if v, line, ok := firstOption(sec, "case_sensitive"); ok && strings.EqualFold(v, "true") {
 		msg := "[WARNING] 'case_sensitive = True' is set on an AD provider. Active Directory object names are case-insensitive; this commonly causes spurious 'user not found' / authorization failures. Consider removing it or setting 'False'."
-		addConfigFinding(report, SevWarning, "case_sensitive", msg, "sssd.conf", prefix+"case_sensitive", line, "case_sensitive = "+v)
+		addConfigFindingEx(report, SevWarning, "case_sensitive", msg, "sssd.conf", prefix+"case_sensitive", line, "case_sensitive = "+v, "log:case-sensitive-on-ad", ConfidenceLog, "sssd-ad(5)")
 	}
 
 	// krb5_validate = false is a security risk.
 	if v, line, ok := firstOption(sec, "krb5_validate"); ok && strings.EqualFold(v, "false") {
 		msg := "[SECURITY RISK] 'krb5_validate = false' is set. This disables KDC spoofing protection. If used to bypass the AD RC4 bug, remove this and fix the AD operatingSystemVersion attribute or update local crypto policies instead."
-		addConfigFinding(report, SevError, "krb5_validate", msg, "sssd.conf", prefix+"krb5_validate", line, "krb5_validate = "+v)
+		addConfigFindingEx(report, SevError, "krb5_validate", msg, "sssd.conf", prefix+"krb5_validate", line, "krb5_validate = "+v, "log:krb5-validate-disabled", ConfidenceLog, "sssd-krb5(5)")
 	}
 
 	validateADAdvancedOptions(sec, report, prefix)
@@ -388,7 +403,7 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 	// always uses SASL/GSSAPI over its own connection.
 	if v, line, ok := firstOption(sec, "ldap_id_use_start_tls"); ok && strings.EqualFold(v, "true") {
 		msg := "CONFIGURATION ERROR: 'ldap_id_use_start_tls = true' is set on an 'ad' provider. The AD provider uses SASL/GSSAPI and does not honour StartTLS; this option is ignored at best and rejected at worst."
-		addConfigFinding(report, SevError, "tls", msg, "sssd.conf", prefix+"ldap_id_use_start_tls", line, "ldap_id_use_start_tls = "+v)
+		addConfigFindingEx(report, SevError, "tls", msg, "sssd.conf", prefix+"ldap_id_use_start_tls", line, "ldap_id_use_start_tls = "+v, "log:starttls-on-ad", ConfidenceLog, "sssd-ldap(5)")
 	}
 
 	// ad_gpo_access_control accepts 'disabled', 'permissive' or 'enforcing'.
@@ -400,7 +415,7 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 		lv := strings.ToLower(v)
 		if lv != "disabled" && lv != "permissive" && lv != "enforcing" {
 			msg := fmt.Sprintf("CONFIGURATION ERROR: 'ad_gpo_access_control = %s' is invalid. Allowed values are 'disabled', 'permissive' or 'enforcing'. SSSD may refuse to start or fall back to permissive mode.", v)
-			addConfigFinding(report, SevError, "gpo", msg, "sssd.conf", prefix+"ad_gpo_access_control", line, "ad_gpo_access_control = "+v)
+			addConfigFindingEx(report, SevError, "gpo", msg, "sssd.conf", prefix+"ad_gpo_access_control", line, "ad_gpo_access_control = "+v, "log:invalid-gpo-value", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 
@@ -408,7 +423,7 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 	if _, _, siteOK := firstOption(sec, "ad_site"); siteOK {
 		if v, line, ok := firstOption(sec, "ad_enable_dns_sites"); ok && strings.EqualFold(v, "false") {
 			msg := "CONFIGURATION WARNING: 'ad_site' is configured together with 'ad_enable_dns_sites = false'. The static site is still used, but automatic DC failover across sites is disabled; on site outage the client cannot locate another DC."
-			addConfigFinding(report, SevWarning, "ad_site", msg, "sssd.conf", prefix+"ad_enable_dns_sites", line, "ad_enable_dns_sites = "+v)
+			addConfigFindingEx(report, SevWarning, "ad_site", msg, "sssd.conf", prefix+"ad_enable_dns_sites", line, "ad_enable_dns_sites = "+v, "log:static-site-no-failover", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 
@@ -426,7 +441,7 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 		}
 		if !valid {
 			msg := fmt.Sprintf("CONFIGURATION WARNING: 'ad_machine_account_password_renewal_opts = %s' is malformed. The expected format is '<renewal days>:<renewal hours>' (e.g. '30:4'); SSSD falls back to the defaults.", v)
-			addConfigFinding(report, SevWarning, "machine_account", msg, "sssd.conf", prefix+"ad_machine_account_password_renewal_opts", line, "ad_machine_account_password_renewal_opts = "+v)
+			addConfigFindingEx(report, SevWarning, "machine_account", msg, "sssd.conf", prefix+"ad_machine_account_password_renewal_opts", line, "ad_machine_account_password_renewal_opts = "+v, "log:malformed-renewal-opts", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 
@@ -434,7 +449,7 @@ func validateADAdvancedOptions(sec *SssdSection, report *ReportData, prefix stri
 	if v, line, ok := firstOption(sec, "ad_hostname"); ok && v != "" && report.Hostname != "" {
 		if !strings.EqualFold(v, report.Hostname) {
 			msg := fmt.Sprintf("CONFIGURATION WARNING: 'ad_hostname = %s' does not match the system hostname '%s'. SPNs and the machine account keytab are tied to the real hostname; a mismatch causes Kerberos 'Server not found in Kerberos database' errors.", v, report.Hostname)
-			addConfigFinding(report, SevWarning, "ad_hostname", msg, "sssd.conf", prefix+"ad_hostname", line, "ad_hostname = "+v)
+			addConfigFindingEx(report, SevWarning, "ad_hostname", msg, "sssd.conf", prefix+"ad_hostname", line, "ad_hostname = "+v, "log:ad-hostname-mismatch", ConfidenceLog, "sssd-ad(5)")
 		}
 	}
 }

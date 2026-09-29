@@ -74,14 +74,14 @@ func runCorrelation(dirPath string, report *ReportData) {
 	krbRealm := strings.TrimSpace(report.KerberosRealm)
 	if krbRealm == "" || strings.EqualFold(krbRealm, "Not configured") {
 		msg := "[CRITICAL] An AD provider is configured but /etc/krb5.conf has no 'default_realm' for the domain '" + realm + "'. The host may not be joined to Active Directory (realm join / adcli join missing)."
-		addConfigFinding(report, SevCritical, "join", msg, "krb5.conf", "[libdefaults].default_realm", 0, "")
+		addConfigFindingEx(report, SevCritical, "join", msg, "krb5.conf", "[libdefaults].default_realm", 0, "", "correlate:krb5-no-realm", ConfidenceLog, "krb5.conf(5)")
 		return
 	}
 
 	// 2. krb5 default_realm vs canonical AD realm mismatch.
 	if !strings.EqualFold(realm, krbRealm) && !domainsOverlap(domain, krbRealm) {
 		msg := "[CRITICAL] Kerberos 'default_realm = " + krbRealm + "' does not match the Active Directory domain '" + realm + "'. Kerberos auth against AD will fail. Fix default_realm (recommended: " + realm + ")."
-		addConfigFinding(report, SevCritical, "krb5_realm", msg, "krb5.conf", "[libdefaults].default_realm", 0, "default_realm = "+krbRealm)
+		addConfigFindingEx(report, SevCritical, "krb5_realm", msg, "krb5.conf", "[libdefaults].default_realm", 0, "default_realm = "+krbRealm, "correlate:krb5-realm-mismatch", ConfidenceLog, "krb5.conf(5)")
 	}
 
 	// 3. DNS search domain must be related to the AD domain.
@@ -89,7 +89,7 @@ func runCorrelation(dirPath string, report *ReportData) {
 		searchToken := firstSearchToken(report.SearchDomain)
 		if searchToken != "" && !domainsOverlap(searchToken, domain) {
 			msg := "DNS search domain '" + searchToken + "' (resolv.conf) does not match the AD domain '" + domain + "'. DNS service-location (SRV) lookups for AD will fail or resolve to the wrong domain."
-			addConfigFinding(report, SevError, "dns", msg, "resolv.conf", "search", 0, "search "+report.SearchDomain)
+			addConfigFindingEx(report, SevError, "dns", msg, "resolv.conf", "search", 0, "search "+report.SearchDomain, "correlate:dns-search-mismatch", ConfidenceHeuristic, "resolv.conf(5)")
 		}
 	}
 
@@ -99,7 +99,7 @@ func runCorrelation(dirPath string, report *ReportData) {
 		if !short {
 			if suffix := hostnameSuffix(report.Hostname); suffix != "" && !domainsOverlap(suffix, domain) {
 				msg := "Hostname '" + report.Hostname + "' is not in the AD domain '" + domain + "'. AD joins/accounts are tied to the DNS domain; ensure the hostname is on a subdomain of the AD domain."
-				addConfigFinding(report, SevError, "hostname", msg, "basic-environment.txt", "Hostname", 0, "Hostname: "+report.Hostname)
+				addConfigFindingEx(report, SevError, "hostname", msg, "basic-environment.txt", "Hostname", 0, "Hostname: "+report.Hostname, "correlate:hostname-not-fqdn", ConfidenceHeuristic, "hostname(7)")
 			}
 		}
 		// Short hostname is already flagged by analyzeHostnameAndFQDN.

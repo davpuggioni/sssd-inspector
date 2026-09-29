@@ -1,7 +1,7 @@
 {
   "source": "SSSD upstream",
   "version": "2.14.0",
-  "generated": "2026-09-28",
+  "generated": "2026-09-29",
   "sources": [
     "ad_modified_defaults.xml",
     "autofs_attributes.xml",
@@ -1163,7 +1163,8 @@
         "proxy"
       ],
       "doc": "The access control provider used for the domain. There are two built-in access providers (in addition to any included in installed backends) Internal special providers are: permit always allow access. deny always deny access. ldap for nativ...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "account_cache_expiration": {
       "name": "account_cache_expiration",
@@ -1173,7 +1174,8 @@
       ],
       "default": "0 (unlimited)",
       "doc": "Number of days entries are left in cache after last successful login before being removed during a cleanup of the cache. 0 means keep forever. The value of this parameter must be greater than or equal to offline_credentials_expiration. Defa...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "ad_access_filter": {
       "name": "ad_access_filter",
@@ -1183,7 +1185,8 @@
       ],
       "default": "Not set",
       "doc": "Specifies an LDAP access control filter that a user must match to gain access. The access_provider option must be explicitly set to ad for this option to take effect. If you want to use the ad_access_filter as the only access control scheme...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_backup_server": {
       "name": "ad_backup_server",
@@ -1192,7 +1195,8 @@
         "domain/ad"
       ],
       "doc": "The comma-separated list of hostnames of the AD servers to which SSSD should connect in order of preference. For more information on failover and server redundancy, see the FAILOVER section. This is optional if autodiscovery is enabled. For...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_domain": {
       "name": "ad_domain",
@@ -1201,7 +1205,8 @@
         "domain/ad"
       ],
       "doc": "Specifies the name of the Active Directory domain. This is optional. If not provided, the configuration domain name is used. For proper operation, this option should be specified as the lower-case version of the long version of the Active D...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_enable_dns_sites": {
       "name": "ad_enable_dns_sites",
@@ -1211,7 +1216,8 @@
       ],
       "default": "true",
       "doc": "Enables DNS sites - location based service discovery. If true and service discovery (see Service Discovery paragraph at the bottom of the man page) is enabled, the SSSD will first attempt to discover the Active Directory server to connect t...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_enable_gc": {
       "name": "ad_enable_gc",
@@ -1221,7 +1227,8 @@
       ],
       "default": "true",
       "doc": "By default, the SSSD connects to the Global Catalog first to retrieve users from trusted domains and uses the LDAP port to retrieve group memberships or as a fallback. Disabling this option makes the SSSD only connect to the LDAP port of th...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_enabled_domains": {
       "name": "ad_enabled_domains",
@@ -1231,7 +1238,8 @@
       ],
       "default": "Not set",
       "doc": "A comma-separated list of enabled Active Directory domains. If provided, SSSD will ignore any domains not listed in this option. If left unset, all discovered domains from the AD forest will be available. During the discovery of the domains...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_access_control": {
       "name": "ad_gpo_access_control",
@@ -1246,7 +1254,8 @@
         "permissive"
       ],
       "doc": "This option specifies the operation mode for GPO-based access control functionality: whether it operates in disabled mode, enforcing mode, or permissive mode. Please note that the access_provider option must be explicitly set to ad in order...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_cache_timeout": {
       "name": "ad_gpo_cache_timeout",
@@ -1256,7 +1265,8 @@
       ],
       "default": "5 (seconds)",
       "doc": "The amount of time between lookups of GPO policy files against the AD server. This will reduce the latency and load on the AD server if there are many access-control requests made in a short period. Default: 5 (seconds)",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_default_right": {
       "name": "ad_gpo_default_right",
@@ -1275,7 +1285,8 @@
         "deny"
       ],
       "doc": "This option defines how access control is evaluated for PAM service names that are not explicitly listed in one of the ad_gpo_map_* options. This option can be set in two different manners. First, this option can be set to use a default log...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_ignore_unreadable": {
       "name": "ad_gpo_ignore_unreadable",
@@ -1285,7 +1296,8 @@
       ],
       "default": "False",
       "doc": "Normally when some group policy containers (AD object) of applicable group policy objects are not readable by SSSD then users are denied access. This option allows to ignore group policy containers and with them associated policies if their...",
-      "source": "sssd-ad.5.xml"
+      "source": "sssd-ad.5.xml",
+      "confidence": "man"
     },
     "ad_gpo_implicit_deny": {
       "name": "ad_gpo_implicit_deny",
@@ -1295,7 +1307,8 @@
       ],
       "default": "False",
       "doc": "Normally when no applicable GPOs are found the users are allowed access. When this option is set to True users will be allowed access only when explicitly allowed by a GPO rule. Otherwise users will be denied access. This can be used to har...",
-      "source": "sssd-ad.5.xml"
+      "source": "sssd-ad.5.xml",
+      "confidence": "man"
     },
     "ad_gpo_map_batch": {
       "name": "ad_gpo_map_batch",
@@ -1305,7 +1318,8 @@
       ],
       "default": "the default set of PAM service names includes:",
       "doc": "A comma-separated list of PAM service names for which GPO-based access control is evaluated based on the BatchLogonRight and DenyBatchLogonRight policy settings. Only those GPOs are evaluated for which the user has Read and Apply Group Poli...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_deny": {
       "name": "ad_gpo_map_deny",
@@ -1315,7 +1329,8 @@
       ],
       "default": "not set",
       "doc": "A comma-separated list of PAM service names for which GPO-based access is always denied, regardless of any GPO Logon Rights. It is possible to add a PAM service name to the default set by using +service_name . Since the default set is empty...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_interactive": {
       "name": "ad_gpo_map_interactive",
@@ -1325,7 +1340,8 @@
       ],
       "default": "the default set of PAM service names includes:",
       "doc": "A comma-separated list of PAM service names for which GPO-based access control is evaluated based on the InteractiveLogonRight and DenyInteractiveLogonRight policy settings. Only those GPOs are evaluated for which the user has Read and Appl...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_network": {
       "name": "ad_gpo_map_network",
@@ -1335,7 +1351,8 @@
       ],
       "default": "the default set of PAM service names includes:",
       "doc": "A comma-separated list of PAM service names for which GPO-based access control is evaluated based on the NetworkLogonRight and DenyNetworkLogonRight policy settings. Only those GPOs are evaluated for which the user has Read and Apply Group...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_permit": {
       "name": "ad_gpo_map_permit",
@@ -1345,7 +1362,8 @@
       ],
       "default": "the default set of PAM service names includes:",
       "doc": "A comma-separated list of PAM service names for which GPO-based access is always granted, regardless of any GPO Logon Rights. It is possible to add another PAM service name to the default set by using +service_name or to explicitly remove a...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_remote_interactive": {
       "name": "ad_gpo_map_remote_interactive",
@@ -1355,7 +1373,8 @@
       ],
       "default": "the default set of PAM service names includes:",
       "doc": "A comma-separated list of PAM service names for which GPO-based access control is evaluated based on the RemoteInteractiveLogonRight and DenyRemoteInteractiveLogonRight policy settings. Only those GPOs are evaluated for which the user has R...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_gpo_map_service": {
       "name": "ad_gpo_map_service",
@@ -1365,7 +1384,8 @@
       ],
       "default": "not set",
       "doc": "A comma-separated list of PAM service names for which GPO-based access control is evaluated based on the ServiceLogonRight and DenyServiceLogonRight policy settings. Only those GPOs are evaluated for which the user has Read and Apply Group...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_hostname": {
       "name": "ad_hostname",
@@ -1374,7 +1394,8 @@
         "domain/ad"
       ],
       "doc": "Optional. On machines where the hostname(5) does not reflect the fully qualified name, sssd will try to expand the short name. If it is not possible or the short name should be really used instead, set this parameter explicitly. This field...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_machine_account_password_renewal_opts": {
       "name": "ad_machine_account_password_renewal_opts",
@@ -1384,7 +1405,8 @@
       ],
       "default": "86400:750:300:realm (24h, 12m30s and 5m)",
       "doc": "This option should only be used to test the machine account renewal task. The option expects 3 integers and a string separated by a colon (':'). The first integer defines the interval in seconds how often the task is run. The second specifi...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_maximum_machine_account_password_age": {
       "name": "ad_maximum_machine_account_password_age",
@@ -1394,7 +1416,8 @@
       ],
       "default": "30 days",
       "doc": "SSSD will check once a day if the machine account password is older than the given age in days and try to renew it. A value of 0 will disable the renewal attempt. Default: 30 days",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_server": {
       "name": "ad_server",
@@ -1403,7 +1426,8 @@
         "domain/ad"
       ],
       "doc": "The comma-separated list of hostnames of the AD servers to which SSSD should connect in order of preference. For more information on failover and server redundancy, see the FAILOVER section. This is optional if autodiscovery is enabled. For...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_site": {
       "name": "ad_site",
@@ -1413,7 +1437,8 @@
       ],
       "default": "Not set",
       "doc": "Specify AD site to which client should try to connect. If this option is not provided, the AD site will be auto-discovered. Default: Not set",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_update_samba_machine_account_password": {
       "name": "ad_update_samba_machine_account_password",
@@ -1423,7 +1448,8 @@
       ],
       "default": "false",
       "doc": "If enabled, when SSSD renews the machine account password, it will also be updated in Samba's database. This prevents Samba's copy of the machine account password from getting out of date when it is set up to use AD for authentication. Defa...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ad_use_ldaps": {
       "name": "ad_use_ldaps",
@@ -1433,7 +1459,8 @@
       ],
       "default": "False",
       "doc": "By default SSSD uses the plain LDAP port 389 and the Global Catalog port 3268. If this option is set to True SSSD will use the LDAPS port 636 and Global Catalog port 3269 with LDAPS protection. Since AD does not allow to have multiple encry...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "allowed_shells": {
       "name": "allowed_shells",
@@ -1443,7 +1470,8 @@
       ],
       "default": "Not set. The user shell is automatically used.",
       "doc": "Restrict user shell to one of the listed values. The order of evaluation is: 1. If the shell is present in /etc/shells , it is used. 2. If the shell is in the allowed_shells list but not in /etc/shells , use the value of the shell_fallback...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "allowed_uids": {
       "name": "allowed_uids",
@@ -1454,7 +1482,8 @@
       ],
       "default": "0, \u0026sssd_user_name; (only root and SSSD",
       "doc": "Specifies the comma-separated list of UID values or user names that are allowed to access the PAC responder. User names are resolved to UIDs at startup. Default: 0, \u0026sssd_user_name; (only root and SSSD service users are allowed to access th...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "auth_provider": {
       "name": "auth_provider",
@@ -1471,7 +1500,8 @@
         "proxy"
       ],
       "doc": "The authentication provider used for the domain. Supported auth providers are: ldap for native LDAP authentication. See sssd-ldap 5 for more information on configuring LDAP. krb5 for Kerberos authentication. See sssd-krb5 5 for more informa...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "auto_private_groups": {
       "name": "auto_private_groups",
@@ -1485,7 +1515,8 @@
         "hybrid"
       ],
       "doc": "This option takes any of three available values: true Create user's private group unconditionally from user's UID number. The GID number is ignored in this case. NOTE: Because the GID number and the user private group are inferred from the...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "autofs_negative_timeout": {
       "name": "autofs_negative_timeout",
@@ -1495,7 +1526,8 @@
       ],
       "default": "15",
       "doc": "Specifies for how many seconds should the autofs responder negative cache hits (that is, queries for invalid map entries, like nonexistent ones) before asking the back end again. Default: 15",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "autofs_provider": {
       "name": "autofs_provider",
@@ -1511,7 +1543,8 @@
         "ldap"
       ],
       "doc": "The autofs provider used for the domain. Supported autofs providers are: ldap to load maps stored in LDAP. See sssd-ldap 5 for more information on configuring LDAP. ipa to load maps stored in an IPA server. See sssd-ipa 5 for more informati...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "avoid_by_id_lookups": {
       "name": "avoid_by_id_lookups",
@@ -1521,7 +1554,8 @@
       ],
       "default": "False (True for IdP provider)",
       "doc": "If this option is set to 'true' SSSD will try to avoid sending lookups by ID to the backend and will switch to a lookup by name if a cached object with a matching ID can be found. This option can e.g. be used in cases where searches by ID a...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "ca_db": {
       "name": "ca_db",
@@ -1530,7 +1564,8 @@
         "ssh"
       ],
       "doc": "Path to a storage of trusted CA certificates. The option is used to validate user certificates before deriving public ssh keys from them. Default: /etc/sssd/pki/sssd_auth_ca_db.pem (path to a file with trusted CA certificates in PEM format)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "cache_credentials": {
       "name": "cache_credentials",
@@ -1540,7 +1575,8 @@
       ],
       "default": "FALSE",
       "doc": "Determines if user credentials are also cached in the local LDB cache. The cached credentials refer to passwords, which includes the first (long term) factor of two-factor authentication, not other authentication mechanisms. Passkey and Sma...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "cache_credentials_minimal_first_factor_length": {
       "name": "cache_credentials_minimal_first_factor_length",
@@ -1550,7 +1586,8 @@
       ],
       "default": "8",
       "doc": "If 2-Factor-Authentication (2FA) is used and credentials should be saved this value determines the minimal length the first authentication factor (long term password) must have to be saved as SHA512 hash into the cache. This should avoid th...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "cache_first": {
       "name": "cache_first",
@@ -1561,7 +1598,8 @@
       ],
       "default": "true",
       "doc": "This option specifies whether the responder should query all caches before querying the Data Providers. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "cached_auth_timeout": {
       "name": "cached_auth_timeout",
@@ -1571,7 +1609,8 @@
       ],
       "default": "0",
       "doc": "Specifies the number of seconds since the last successful online authentication during which SSSD will authenticate users via cached credentials, even while online. If the cached authentication fails, SSSD immediately falls back to online a...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "case_sensitive": {
       "name": "case_sensitive",
@@ -1585,7 +1624,8 @@
         "preserving"
       ],
       "doc": "Treat user and group names as case sensitive. Possible option values are: True Case sensitive. This value is invalid for AD provider.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "certificate_verification": {
       "name": "certificate_verification",
@@ -1600,7 +1640,8 @@
         "crl"
       ],
       "doc": "With this parameter the certificate verification can be tuned with a comma separated list of options. Supported options are: no_ocsp Disables Online Certificate Status Protocol (OCSP) checks. This might be needed if the OCSP servers defined...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "chpass_provider": {
       "name": "chpass_provider",
@@ -1617,7 +1658,8 @@
         "proxy"
       ],
       "doc": "The provider which should handle change password operations for the domain. Supported change password providers are: ldap to change a password stored in a LDAP server. See sssd-ldap 5 for more information on configuring LDAP. krb5 to change...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "client_idle_timeout": {
       "name": "client_idle_timeout",
@@ -1628,7 +1670,8 @@
       ],
       "default": "60, KCM: 300",
       "doc": "This option specifies the number of seconds that a client of an SSSD process can hold onto a file descriptor without communicating on it. This value is limited in order to avoid resource exhaustion on the system. The timeout can't be shorte...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "command": {
       "name": "command",
@@ -1637,7 +1680,8 @@
         "service",
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "config_file_version": {
       "name": "config_file_version",
@@ -1646,7 +1690,8 @@
         "sssd"
       ],
       "doc": "Declares the sssd.conf file format version. The daemon refuses to start if the file was written for a newer release than the running one.",
-      "source": "curated"
+      "source": "curated",
+      "confidence": "curated"
     },
     "core_dumpable": {
       "name": "core_dumpable",
@@ -1656,7 +1701,8 @@
       ],
       "default": "true",
       "doc": "This option can be used for general system hardening: setting it to 'false' forbids core dumps for all SSSD processes to avoid leaking plain text passwords. See man page prctl:PR_SET_DUMPABLE on Linux or procctl:PROC_TRACE_CTL on FreeBSD fo...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "debug": {
       "name": "debug",
@@ -1667,7 +1713,8 @@
         "*"
       ],
       "doc": "SSSD 1.14 and later also includes the debug alias for debug_level as a convenience feature. If both are specified, the value of debug_level will be used.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "debug_backtrace_enabled": {
       "name": "debug_backtrace_enabled",
@@ -1678,7 +1725,8 @@
       ],
       "default": "true",
       "doc": "Enable debug backtrace. In case SSSD is run with debug_level less than 9, everything is logged to a ring buffer in memory and flushed to a log file on any error up to and including `min(0x0040, debug_level)` (i.e. if debug_level is explicit...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "debug_level": {
       "name": "debug_level",
@@ -1688,7 +1736,8 @@
         "domain",
         "*"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "debug_microseconds": {
       "name": "debug_microseconds",
@@ -1699,7 +1748,8 @@
       ],
       "default": "false",
       "doc": "Add microseconds to the timestamp in debug messages. If journald is enabled for SSSD debug logging this option is ignored. Default: false",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "debug_timestamps": {
       "name": "debug_timestamps",
@@ -1711,7 +1761,8 @@
       ],
       "default": "true",
       "doc": "Add a timestamp to the debug messages. If journald is enabled for SSSD debug logging this option is ignored. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "default_domain_suffix": {
       "name": "default_domain_suffix",
@@ -1721,7 +1772,8 @@
       ],
       "default": "not set",
       "doc": "Please note that this option is deprecated and domain_resolution_order should be used. This string will be used as a default domain name for all names without a domain name component. The main use case is environments where the primary doma...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "default_shell": {
       "name": "default_shell",
@@ -1732,7 +1784,8 @@
       ],
       "default": "not set (Return NULL if no shell is",
       "doc": "The default shell to use if the provider does not return one during lookup. This option can be specified globally in the [nss] section or per-domain. Default: not set (Return NULL if no shell is specified and rely on libc to substitute some...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "description": {
       "name": "description",
@@ -1741,7 +1794,8 @@
         "service",
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "disable_netlink": {
       "name": "disable_netlink",
@@ -1751,7 +1805,8 @@
       ],
       "default": "false (netlink changes are detected)",
       "doc": "SSSD hooks into the netlink interface to monitor changes to routes, addresses, links and trigger certain actions. The SSSD state changes caused by netlink events may be undesirable and can be disabled by setting this option to 'true' Defaul...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dns_discovery_domain": {
       "name": "dns_discovery_domain",
@@ -1761,7 +1816,8 @@
       ],
       "default": "Use the domain part of machine's hostname",
       "doc": "If service discovery is used in the back end, specifies the domain part of the service discovery DNS query. Default: Use the domain part of machine's hostname",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dns_resolver_op_timeout": {
       "name": "dns_resolver_op_timeout",
@@ -1771,7 +1827,8 @@
       ],
       "default": "3",
       "doc": "Defines the amount of time (in seconds) to wait to resolve single DNS query (e.g. resolution of a hostname or an SRV record) before trying the next hostname or DNS discovery. Please see the section FAILOVER in sssd-ldap 5 , sssd-krb5 5 , ss...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dns_resolver_server_timeout": {
       "name": "dns_resolver_server_timeout",
@@ -1781,7 +1838,8 @@
       ],
       "default": "1000",
       "doc": "Defines the timeout duration (in milliseconds) SSSD waits for a DNS server to respond before moving to the next one. The AD provider will use this option for the CLDAP ping timeouts as well. Please see the section FAILOVER in sssd-ldap 5 ,...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dns_resolver_timeout": {
       "name": "dns_resolver_timeout",
@@ -1791,7 +1849,8 @@
       ],
       "default": "6",
       "doc": "Defines the amount of time (in seconds) to wait for a reply from the internal fail over service before assuming that the service is unreachable. If this timeout is reached, the domain will continue to operate in offline mode. Please see the...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dns_resolver_use_search_list": {
       "name": "dns_resolver_use_search_list",
@@ -1801,7 +1860,8 @@
       ],
       "default": "TRUE",
       "doc": "Normally, the DNS resolver searches the domain list defined in the \"search\" directive from the resolv.conf file. This can lead to delays in environments with improperly configured DNS. If fully qualified domain names (or _srv_) are used in...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "domain_resolution_order": {
       "name": "domain_resolution_order",
@@ -1811,7 +1871,8 @@
       ],
       "default": "Not set",
       "doc": "Comma separated list of domains and subdomains representing the lookup order that will be followed. The list doesn't have to include all possible domains as the missing domains will be looked up based on the order they're presented in the d...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "domain_type": {
       "name": "domain_type",
@@ -1821,7 +1882,8 @@
       ],
       "default": "posix",
       "doc": "Specifies whether the domain is meant to be used by POSIX-aware clients such as the Name Service Switch or by applications that do not need POSIX data to be present or generated. Only objects from POSIX domains are available to the operatin...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "domains": {
       "name": "domains",
@@ -1832,7 +1894,8 @@
       ],
       "default": "the configured domain in sssd.conf",
       "doc": "A domain is a database containing user information. SSSD can use more domains at the same time, but at least one must be configured or SSSD won't start. This parameter describes the list of domains in the order you want them to be queried....",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_address": {
       "name": "dyndns_address",
@@ -1844,7 +1907,8 @@
       ],
       "default": "No filtering of IP addresses.",
       "doc": "Optional. Applicable only when dyndns_update is true. A list of IP addresses or IP networks to be used for dynamic DNS updates. Network addresses must be in CIDR format. An entry can be prefixed with ! to indicate exclusion. The best match...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_auth": {
       "name": "dyndns_auth",
@@ -1856,7 +1920,8 @@
       ],
       "default": "GSS-TSIG",
       "doc": "Whether the nsupdate utility should use GSS-TSIG authentication for secure updates with the DNS server, insecure updates can be sent by setting this option to 'none'. Default: GSS-TSIG",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_auth_ptr": {
       "name": "dyndns_auth_ptr",
@@ -1867,7 +1932,8 @@
       ],
       "default": "Same as dyndns_auth",
       "doc": "Whether the nsupdate utility should use GSS-TSIG authentication for secure PTR updates with the DNS server, insecure updates can be sent by setting this option to 'none'. Default: Same as dyndns_auth",
-      "source": "sssd-ad.5.xml"
+      "source": "sssd-ad.5.xml",
+      "confidence": "man"
     },
     "dyndns_dot_cacert": {
       "name": "dyndns_dot_cacert",
@@ -1879,7 +1945,8 @@
       ],
       "default": "None (use global certificate store)",
       "doc": "This option specifies the file of the certificate authorities certificates (in PEM format) in order to verify the remote server TLS certificate when using DoT. Default: None (use global certificate store)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_dot_cert": {
       "name": "dyndns_dot_cert",
@@ -1891,7 +1958,8 @@
       ],
       "default": "None (Do not use TLS authentication)",
       "doc": "This option sets the certificate(s) file for authentication for the DoT transport to the remote server. The certificate chain file is expected to be in PEM format. The dyndns_dot_cert and dyndns_dot_key options must be both set to achieve m...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_dot_key": {
       "name": "dyndns_dot_key",
@@ -1903,7 +1971,8 @@
       ],
       "default": "None (Do not use TLS authentication)",
       "doc": "This option sets the key file for authenticated encryption for the DoT transport to the remote server. The private key file is expected to be in PEM format. Default: None (Do not use TLS authentication)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_force_tcp": {
       "name": "dyndns_force_tcp",
@@ -1915,7 +1984,8 @@
       ],
       "default": "False (let nsupdate choose the protocol)",
       "doc": "Whether the nsupdate utility should default to using TCP for communicating with the DNS server. Default: False (let nsupdate choose the protocol)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_iface": {
       "name": "dyndns_iface",
@@ -1927,7 +1997,8 @@
       ],
       "default": "Use the IP addresses of the interface which",
       "doc": "Optional. Applicable only when dyndns_update is true. Choose the interface or a list of interfaces whose IP addresses should be used for dynamic DNS updates. The name of interface can be a wildcard pattern prefixed with ! for interface excl...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_refresh_interval": {
       "name": "dyndns_refresh_interval",
@@ -1939,7 +2010,8 @@
       ],
       "default": "86400 (24 hours)",
       "doc": "How often should the back end perform periodic DNS update in addition to the automatic update performed when the back end goes online. This is optional and applicable only when dyndns_update is true. Note that the minimum value is 60 second...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_refresh_interval_offset": {
       "name": "dyndns_refresh_interval_offset",
@@ -1947,7 +2019,8 @@
       "sections": [
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_server": {
       "name": "dyndns_server",
@@ -1959,7 +2032,8 @@
       ],
       "default": "None (let nsupdate choose the server)",
       "doc": "The DNS server to use when performing a DNS update. In most setups, it's recommended to leave this option unset. Setting this option makes sense for environments where the DNS server is different from the identity server or when we use encr...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_ttl": {
       "name": "dyndns_ttl",
@@ -1971,7 +2045,8 @@
       ],
       "default": "3600 (seconds)",
       "doc": "The TTL to apply to the client DNS record when updating it. If dyndns_update is false this has no effect. This will override the TTL serverside if set by an administrator. Default: 3600 (seconds)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_update": {
       "name": "dyndns_update",
@@ -1983,7 +2058,8 @@
       ],
       "default": "true",
       "doc": "Optional. This option tells SSSD to automatically update the Active Directory DNS server with the IP address of this client. The update is secured using GSS-TSIG. As a consequence, the Active Directory administrator only needs to allow secu...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_update_per_family": {
       "name": "dyndns_update_per_family",
@@ -1995,7 +2071,8 @@
       ],
       "default": "true",
       "doc": "DNS update is by default performed in two steps - IPv4 update and then IPv6 update. In some cases it might be desirable to perform IPv4 and IPv6 update in single step. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "dyndns_update_ptr": {
       "name": "dyndns_update_ptr",
@@ -2007,7 +2084,8 @@
       ],
       "default": "True",
       "doc": "Whether the PTR record should also be explicitly updated when updating the client's DNS records. Applicable only when dyndns_update is true. Note that dyndns_update_per_family parameter does not apply for PTR record updates. Those updates a...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "enable_files_domain": {
       "name": "enable_files_domain",
@@ -2015,7 +2093,8 @@
       "sections": [
         "sssd"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "enabled": {
       "name": "enabled",
@@ -2024,7 +2103,8 @@
         "domain"
       ],
       "doc": "Explicitly enable or disable the domain. If true , the domain is always enabled . If false , the domain is always disabled . If this option is not set, the domain is enabled only if it is listed in the domains option in the [sssd] section.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_autofs_timeout": {
       "name": "entry_cache_autofs_timeout",
@@ -2034,7 +2114,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should the autofs service consider automounter maps valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_group_timeout": {
       "name": "entry_cache_group_timeout",
@@ -2044,7 +2125,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should nss_sss consider group entries valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_netgroup_timeout": {
       "name": "entry_cache_netgroup_timeout",
@@ -2054,7 +2136,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should nss_sss consider netgroup entries valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_nowait_percentage": {
       "name": "entry_cache_nowait_percentage",
@@ -2064,7 +2147,8 @@
       ],
       "default": "50",
       "doc": "The entry cache can be set to automatically update entries in the background if they are requested beyond a percentage of the entry_cache_timeout value for the domain. For example, if the domain's entry_cache_timeout is set to 30s and entry...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_resolver_timeout": {
       "name": "entry_cache_resolver_timeout",
@@ -2074,7 +2158,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should nss_sss consider hosts and networks entries valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_service_timeout": {
       "name": "entry_cache_service_timeout",
@@ -2084,7 +2169,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should nss_sss consider service entries valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_ssh_host_timeout": {
       "name": "entry_cache_ssh_host_timeout",
@@ -2094,7 +2180,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds to keep a host ssh key after refresh. IE how long to cache the host key for. Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_sudo_timeout": {
       "name": "entry_cache_sudo_timeout",
@@ -2104,7 +2191,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should sudo consider rules valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_timeout": {
       "name": "entry_cache_timeout",
@@ -2114,7 +2202,8 @@
       ],
       "default": "5400",
       "doc": "How many seconds should nss_sss consider entries valid before asking the backend again The cache expiration timestamps are stored as attributes of individual objects in the cache. Therefore, changing the cache timeout only has effect for ne...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_cache_user_timeout": {
       "name": "entry_cache_user_timeout",
@@ -2124,7 +2213,8 @@
       ],
       "default": "entry_cache_timeout",
       "doc": "How many seconds should nss_sss consider user entries valid before asking the backend again Default: entry_cache_timeout",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "entry_negative_timeout": {
       "name": "entry_negative_timeout",
@@ -2134,7 +2224,8 @@
       ],
       "default": "15",
       "doc": "Specifies for how many seconds nss_sss should cache negative cache hits (that is, queries for invalid database entries, like nonexistent ones) before asking the back end again. Default: 15",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "enum_cache_timeout": {
       "name": "enum_cache_timeout",
@@ -2144,7 +2235,8 @@
       ],
       "default": "120",
       "doc": "How many seconds should nss_sss cache enumerations (requests for info about all users) Default: 120",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "enumerate": {
       "name": "enumerate",
@@ -2154,7 +2246,8 @@
       ],
       "default": "FALSE",
       "doc": "Determines if a domain can be enumerated, that is, whether the domain can list all the users and group it contains. Note that it is not required to enable enumeration in order for secondary groups to be displayed. This parameter can have on...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "exclude_groups": {
       "name": "exclude_groups",
@@ -2164,7 +2257,8 @@
       ],
       "default": "Empty. No groups excluded.",
       "doc": "A comma-separated list of groups, members of which should be excluded from recording. Only applicable with 'scope=all'. NOTE: using this option (having it set to anything) has a considerable performance cost, because each uncached request f...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "exclude_users": {
       "name": "exclude_users",
@@ -2174,7 +2268,8 @@
       ],
       "default": "Empty. No users excluded.",
       "doc": "A comma-separated list of users to be excluded from recording, only applicable with 'scope=all'. Default: Empty. No users excluded.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "failover_primary_timeout": {
       "name": "failover_primary_timeout",
@@ -2184,7 +2279,8 @@
       ],
       "default": "31",
       "doc": "When no primary server is available, SSSD fails over to a backup server. This option defines the number of seconds SSSD waits before attempting to reconnect to the primary server. Note: The minimum value is 31. Default: 31",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "fallback_homedir": {
       "name": "fallback_homedir",
@@ -2195,7 +2291,8 @@
       ],
       "default": "not set (no substitution for unset home",
       "doc": "Set a default template for a user's home directory if one is not specified explicitly by the domain's data provider. The available values for this option are the same as for override_homedir. example: fallback_homedir = /home/%u Default: no...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "fd_limit": {
       "name": "fd_limit",
@@ -2206,7 +2303,8 @@
       ],
       "default": "8192 (or limits.conf \"hard\" limit)",
       "doc": "This option specifies the maximum number of file descriptors that may be opened at one time by this SSSD process. Note this value will be capped by the init system at the startup of SSSD, see e.g. man systemd.exec for details. Default: 8192...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "filter_groups": {
       "name": "filter_groups",
@@ -2217,7 +2315,8 @@
       ],
       "default": "root",
       "doc": "Exclude certain users or groups from being fetched from the sss NSS database. This is particularly useful for system accounts. This option can also be set per-domain or include fully-qualified names to filter only users from the particular...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "filter_users": {
       "name": "filter_users",
@@ -2228,7 +2327,8 @@
       ],
       "default": "root",
       "doc": "Exclude certain users or groups from being fetched from the sss NSS database. This is particularly useful for system accounts. This option can also be set per-domain or include fully-qualified names to filter only users from the particular...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "filter_users_in_groups": {
       "name": "filter_users_in_groups",
@@ -2238,7 +2338,8 @@
       ],
       "default": "true",
       "doc": "If you want filtered users to remain group members set this option to false Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "full_name_format": {
       "name": "full_name_format",
@@ -2248,7 +2349,8 @@
         "domain"
       ],
       "doc": "A printf 3 -compatible format that describes how to compose a fully qualified name from user name and domain name components. The following expansions are supported: %1$s user name",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "get_domains_timeout": {
       "name": "get_domains_timeout",
@@ -2259,7 +2361,8 @@
       ],
       "default": "60",
       "doc": "Specifies time in seconds for which the list of subdomains will be considered valid. Default: 60",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "groups": {
       "name": "groups",
@@ -2269,7 +2372,8 @@
       ],
       "default": "Empty. Matches no groups.",
       "doc": "A comma-separated list of groups, members of which should have session recording enabled. Matches group names as returned by NSS. I.e. after the possible space replacement, case changes, etc. NOTE: using this option (having it set to anythi...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "homedir_substring": {
       "name": "homedir_substring",
@@ -2279,7 +2383,8 @@
         "domain"
       ],
       "default": "/home",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "hostid_provider": {
       "name": "hostid_provider",
@@ -2289,7 +2394,8 @@
       ],
       "default": "The value of",
       "doc": "The provider used for retrieving host identity information. Supported hostid providers are: ipa to load host identity stored in an IPA server. See sssd-ipa 5 for more information on configuring IPA. none disables hostid explicitly. Default:...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "id_provider": {
       "name": "id_provider",
@@ -2307,7 +2413,8 @@
         "files"
       ],
       "doc": "The identification provider used for the domain. Supported ID providers are: proxy : Support a legacy NSS provider. ldap : LDAP provider. See sssd-ldap 5 for more information on configuring LDAP. ipa : FreeIPA and Red Hat Identity Managemen...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "idmap_range_max": {
       "name": "idmap_range_max",
@@ -2317,7 +2424,8 @@
       ],
       "default": "2000200000",
       "doc": "Specifies the upper (exclusive) bound of the range of POSIX IDs to use for mapping IdP users and groups to POSIX IDs. It is the first POSIX ID which will not be used for POSIX ID-mapping anymore. Default: 2000200000",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idmap_range_min": {
       "name": "idmap_range_min",
@@ -2327,7 +2435,8 @@
       ],
       "default": "200000",
       "doc": "Specifies the lower (inclusive) bound of the range of POSIX IDs to use for mapping IdP users and group to POSIX IDs. It is the first POSIX ID which can be used for the mapping. The interval between idmap_range_min and idmap_range_max will b...",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idmap_range_size": {
       "name": "idmap_range_size",
@@ -2337,7 +2446,8 @@
       ],
       "default": "200000",
       "doc": "Specifies the number of POSIX IDs available for a single IdP domain. Default: 200000",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_auth_scope": {
       "name": "idp_auth_scope",
@@ -2347,7 +2457,8 @@
       ],
       "default": "Not set",
       "doc": "Scope required during authentication. The scopes are used by the server to determine which attributes/claims are returned to the caller. Currently the tokens returned during user authentication are not used for other purposes hence the only...",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_auto_refresh": {
       "name": "idp_auto_refresh",
@@ -2357,7 +2468,8 @@
       ],
       "default": "false",
       "doc": "Refresh tokens automatically, after they have reached about half their lifetime. Note: Scheduled token refreshes are not preserved across restarts of SSSD. Default: false",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_client_id": {
       "name": "idp_client_id",
@@ -2367,7 +2479,8 @@
       ],
       "default": "Not set (Required)",
       "doc": "ID of the IdP client used by SSSD to authenticate users and as a client to lookup user and group attributes. This client must offer device authorization according to RFC-8628 and must have permissions to search and read user and group attri...",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_client_secret": {
       "name": "idp_client_secret",
@@ -2377,7 +2490,8 @@
       ],
       "default": "Not set",
       "doc": "Password of the IdP client. The password is required for the id_provider. If only used as auth_provider it depends on the server side configuration if it is required or not. Default: Not set",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_device_auth_endpoint": {
       "name": "idp_device_auth_endpoint",
@@ -2387,7 +2501,8 @@
       ],
       "default": "Not set",
       "doc": "IdP endpoint for device authorization according to RFC-8628. This is required for user authentication. Default: Not set",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_id_scope": {
       "name": "idp_id_scope",
@@ -2397,7 +2512,8 @@
       ],
       "default": "Not set",
       "doc": "Scope required for looking up user and group attributes with the REST API. The scopes are used by the server to determine which attributes/claims are returned to the caller. Note: In previous versions of SSSD, this option was expected to al...",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_request_timeout": {
       "name": "idp_request_timeout",
@@ -2407,7 +2523,8 @@
       ],
       "default": "10",
       "doc": "Timeout in seconds for an individual request to the IdP. Default: 10",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_token_endpoint": {
       "name": "idp_token_endpoint",
@@ -2417,7 +2534,8 @@
       ],
       "default": "Not set (Required)",
       "doc": "IdP endpoint for requesting access tokens. Default: Not set (Required)",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_type": {
       "name": "idp_type",
@@ -2427,7 +2545,8 @@
       ],
       "default": "Not set (Required)",
       "doc": "Required option that specifies the IdP product. Currently Entra ID (entra_id) and Keycloak (keycloak) are supported. Depending on the IdP product additional platform specific options might follow the name separated by a colon (:). E.g. for...",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "idp_userinfo_endpoint": {
       "name": "idp_userinfo_endpoint",
@@ -2437,7 +2556,8 @@
       ],
       "default": "Not set",
       "doc": "IdP userinfo endpoint to request user attributes after a successful authentication of the user. Required for authentication. Default: Not set",
-      "source": "sssd-idp.5.xml"
+      "source": "sssd-idp.5.xml",
+      "confidence": "man"
     },
     "ignore_group_members": {
       "name": "ignore_group_members",
@@ -2447,7 +2567,8 @@
       ],
       "default": "FALSE",
       "doc": "Do not return group members for group lookups. If set to TRUE, the group membership attribute is not requested from the ldap server, and group members are not returned when processing group lookup calls, such as getgrnam 3 or getgrgid 3 . A...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "implicit_pac_responder": {
       "name": "implicit_pac_responder",
@@ -2457,7 +2578,8 @@
       ],
       "default": "true",
       "doc": "The PAC responder is enabled automatically for the IPA and AD provider to evaluate and check the PAC. If it has to be disabled set this option to 'false'. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "inherit_from": {
       "name": "inherit_from",
@@ -2467,7 +2589,8 @@
       ],
       "default": "Not set",
       "doc": "The SSSD POSIX-type domain the application domain inherits all settings from. The application domain can moreover add its own settings to the application settings that augment or override the sibling domain settings. Default: Not set",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "ipa_access_order": {
       "name": "ipa_access_order",
@@ -2476,7 +2599,8 @@
         "domain/ipa"
       ],
       "doc": "Comma separated list of access control options. Allowed values are: expire : use IPA's account expiration policy. pwd_expire_policy_reject, pwd_expire_policy_warn, pwd_expire_policy_renew: These options are useful if users are interested in...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_anchor_uuid": {
       "name": "ipa_anchor_uuid",
@@ -2487,7 +2611,8 @@
       ],
       "default": "ipaAnchorUUID",
       "doc": "Name of the attribute containing the reference to the original object in a remote domain. Default: ipaAnchorUUID",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_automount_location": {
       "name": "ipa_automount_location",
@@ -2498,7 +2623,8 @@
       ],
       "default": "The location named \"default\"",
       "doc": "The automounter location this IPA client will be using Default: The location named \"default\"",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_backup_server": {
       "name": "ipa_backup_server",
@@ -2507,7 +2633,8 @@
         "domain/ipa"
       ],
       "doc": "The comma-separated list of IP addresses or hostnames of the IPA servers to which SSSD should connect in the order of preference. For more information on failover and server redundancy, see the FAILOVER section. This is optional if autodisc...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_deskprofile_refresh": {
       "name": "ipa_deskprofile_refresh",
@@ -2518,7 +2645,8 @@
       ],
       "default": "5 (seconds)",
       "doc": "The amount of time between lookups of the Desktop Profile rules against the IPA server. This will reduce the latency and load on the IPA server if there are many desktop profiles requests made in a short period. Default: 5 (seconds)",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_deskprofile_request_interval": {
       "name": "ipa_deskprofile_request_interval",
@@ -2529,7 +2657,8 @@
       ],
       "default": "60 (minutes)",
       "doc": "The amount of time between lookups of the Desktop Profile rules against the IPA server in case the last request did not return any rule. Default: 60 (minutes)",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_deskprofile_search_base": {
       "name": "ipa_deskprofile_search_base",
@@ -2539,7 +2668,8 @@
       ],
       "default": "Use base DN",
       "doc": "Optional. Use the given string as search base for Desktop Profile related objects. Default: Use base DN",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_domain": {
       "name": "ipa_domain",
@@ -2548,7 +2678,8 @@
         "domain/ipa"
       ],
       "doc": "Specifies the name of the IPA domain. This is optional. If not provided, the configuration domain name is used.",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_group_override_object_class": {
       "name": "ipa_group_override_object_class",
@@ -2559,7 +2690,8 @@
       ],
       "default": "ipaGroupOverride",
       "doc": "Name of the objectclass for group overrides. It is used to determine if the found override object is related to a user or a group. Group overrides can contain attributes given by ldap_group_name ldap_group_gid_number Default: ipaGroupOverri...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hbac_refresh": {
       "name": "ipa_hbac_refresh",
@@ -2570,7 +2702,8 @@
       ],
       "default": "5 (seconds)",
       "doc": "The amount of time between lookups of the HBAC rules against the IPA server. This will reduce the latency and load on the IPA server if there are many access-control requests made in a short period. Default: 5 (seconds)",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hbac_search_base": {
       "name": "ipa_hbac_search_base",
@@ -2580,7 +2713,8 @@
       ],
       "default": "Use base DN",
       "doc": "Optional. Use the given string as search base for HBAC related objects. Default: Use base DN",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hbac_support_srchost": {
       "name": "ipa_hbac_support_srchost",
@@ -2588,7 +2722,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_fqdn": {
       "name": "ipa_host_fqdn",
@@ -2598,7 +2733,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_member_of": {
       "name": "ipa_host_member_of",
@@ -2607,7 +2743,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_name": {
       "name": "ipa_host_name",
@@ -2616,7 +2753,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_object_class": {
       "name": "ipa_host_object_class",
@@ -2626,7 +2764,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_search_base": {
       "name": "ipa_host_search_base",
@@ -2635,7 +2774,8 @@
         "domain/ipa"
       ],
       "doc": "Deprecated. Use ldap_host_search_base instead.",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_serverhostname": {
       "name": "ipa_host_serverhostname",
@@ -2644,7 +2784,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_ssh_public_key": {
       "name": "ipa_host_ssh_public_key",
@@ -2654,7 +2795,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_host_uuid": {
       "name": "ipa_host_uuid",
@@ -2663,7 +2805,8 @@
         "domain/ipa/access",
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostgroup_member": {
       "name": "ipa_hostgroup_member",
@@ -2671,7 +2814,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostgroup_memberof": {
       "name": "ipa_hostgroup_memberof",
@@ -2679,7 +2823,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostgroup_name": {
       "name": "ipa_hostgroup_name",
@@ -2687,7 +2832,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostgroup_objectclass": {
       "name": "ipa_hostgroup_objectclass",
@@ -2695,7 +2841,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostgroup_uuid": {
       "name": "ipa_hostgroup_uuid",
@@ -2703,7 +2850,8 @@
       "sections": [
         "domain/ipa/access"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_hostname": {
       "name": "ipa_hostname",
@@ -2712,7 +2860,8 @@
         "domain/ipa"
       ],
       "doc": "Optional. May be set on machines where the hostname(5) does not reflect the fully qualified name used in the IPA domain to identify this host. The hostname must be fully qualified.",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_master_domain_search_base": {
       "name": "ipa_master_domain_search_base",
@@ -2722,7 +2871,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for master domain object. See ldap_search_base for information about configuring multiple search bases. Default: the value of cn=ad,cn=etc,%basedn",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_domain": {
       "name": "ipa_netgroup_domain",
@@ -2730,7 +2880,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_member": {
       "name": "ipa_netgroup_member",
@@ -2738,7 +2889,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_member_ext_host": {
       "name": "ipa_netgroup_member_ext_host",
@@ -2746,7 +2898,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_member_host": {
       "name": "ipa_netgroup_member_host",
@@ -2754,7 +2907,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_member_of": {
       "name": "ipa_netgroup_member_of",
@@ -2762,7 +2916,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_member_user": {
       "name": "ipa_netgroup_member_user",
@@ -2770,7 +2925,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_name": {
       "name": "ipa_netgroup_name",
@@ -2778,7 +2934,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_object_class": {
       "name": "ipa_netgroup_object_class",
@@ -2786,7 +2943,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_netgroup_uuid": {
       "name": "ipa_netgroup_uuid",
@@ -2794,7 +2952,8 @@
       "sections": [
         "domain/ipa/id"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_override_object_class": {
       "name": "ipa_override_object_class",
@@ -2805,7 +2964,8 @@
       ],
       "default": "ipaOverrideAnchor",
       "doc": "Objectclass of the override objects. Default: ipaOverrideAnchor",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_ranges_search_base": {
       "name": "ipa_ranges_search_base",
@@ -2813,7 +2973,8 @@
       "sections": [
         "domain/ipa"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_refresh": {
       "name": "ipa_selinux_refresh",
@@ -2824,7 +2985,8 @@
       ],
       "default": "5 (seconds)",
       "doc": "The amount of time between lookups of the SELinux maps against the IPA server. This will reduce the latency and load on the IPA server if there are many user login requests made in a short period. Default: 5 (seconds)",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_search_base": {
       "name": "ipa_selinux_search_base",
@@ -2834,7 +2996,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for SELinux user maps. See ldap_search_base for information about configuring multiple search bases. Default: the value of ldap_search_base",
-      "source": "sssd-ipa.5.xml"
+      "source": "sssd-ipa.5.xml",
+      "confidence": "man"
     },
     "ipa_selinux_usermap_enabled": {
       "name": "ipa_selinux_usermap_enabled",
@@ -2842,7 +3005,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_host_category": {
       "name": "ipa_selinux_usermap_host_category",
@@ -2850,7 +3014,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_member_host": {
       "name": "ipa_selinux_usermap_member_host",
@@ -2858,7 +3023,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_member_user": {
       "name": "ipa_selinux_usermap_member_user",
@@ -2866,7 +3032,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_name": {
       "name": "ipa_selinux_usermap_name",
@@ -2874,7 +3041,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_object_class": {
       "name": "ipa_selinux_usermap_object_class",
@@ -2882,7 +3050,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_see_also": {
       "name": "ipa_selinux_usermap_see_also",
@@ -2890,7 +3059,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_selinux_user": {
       "name": "ipa_selinux_usermap_selinux_user",
@@ -2898,7 +3068,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_user_category": {
       "name": "ipa_selinux_usermap_user_category",
@@ -2906,7 +3077,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_selinux_usermap_uuid": {
       "name": "ipa_selinux_usermap_uuid",
@@ -2914,7 +3086,8 @@
       "sections": [
         "domain/ipa/session"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_server": {
       "name": "ipa_server",
@@ -2923,7 +3096,8 @@
         "domain/ipa"
       ],
       "doc": "The comma-separated list of IP addresses or hostnames of the IPA servers to which SSSD should connect in the order of preference. For more information on failover and server redundancy, see the FAILOVER section. This is optional if autodisc...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_server_mode": {
       "name": "ipa_server_mode",
@@ -2934,7 +3108,8 @@
       ],
       "default": "false",
       "doc": "This option will be set by the IPA installer (ipa-server-install) automatically and denotes if SSSD is running on an IPA server or not. On an IPA server SSSD will lookup users and groups from trusted domains directly while on a client it wi...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_subdomains_search_base": {
       "name": "ipa_subdomains_search_base",
@@ -2945,7 +3120,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for trusted domains. See ldap_search_base for information about configuring multiple search bases. Default: the value of cn=trusts,%basedn",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_subid_ranges_search_base": {
       "name": "ipa_subid_ranges_search_base",
@@ -2954,7 +3130,8 @@
         "domain/ipa"
       ],
       "doc": "Deprecated. Use ldap_subid_ranges_search_base instead.",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmd_memberof": {
       "name": "ipa_sudocmd_memberof",
@@ -2962,7 +3139,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmd_object_class": {
       "name": "ipa_sudocmd_object_class",
@@ -2970,7 +3148,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmd_sudocmd": {
       "name": "ipa_sudocmd_sudocmd",
@@ -2978,7 +3157,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmd_uuid": {
       "name": "ipa_sudocmd_uuid",
@@ -2986,7 +3166,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmdgroup_entry_usn": {
       "name": "ipa_sudocmdgroup_entry_usn",
@@ -2994,7 +3175,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmdgroup_member": {
       "name": "ipa_sudocmdgroup_member",
@@ -3002,7 +3184,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmdgroup_name": {
       "name": "ipa_sudocmdgroup_name",
@@ -3010,7 +3193,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmdgroup_object_class": {
       "name": "ipa_sudocmdgroup_object_class",
@@ -3018,7 +3202,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudocmdgroup_uuid": {
       "name": "ipa_sudocmdgroup_uuid",
@@ -3026,7 +3211,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_allowcmd": {
       "name": "ipa_sudorule_allowcmd",
@@ -3034,7 +3220,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_cmdcategory": {
       "name": "ipa_sudorule_cmdcategory",
@@ -3042,7 +3229,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_denycmd": {
       "name": "ipa_sudorule_denycmd",
@@ -3050,7 +3238,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_enabled_flag": {
       "name": "ipa_sudorule_enabled_flag",
@@ -3058,7 +3247,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_entry_usn": {
       "name": "ipa_sudorule_entry_usn",
@@ -3066,7 +3256,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_externaluser": {
       "name": "ipa_sudorule_externaluser",
@@ -3074,7 +3265,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_host": {
       "name": "ipa_sudorule_host",
@@ -3082,7 +3274,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_hostcategory": {
       "name": "ipa_sudorule_hostcategory",
@@ -3090,7 +3283,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_name": {
       "name": "ipa_sudorule_name",
@@ -3098,7 +3292,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_notafter": {
       "name": "ipa_sudorule_notafter",
@@ -3106,7 +3301,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_notbefore": {
       "name": "ipa_sudorule_notbefore",
@@ -3114,7 +3310,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_object_class": {
       "name": "ipa_sudorule_object_class",
@@ -3122,7 +3319,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_option": {
       "name": "ipa_sudorule_option",
@@ -3130,7 +3328,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasextgroup": {
       "name": "ipa_sudorule_runasextgroup",
@@ -3138,7 +3337,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasextuser": {
       "name": "ipa_sudorule_runasextuser",
@@ -3146,7 +3346,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasextusergroup": {
       "name": "ipa_sudorule_runasextusergroup",
@@ -3154,7 +3355,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasgroup": {
       "name": "ipa_sudorule_runasgroup",
@@ -3162,7 +3364,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasgroupcategory": {
       "name": "ipa_sudorule_runasgroupcategory",
@@ -3170,7 +3373,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_runasusercategory": {
       "name": "ipa_sudorule_runasusercategory",
@@ -3178,7 +3382,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_sudoorder": {
       "name": "ipa_sudorule_sudoorder",
@@ -3186,7 +3391,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_user": {
       "name": "ipa_sudorule_user",
@@ -3194,7 +3400,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_usercategory": {
       "name": "ipa_sudorule_usercategory",
@@ -3202,7 +3409,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_sudorule_uuid": {
       "name": "ipa_sudorule_uuid",
@@ -3210,7 +3418,8 @@
       "sections": [
         "domain/ipa/sudo"
       ],
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_user_override_object_class": {
       "name": "ipa_user_override_object_class",
@@ -3221,7 +3430,8 @@
       ],
       "default": "ipaUserOverride",
       "doc": "Name of the objectclass for user overrides. It is used to determine if the found override object is related to a user or a group. User overrides can contain attributes given by ldap_user_name ldap_user_uid_number ldap_user_gid_number ldap_u...",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_view_class": {
       "name": "ipa_view_class",
@@ -3232,7 +3442,8 @@
       ],
       "default": "nsContainer",
       "doc": "Objectclass of the view container. Default: nsContainer",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_view_name": {
       "name": "ipa_view_name",
@@ -3243,7 +3454,8 @@
       ],
       "default": "cn",
       "doc": "Name of the attribute holding the name of the view. Default: cn",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "ipa_views_search_base": {
       "name": "ipa_views_search_base",
@@ -3254,7 +3466,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for views containers. See ldap_search_base for information about configuring multiple search bases. Default: the value of cn=views,cn=accounts,%basedn",
-      "source": "sssd-ipa.conf"
+      "source": "sssd-ipa.conf",
+      "confidence": "api"
     },
     "krb5_auth_timeout": {
       "name": "krb5_auth_timeout",
@@ -3264,7 +3477,8 @@
         "domain/ipa",
         "domain/krb5"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_backup_kpasswd": {
       "name": "krb5_backup_kpasswd",
@@ -3276,7 +3490,8 @@
       ],
       "default": "Use the KDC",
       "doc": "If the change password service is not running on the KDC, alternative servers can be defined here. An optional port number (preceded by a colon) may be appended to the addresses or hostnames. For more information on failover and server redu...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_backup_server": {
       "name": "krb5_backup_server",
@@ -3288,7 +3503,8 @@
         "domain/ldap"
       ],
       "doc": "Specifies the comma-separated list of IP addresses or hostnames of the Kerberos servers to which SSSD should connect, in the order of preference. For more information on failover and server redundancy, see the FAILOVER section. An optional...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_canonicalize": {
       "name": "krb5_canonicalize",
@@ -3301,7 +3517,8 @@
       ],
       "default": "false",
       "doc": "Specifies if the host principal should be canonicalized when connecting to LDAP server. This feature is available with MIT Kerberos \u003e= 1.7 Default: false",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_ccachedir": {
       "name": "krb5_ccachedir",
@@ -3314,7 +3531,8 @@
       ],
       "default": "/tmp",
       "doc": "Directory to store credential caches. All the substitution sequences of krb5_ccname_template can be used here, too, except %d and %P. The directory is created as private and owned by the user, with permissions set to 0700. Default: /tmp",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_ccname_template": {
       "name": "krb5_ccname_template",
@@ -3326,7 +3544,8 @@
         "domain/krb5"
       ],
       "doc": "Location of the user's credential cache. Three credential cache types are currently supported: FILE , DIR and KEYRING:persistent . The cache can be specified either as TYPE:RESIDUAL , or as an absolute path, which implies the FILE type. In...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_confd_path": {
       "name": "krb5_confd_path",
@@ -3337,7 +3556,8 @@
       ],
       "default": "not set (krb5.include.d subdirectory of",
       "doc": "Absolute path of a directory where SSSD should place Kerberos configuration snippets. To disable the creation of the configuration snippets set the parameter to 'none'. Default: not set (krb5.include.d subdirectory of SSSD's pubconf directo...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_fast_principal": {
       "name": "krb5_fast_principal",
@@ -3349,7 +3569,8 @@
         "domain/krb5"
       ],
       "doc": "Specifies the server principal to use for FAST.",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_fast_use_anonymous_pkinit": {
       "name": "krb5_fast_use_anonymous_pkinit",
@@ -3362,7 +3583,8 @@
       ],
       "default": "false",
       "doc": "If set to true try to use anonymous PKINIT instead of a keytab to get the required credential for FAST. The krb5_fast_principal options is ignored in this case. Default: false",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_kdcinfo_lookahead": {
       "name": "krb5_kdcinfo_lookahead",
@@ -3372,7 +3594,8 @@
       ],
       "default": "3:1",
       "doc": "When krb5_use_kdcinfo is set to true, you can limit the amount of servers handed to sssd_krb5_locator_plugin 8 . This might be helpful when there are too many servers discovered using SRV record. The krb5_kdcinfo_lookahead option contains t...",
-      "source": "sssd-krb5.5.xml"
+      "source": "sssd-krb5.5.xml",
+      "confidence": "man"
     },
     "krb5_kdcip": {
       "name": "krb5_kdcip",
@@ -3383,7 +3606,8 @@
         "domain/krb5",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_keytab": {
       "name": "krb5_keytab",
@@ -3396,7 +3620,8 @@
       ],
       "default": "System keytab, normally",
       "doc": "The location of the keytab to use when validating credentials obtained from KDCs. Default: System keytab, normally /etc/krb5.keytab",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_kpasswd": {
       "name": "krb5_kpasswd",
@@ -3408,7 +3633,8 @@
       ],
       "default": "Use the KDC",
       "doc": "If the change password service is not running on the KDC, alternative servers can be defined here. An optional port number (preceded by a colon) may be appended to the addresses or hostnames. For more information on failover and server redu...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_lifetime": {
       "name": "krb5_lifetime",
@@ -3418,7 +3644,8 @@
         "domain/ipa/auth",
         "domain/krb5/auth"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_map_user": {
       "name": "krb5_map_user",
@@ -3431,7 +3658,8 @@
       ],
       "default": "not set",
       "doc": "The list of mappings is given as a comma-separated list of pairs username:primary where username is a UNIX user name and primary is a user part of a kerberos principal. This mapping is used when user is authenticating using auth_provider =...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_rcache_dir": {
       "name": "krb5_rcache_dir",
@@ -3441,7 +3669,8 @@
       ],
       "default": "Distribution-specific and specified",
       "doc": "Directory on the filesystem where SSSD should store Kerberos replay cache files. This option accepts a special value __LIBKRB5_DEFAULTS__ that will instruct SSSD to let libkrb5 decide the appropriate location for the replay cache. Default:...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "krb5_realm": {
       "name": "krb5_realm",
@@ -3454,7 +3683,8 @@
       ],
       "default": "System defaults, see",
       "doc": "The name of the Kerberos realm. This is optional and defaults to the value of ipa_domain . The name of the Kerberos realm has a special meaning in IPA - it is converted into the base DN to use for performing LDAP operations.",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_renew_interval": {
       "name": "krb5_renew_interval",
@@ -3464,7 +3694,8 @@
         "domain/ipa/auth",
         "domain/krb5/auth"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_renewable_lifetime": {
       "name": "krb5_renewable_lifetime",
@@ -3474,7 +3705,8 @@
         "domain/ipa/auth",
         "domain/krb5/auth"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_server": {
       "name": "krb5_server",
@@ -3486,7 +3718,8 @@
         "domain/ldap"
       ],
       "doc": "Specifies the comma-separated list of IP addresses or hostnames of the Kerberos servers to which SSSD should connect, in the order of preference. For more information on failover and server redundancy, see the FAILOVER section. An optional...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_store_password_if_offline": {
       "name": "krb5_store_password_if_offline",
@@ -3499,7 +3732,8 @@
       ],
       "default": "false",
       "doc": "Store the password of the user if the provider is offline and use it to request a TGT when the provider comes online again. NOTE: this feature is only available on Linux. Passwords stored in this way are kept in plaintext in the kernel keyr...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_use_enterprise_principal": {
       "name": "krb5_use_enterprise_principal",
@@ -3512,7 +3746,8 @@
       ],
       "default": "false (AD provider: true)",
       "doc": "Specifies if the user principal should be treated as enterprise principal. See section 5 of RFC 6806 for more details about enterprise principals. Default: false (AD provider: true) The IPA provider will set to option to 'true' if it detect...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_use_fast": {
       "name": "krb5_use_fast",
@@ -3530,7 +3765,8 @@
         "demand"
       ],
       "doc": "Enables flexible authentication secure tunneling (FAST) for Kerberos pre-authentication. The following options are supported: never use FAST. This is equivalent to not setting this option at all. try to use FAST. If the server does not supp...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_use_kdcinfo": {
       "name": "krb5_use_kdcinfo",
@@ -3543,7 +3779,8 @@
       ],
       "default": "true",
       "doc": "Specifies if the SSSD should instruct the Kerberos libraries what realm and which KDCs to use. This option is on by default, if you disable it, you need to configure the Kerberos library using the krb5.conf 5 configuration file. See the sss...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_use_subdomain_realm": {
       "name": "krb5_use_subdomain_realm",
@@ -3556,7 +3793,8 @@
       ],
       "default": "false",
       "doc": "Specifies to use subdomains realms for the authentication of users from trusted domains. This option can be set to 'true' if enterprise principals are used with upnSuffixes which are not known on the parent domain KDCs. If the option is set...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "krb5_validate": {
       "name": "krb5_validate",
@@ -3566,7 +3804,8 @@
         "domain/ipa/auth",
         "domain/krb5/auth"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_access_filter": {
       "name": "ldap_access_filter",
@@ -3577,7 +3816,8 @@
       ],
       "default": "Empty",
       "doc": "If using access_provider = ldap and ldap_access_order = filter (default), this option is mandatory. It specifies an LDAP search filter criteria that must be met for the user to be granted access on this host. If access_provider = ldap, ldap...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_access_order": {
       "name": "ldap_access_order",
@@ -3588,7 +3828,8 @@
       ],
       "default": "filter",
       "doc": "Comma separated list of access control options. Allowed values are: filter : use ldap_access_filter lockout : use account locking. If set, this option denies access in case that ldap attribute 'pwdAccountLockedTime' is present and has value...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_account_expire_policy": {
       "name": "ldap_account_expire_policy",
@@ -3599,7 +3840,8 @@
       ],
       "default": "Empty",
       "doc": "With this option a client side evaluation of access control attributes can be enabled. Please note that it is always recommended to use server side access control, i.e. the LDAP server should deny the bind request with a suitable error code...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_autofs_entry_key": {
       "name": "ldap_autofs_entry_key",
@@ -3609,7 +3851,8 @@
         "domain/ipa/autofs",
         "domain/ldap/autofs"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_entry_object_class": {
       "name": "ldap_autofs_entry_object_class",
@@ -3619,7 +3862,8 @@
         "domain/ipa/autofs",
         "domain/ldap/autofs"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_entry_value": {
       "name": "ldap_autofs_entry_value",
@@ -3629,7 +3873,8 @@
         "domain/ipa/autofs",
         "domain/ldap/autofs"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_map_master_name": {
       "name": "ldap_autofs_map_master_name",
@@ -3642,7 +3887,8 @@
       ],
       "default": "auto.master",
       "doc": "The name of the automount master map in LDAP. Default: auto.master",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_map_name": {
       "name": "ldap_autofs_map_name",
@@ -3652,7 +3898,8 @@
         "domain/ipa/autofs",
         "domain/ldap/autofs"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_map_object_class": {
       "name": "ldap_autofs_map_object_class",
@@ -3662,7 +3909,8 @@
         "domain/ipa/autofs",
         "domain/ldap/autofs"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_autofs_search_base": {
       "name": "ldap_autofs_search_base",
@@ -3673,7 +3921,8 @@
         "domain/ldap/autofs",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_backup_uri": {
       "name": "ldap_backup_uri",
@@ -3684,7 +3933,8 @@
         "domain/ldap"
       ],
       "doc": "Specifies the comma-separated list of URIs of the LDAP servers to which SSSD should connect in the order of preference. Refer to the FAILOVER section for more information on failover and server redundancy. If neither option is specified, se...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_chpass_backup_uri": {
       "name": "ldap_chpass_backup_uri",
@@ -3695,7 +3945,8 @@
       ],
       "default": "empty, i.e. ldap_uri is used.",
       "doc": "Specifies the comma-separated list of URIs of the LDAP servers to which SSSD should connect in the order of preference to change the password of a user. Refer to the FAILOVER section for more information on failover and server redundancy. T...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_chpass_dns_service_name": {
       "name": "ldap_chpass_dns_service_name",
@@ -3706,7 +3957,8 @@
       ],
       "default": "not set, i.e. service discovery is disabled",
       "doc": "Specifies the service name to use to find an LDAP server which allows password changes when service discovery is enabled. Default: not set, i.e. service discovery is disabled",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_chpass_update_last_change": {
       "name": "ldap_chpass_update_last_change",
@@ -3717,7 +3969,8 @@
       ],
       "default": "False",
       "doc": "Specifies whether to update the ldap_user_shadow_last_change attribute with days since the Epoch after a password change operation. It is recommended to set this option explicitly if \"ldap_pwd_policy = shadow\" is used to let SSSD know if th...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_chpass_uri": {
       "name": "ldap_chpass_uri",
@@ -3728,7 +3981,8 @@
       ],
       "default": "empty, i.e. ldap_uri is used.",
       "doc": "Specifies the comma-separated list of URIs of the LDAP servers to which SSSD should connect in the order of preference to change the password of a user. Refer to the FAILOVER section for more information on failover and server redundancy. T...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_connection_expire_offset": {
       "name": "ldap_connection_expire_offset",
@@ -3740,7 +3994,8 @@
       ],
       "default": "0",
       "doc": "Random offset between 0 and configured value is added to ldap_connection_expire_timeout . This option can be also set per subdomain or inherited via subdomain_inherit . Default: 0",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_connection_expire_timeout": {
       "name": "ldap_connection_expire_timeout",
@@ -3752,7 +4007,8 @@
       ],
       "default": "900 (15 minutes)",
       "doc": "Specifies a timeout (in seconds) that a connection to an LDAP server will be maintained. After this time, the connection will be re-established. If used in parallel with SASL/GSSAPI, the sooner of the two values (this value vs. the TGT life...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_connection_idle_timeout": {
       "name": "ldap_connection_idle_timeout",
@@ -3764,7 +4020,8 @@
       ],
       "default": "900 (15 minutes)",
       "doc": "Specifies a timeout (in seconds) that an idle connection to an LDAP server will be maintained. If the connection is idle for more than this time then the connection will be closed. You can disable this timeout by setting the value to 0. Thi...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_default_authtok": {
       "name": "ldap_default_authtok",
@@ -3775,7 +4032,8 @@
         "domain/ldap"
       ],
       "doc": "The authentication token of the default bind DN.",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_default_authtok_type": {
       "name": "ldap_default_authtok_type",
@@ -3787,7 +4045,8 @@
       ],
       "default": "password",
       "doc": "The type of the authentication token of the default bind DN. The two mechanisms currently supported are: password obfuscated_password Default: password See the sss_obfuscate 8 manual page for more information.",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_default_bind_dn": {
       "name": "ldap_default_bind_dn",
@@ -3798,7 +4057,8 @@
         "domain/ldap"
       ],
       "doc": "The default bind DN to use for performing LDAP operations.",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_deref": {
       "name": "ldap_deref",
@@ -3816,7 +4076,8 @@
         "always"
       ],
       "doc": "Specifies how alias dereferencing is done when performing a search. The following options are allowed: never : Aliases are never dereferenced. searching : Aliases are dereferenced in subordinates of the base object, but not in locating the...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_deref_threshold": {
       "name": "ldap_deref_threshold",
@@ -3828,7 +4089,8 @@
       ],
       "default": "10",
       "doc": "Specify the number of group members that must be missing from the internal cache in order to trigger a dereference lookup. If less members are missing, they are looked up individually. You can turn off dereference lookups completely by sett...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_disable_paging": {
       "name": "ldap_disable_paging",
@@ -3840,7 +4102,8 @@
       ],
       "default": "False",
       "doc": "Disable the LDAP paging control. This option should be used if the LDAP server reports that it supports the LDAP paging control in its RootDSE but it is not enabled or does not behave properly. Example: OpenLDAP servers with the paging cont...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_disable_range_retrieval": {
       "name": "ldap_disable_range_retrieval",
@@ -3850,7 +4113,8 @@
       ],
       "default": "False",
       "doc": "Disable Active Directory range retrieval. Active Directory limits the number of members that can be retrieved in a single lookup using the MaxValRange policy, which defaults to 1500 members. If a group contains more than 1500 members, the r...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_dns_service_name": {
       "name": "ldap_dns_service_name",
@@ -3862,7 +4126,8 @@
       ],
       "default": "ldap",
       "doc": "Specifies the service name to use when service discovery is enabled. Default: ldap",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_entry_usn": {
       "name": "ldap_entry_usn",
@@ -3872,7 +4137,8 @@
         "domain/ipa",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_enumeration_refresh_timeout": {
       "name": "ldap_enumeration_refresh_timeout",
@@ -3885,7 +4151,8 @@
       ],
       "default": "300",
       "doc": "Specifies how many seconds SSSD has to wait before refreshing its cache of enumerated records. Default: 300",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_enumeration_search_timeout": {
       "name": "ldap_enumeration_search_timeout",
@@ -3896,7 +4163,8 @@
       ],
       "default": "60",
       "doc": "Specifies the timeout (in seconds) that ldap searches for user and group enumerations are allowed to run before they are cancelled and cached results are returned (and offline mode is entered) Default: 60",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_force_upper_case_realm": {
       "name": "ldap_force_upper_case_realm",
@@ -3909,7 +4177,8 @@
       ],
       "default": "false",
       "doc": "Some directory servers, for example Active Directory, might deliver the realm part of the UPN in lower case, which might cause the authentication to fail. Set this option to a non-zero value if you want to use an upper-case realm. Default:...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_entry_usn": {
       "name": "ldap_group_entry_usn",
@@ -3919,7 +4188,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_external_member": {
       "name": "ldap_group_external_member",
@@ -3929,7 +4199,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_gid_number": {
       "name": "ldap_group_gid_number",
@@ -3939,7 +4210,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_member": {
       "name": "ldap_group_member",
@@ -3949,7 +4221,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_modify_timestamp": {
       "name": "ldap_group_modify_timestamp",
@@ -3959,7 +4232,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_name": {
       "name": "ldap_group_name",
@@ -3969,7 +4243,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_nesting_level": {
       "name": "ldap_group_nesting_level",
@@ -3982,7 +4257,8 @@
       ],
       "default": "2",
       "doc": "If ldap_schema is set to a schema format that supports nested groups (e.g. RFC2307bis), then this option controls how many levels of nesting SSSD will follow. This option has no effect on the RFC2307 schema. Note: This option specifies the...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_object_class": {
       "name": "ldap_group_object_class",
@@ -3992,7 +4268,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_objectsid": {
       "name": "ldap_group_objectsid",
@@ -4002,7 +4279,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_search_base": {
       "name": "ldap_group_search_base",
@@ -4013,7 +4291,8 @@
         "domain/ldap/id",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_search_filter": {
       "name": "ldap_group_search_filter",
@@ -4023,7 +4302,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_search_scope": {
       "name": "ldap_group_search_scope",
@@ -4033,7 +4313,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_type": {
       "name": "ldap_group_type",
@@ -4043,7 +4324,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_group_uuid": {
       "name": "ldap_group_uuid",
@@ -4053,7 +4335,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_host_search_base": {
       "name": "ldap_host_search_base",
@@ -4063,7 +4346,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for host objects. See ldap_search_base for information about configuring multiple search bases. Default: the value of ldap_search_base",
-      "source": "sssd-ldap.5.xml"
+      "source": "sssd-ldap.5.xml",
+      "confidence": "man"
     },
     "ldap_id_mapping": {
       "name": "ldap_id_mapping",
@@ -4076,7 +4360,8 @@
       ],
       "default": "false",
       "doc": "Specifies that SSSD should attempt to map user and group IDs from the ldap_user_objectsid and ldap_group_objectsid attributes instead of relying on ldap_user_uid_number and ldap_group_gid_number. Currently this feature supports only ActiveD...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_id_use_start_tls": {
       "name": "ldap_id_use_start_tls",
@@ -4089,7 +4374,8 @@
       ],
       "default": "true",
       "doc": "Specifies that the id_provider connection must also use tls to protect the channel. true is strongly recommended for security reasons. Default: true",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_autorid_compat": {
       "name": "ldap_idmap_autorid_compat",
@@ -4099,7 +4385,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_default_domain": {
       "name": "ldap_idmap_default_domain",
@@ -4109,7 +4396,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_default_domain_sid": {
       "name": "ldap_idmap_default_domain_sid",
@@ -4119,7 +4407,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_helper_table_size": {
       "name": "ldap_idmap_helper_table_size",
@@ -4129,7 +4418,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_range_max": {
       "name": "ldap_idmap_range_max",
@@ -4139,7 +4429,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_range_min": {
       "name": "ldap_idmap_range_min",
@@ -4149,7 +4440,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_idmap_range_size": {
       "name": "ldap_idmap_range_size",
@@ -4159,7 +4451,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ignore_unreadable_references": {
       "name": "ldap_ignore_unreadable_references",
@@ -4169,7 +4462,8 @@
       ],
       "default": "False",
       "doc": "Ignore unreadable LDAP entries referenced in group's member attribute. If this parameter is set to false an error will be returned and the operation will fail instead of just ignoring the unreadable entry. This parameter may be useful when...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_iphost_entry_usn": {
       "name": "ldap_iphost_entry_usn",
@@ -4178,7 +4472,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_iphost_name": {
       "name": "ldap_iphost_name",
@@ -4187,7 +4482,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_iphost_number": {
       "name": "ldap_iphost_number",
@@ -4196,7 +4492,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_iphost_object_class": {
       "name": "ldap_iphost_object_class",
@@ -4205,7 +4502,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_iphost_search_base": {
       "name": "ldap_iphost_search_base",
@@ -4215,7 +4513,8 @@
         "domain/ldap/resolver",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ipnetwork_entry_usn": {
       "name": "ldap_ipnetwork_entry_usn",
@@ -4224,7 +4523,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ipnetwork_name": {
       "name": "ldap_ipnetwork_name",
@@ -4233,7 +4533,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ipnetwork_number": {
       "name": "ldap_ipnetwork_number",
@@ -4242,7 +4543,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ipnetwork_object_class": {
       "name": "ldap_ipnetwork_object_class",
@@ -4251,7 +4553,8 @@
         "domain/ad/resolver",
         "domain/ldap/resolver"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ipnetwork_search_base": {
       "name": "ldap_ipnetwork_search_base",
@@ -4261,7 +4564,8 @@
         "domain/ldap/resolver",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_krb5_init_creds": {
       "name": "ldap_krb5_init_creds",
@@ -4273,7 +4577,8 @@
       ],
       "default": "true",
       "doc": "Specifies that the id_provider should init Kerberos credentials (TGT). This action is performed only if SASL is used and the mechanism selected is GSSAPI or GSS-SPNEGO. Default: true",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_krb5_keytab": {
       "name": "ldap_krb5_keytab",
@@ -4285,7 +4590,8 @@
       ],
       "default": "System keytab, normally",
       "doc": "Specify the keytab to use when using SASL/GSSAPI/GSS-SPNEGO. This option can be also set per subdomain or inherited via subdomain_inherit . Default: System keytab, normally /etc/krb5.keytab",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_krb5_ticket_lifetime": {
       "name": "ldap_krb5_ticket_lifetime",
@@ -4297,7 +4603,8 @@
       ],
       "default": "86400 (24 hours)",
       "doc": "Specifies the lifetime in seconds of the TGT if GSSAPI or GSS-SPNEGO is used. This option can be also set per subdomain or inherited via subdomain_inherit . Default: 86400 (24 hours)",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_library_debug_level": {
       "name": "ldap_library_debug_level",
@@ -4308,7 +4615,8 @@
       ],
       "default": "0 (libldap debugging disabled)",
       "doc": "Switches on libldap debugging with the given level. The libldap debug messages will be written independent of the general debug_level. OpenLDAP uses a bitmap to enable debugging for specific components, -1 will enable full debug output. Def...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_max_id": {
       "name": "ldap_max_id",
@@ -4319,7 +4627,8 @@
       ],
       "default": "not set (both options are set to 0)",
       "doc": "In contrast to the SID based ID mapping which is used if ldap_id_mapping is set to true the allowed ID range for ldap_user_uid_number and ldap_group_gid_number is unbound. In a setup with sub/trusted-domains this might lead to ID collisions...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_min_id": {
       "name": "ldap_min_id",
@@ -4330,7 +4639,8 @@
       ],
       "default": "not set (both options are set to 0)",
       "doc": "In contrast to the SID based ID mapping which is used if ldap_id_mapping is set to true the allowed ID range for ldap_user_uid_number and ldap_group_gid_number is unbound. In a setup with sub/trusted-domains this might lead to ID collisions...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_member": {
       "name": "ldap_netgroup_member",
@@ -4338,7 +4648,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_modify_timestamp": {
       "name": "ldap_netgroup_modify_timestamp",
@@ -4346,7 +4657,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_name": {
       "name": "ldap_netgroup_name",
@@ -4354,7 +4666,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_object_class": {
       "name": "ldap_netgroup_object_class",
@@ -4362,7 +4675,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_search_base": {
       "name": "ldap_netgroup_search_base",
@@ -4373,7 +4687,8 @@
         "domain/ldap/id",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_netgroup_triple": {
       "name": "ldap_netgroup_triple",
@@ -4381,7 +4696,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_network_timeout": {
       "name": "ldap_network_timeout",
@@ -4393,7 +4709,8 @@
       ],
       "default": "6",
       "doc": "Specifies the timeout (in seconds) after which the poll 2 / select 2 following a connect 2 returns in case of no activity. This option can be also set per subdomain or inherited via subdomain_inherit . Default: 6",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ns_account_lock": {
       "name": "ldap_ns_account_lock",
@@ -4401,7 +4718,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_offline_timeout": {
       "name": "ldap_offline_timeout",
@@ -4411,7 +4729,8 @@
         "domain/ipa",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_opt_timeout": {
       "name": "ldap_opt_timeout",
@@ -4423,7 +4742,8 @@
       ],
       "default": "8",
       "doc": "Specifies a timeout (in seconds) after which calls to synchronous LDAP APIs will abort if no response is received. Also controls the timeout when communicating with the KDC in case of SASL bind, the timeout of an LDAP bind operation, passwo...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_page_size": {
       "name": "ldap_page_size",
@@ -4435,7 +4755,8 @@
       ],
       "default": "1000",
       "doc": "Specify the number of records to retrieve from LDAP in a single request. Some LDAP servers enforce a maximum limit per-request. Default: 1000",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_ppolicy_pwd_change_threshold": {
       "name": "ldap_ppolicy_pwd_change_threshold",
@@ -4445,7 +4766,8 @@
       ],
       "default": "0",
       "doc": "Forces a password change when server side password policy controls are enabled and remaining grace logins returned by the server after the authentication reach or go below the threshold. Note that the minimum useful value is 2, as changing...",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_purge_cache_timeout": {
       "name": "ldap_purge_cache_timeout",
@@ -4458,7 +4780,8 @@
       ],
       "default": "0 (disabled)",
       "doc": "Determine how often to check the cache for inactive entries (such as groups with no members and users who have never logged in) and remove them to save space. Setting this option to zero will disable the cache cleanup operation. Please note...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_pwd_attribute": {
       "name": "ldap_pwd_attribute",
@@ -4468,7 +4791,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_pwd_policy": {
       "name": "ldap_pwd_policy",
@@ -4481,7 +4805,8 @@
       ],
       "default": "none",
       "doc": "Select the policy to evaluate the password expiration on the client side. The following values are allowed: none - No evaluation on the client side. This option cannot disable server-side password policies. shadow - Use shadow 5 style attri...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_pwdlockout_dn": {
       "name": "ldap_pwdlockout_dn",
@@ -4494,7 +4819,8 @@
       ],
       "default": "cn=ppolicy,ou=policies,$ldap_search_base",
       "doc": "This option specifies the DN of password policy entry on LDAP server. Please note that absence of this option in sssd.conf in case of enabled account lockout checking will yield access denied as ppolicy attributes on LDAP server cannot be c...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_pwmodify_mode": {
       "name": "ldap_pwmodify_mode",
@@ -4510,7 +4836,8 @@
         "exop"
       ],
       "doc": "Specify the operation that is used to modify user password. Two modes are currently supported: exop - Password Modify Extended Operation (RFC 3062) ldap_modify - Direct modification of userPassword (not recommended). exop_force - Try Passwo...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_read_rootdse": {
       "name": "ldap_read_rootdse",
@@ -4520,7 +4847,8 @@
       ],
       "default": "anonymous",
       "doc": "SSSD reads RootDSE to get information about LDAP and its capabilities. By default, this is done anonymously. However, this may not be permitted by the LDAP server. In such cases we can use this option to influence SSSD behavior. Allowed val...",
-      "source": "sssd-ldap.5.xml"
+      "source": "sssd-ldap.5.xml",
+      "confidence": "man"
     },
     "ldap_referrals": {
       "name": "ldap_referrals",
@@ -4532,7 +4860,8 @@
       ],
       "default": "true",
       "doc": "Specifies whether automatic referral chasing should be enabled. Please note that sssd only supports referral chasing when it is compiled with OpenLDAP version 2.4.13 or higher. Chasing referrals may incur a performance penalty in environmen...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_rfc2307_fallback_to_local_users": {
       "name": "ldap_rfc2307_fallback_to_local_users",
@@ -4545,7 +4874,8 @@
       ],
       "default": "false",
       "doc": "Allows to retain local users as members of an LDAP group for servers that use the RFC2307 schema. In some environments where the RFC2307 schema is used, local users are made members of LDAP groups by adding their names to the memberUid attr...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_rootdse_last_usn": {
       "name": "ldap_rootdse_last_usn",
@@ -4555,7 +4885,8 @@
         "domain/ipa",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sasl_authid": {
       "name": "ldap_sasl_authid",
@@ -4567,7 +4898,8 @@
       ],
       "default": "host/hostname@REALM",
       "doc": "Specify the SASL authorization id to use. When GSSAPI/GSS-SPNEGO are used, this represents the Kerberos principal used for authentication to the directory. This option can either contain the full principal (for example host/myhost@EXAMPLE.C...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sasl_canonicalize": {
       "name": "ldap_sasl_canonicalize",
@@ -4577,7 +4909,8 @@
       ],
       "default": "false;",
       "doc": "If set to true, the LDAP library would perform a reverse lookup to canonicalize the host name during a SASL bind. Default: false;",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_sasl_maxssf": {
       "name": "ldap_sasl_maxssf",
@@ -4589,7 +4922,8 @@
       ],
       "default": "Use the system default (usually specified",
       "doc": "When communicating with an LDAP server using SASL, specify the maximal security level necessary to establish the connection. The values of this option are defined by OpenLDAP. Default: Use the system default (usually specified by ldap.conf)",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sasl_mech": {
       "name": "ldap_sasl_mech",
@@ -4601,7 +4935,8 @@
       ],
       "default": "not set",
       "doc": "Specify the SASL mechanism to use. Currently only GSSAPI and GSS-SPNEGO are tested and supported. If the backend supports sub-domains the value of ldap_sasl_mech is automatically inherited to the sub-domains. If a different value is needed...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sasl_minssf": {
       "name": "ldap_sasl_minssf",
@@ -4613,7 +4948,8 @@
       ],
       "default": "Use the system default (usually specified",
       "doc": "When communicating with an LDAP server using SASL, specify the minimum security level necessary to establish the connection. The values of this option are defined by OpenLDAP. Default: Use the system default (usually specified by ldap.conf)",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sasl_realm": {
       "name": "ldap_sasl_realm",
@@ -4623,7 +4959,8 @@
       ],
       "default": "the value of krb5_realm.",
       "doc": "Specify the SASL realm to use. When not specified, this option defaults to the value of krb5_realm. If the ldap_sasl_authid contains the realm as well, this option is ignored. Default: the value of krb5_realm.",
-      "source": "sssd-ldap.5.xml"
+      "source": "sssd-ldap.5.xml",
+      "confidence": "man"
     },
     "ldap_schema": {
       "name": "ldap_schema",
@@ -4641,7 +4978,8 @@
         "ad"
       ],
       "doc": "Specifies the Schema Type in use on the target LDAP server. Depending on the selected schema, the default attribute names retrieved from the servers may vary. The way that some attributes are handled may also differ. Four schema types are c...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_search_base": {
       "name": "ldap_search_base",
@@ -4653,7 +4991,8 @@
       ],
       "default": "If not set, the value of the",
       "doc": "The default base DN to use for performing LDAP user operations. Starting with SSSD 1.7.0, SSSD supports multiple search bases using the syntax: search_base[?scope?[filter][?search_base?scope?[filter]]*] The scope can be one of \"base\", \"onel...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_search_timeout": {
       "name": "ldap_search_timeout",
@@ -4666,7 +5005,8 @@
       ],
       "default": "6",
       "doc": "Specifies the timeout (in seconds) that ldap searches are allowed to run before they are cancelled and cached results are returned (and offline mode is entered) Note: this option is subject to change in future versions of the SSSD. It will...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_entry_usn": {
       "name": "ldap_service_entry_usn",
@@ -4676,7 +5016,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_name": {
       "name": "ldap_service_name",
@@ -4686,7 +5027,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_object_class": {
       "name": "ldap_service_object_class",
@@ -4696,7 +5038,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_port": {
       "name": "ldap_service_port",
@@ -4706,7 +5049,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_proto": {
       "name": "ldap_service_proto",
@@ -4716,7 +5060,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_service_search_base": {
       "name": "ldap_service_search_base",
@@ -4727,7 +5072,8 @@
         "domain/ldap/id",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_subid_ranges_search_base": {
       "name": "ldap_subid_ranges_search_base",
@@ -4738,7 +5084,8 @@
       ],
       "default": "the value of",
       "doc": "Optional. Use the given string as search base for subordinate ranges related objects. Default: the value of cn=subids,%basedn for IPA otherwise ldap_search_base .",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_sudo_full_refresh_interval": {
       "name": "ldap_sudo_full_refresh_interval",
@@ -4751,7 +5098,8 @@
       ],
       "default": "21600 (6 hours)",
       "doc": "How many seconds SSSD will wait between executing a full refresh of sudo rules (which downloads all rules that are stored on the server). The value must be greater than ldap_sudo_smart_refresh_interval You can disable full refresh by settin...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_hostnames": {
       "name": "ldap_sudo_hostnames",
@@ -4764,7 +5112,8 @@
       ],
       "default": "not specified",
       "doc": "Space separated list of hostnames or fully qualified domain names that should be used to filter the rules. If this option is empty, SSSD will try to discover the hostname and the fully qualified domain name automatically. If ldap_sudo_use_h...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_include_netgroups": {
       "name": "ldap_sudo_include_netgroups",
@@ -4777,7 +5126,8 @@
       ],
       "default": "true",
       "doc": "If true then SSSD will download every rule that contains a netgroup in sudoHost attribute. If ldap_sudo_use_host_filter is false then this option has no effect. Default: true",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_include_regexp": {
       "name": "ldap_sudo_include_regexp",
@@ -4790,7 +5140,8 @@
       ],
       "default": "false",
       "doc": "If true then SSSD will download every rule that contains a wildcard in sudoHost attribute. If ldap_sudo_use_host_filter is false then this option has no effect. Using wildcard is an operation that is very costly to evaluate on the LDAP serv...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_ip": {
       "name": "ldap_sudo_ip",
@@ -4803,7 +5154,8 @@
       ],
       "default": "not specified",
       "doc": "Space separated list of IPv4 or IPv6 host/network addresses that should be used to filter the rules. If this option is empty, SSSD will try to discover the addresses automatically. If ldap_sudo_use_host_filter is false then this option has...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_random_offset": {
       "name": "ldap_sudo_random_offset",
@@ -4816,7 +5168,8 @@
       ],
       "default": "0 (disabled)",
       "doc": "Random offset between 0 and configured value is added to smart and full refresh periods each time the periodic task is scheduled. The value is in seconds. Note that this random offset is also applied on the first SSSD start which delays the...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_search_base": {
       "name": "ldap_sudo_search_base",
@@ -4827,7 +5180,8 @@
         "domain/ldap/sudo",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_smart_refresh_interval": {
       "name": "ldap_sudo_smart_refresh_interval",
@@ -4840,7 +5194,8 @@
       ],
       "default": "900 (15 minutes)",
       "doc": "How many seconds SSSD has to wait before executing a smart refresh of sudo rules (which downloads all rules that have USN higher than the highest server USN value that is currently known by SSSD). If USN attributes are not supported by the...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudo_use_host_filter": {
       "name": "ldap_sudo_use_host_filter",
@@ -4853,7 +5208,8 @@
       ],
       "default": "true",
       "doc": "If true, SSSD will download only rules that are applicable to this machine (using the IPv4 or IPv6 host/network addresses and hostnames). Default: true",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_command": {
       "name": "ldap_sudorule_command",
@@ -4863,7 +5219,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_host": {
       "name": "ldap_sudorule_host",
@@ -4873,7 +5230,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_name": {
       "name": "ldap_sudorule_name",
@@ -4883,7 +5241,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_notafter": {
       "name": "ldap_sudorule_notafter",
@@ -4893,7 +5252,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_notbefore": {
       "name": "ldap_sudorule_notbefore",
@@ -4903,7 +5263,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_object_class": {
       "name": "ldap_sudorule_object_class",
@@ -4913,7 +5274,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_object_class_attr": {
       "name": "ldap_sudorule_object_class_attr",
@@ -4923,7 +5285,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_option": {
       "name": "ldap_sudorule_option",
@@ -4933,7 +5296,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_order": {
       "name": "ldap_sudorule_order",
@@ -4943,7 +5307,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_runas": {
       "name": "ldap_sudorule_runas",
@@ -4953,7 +5318,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_runasgroup": {
       "name": "ldap_sudorule_runasgroup",
@@ -4963,7 +5329,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_runasuser": {
       "name": "ldap_sudorule_runasuser",
@@ -4973,7 +5340,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_sudorule_user": {
       "name": "ldap_sudorule_user",
@@ -4983,7 +5351,8 @@
         "domain/ipa/sudo",
         "domain/ldap/sudo"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_cacert": {
       "name": "ldap_tls_cacert",
@@ -4995,7 +5364,8 @@
       ],
       "default": "use OpenLDAP defaults, typically in",
       "doc": "Specifies the file that contains certificates for all of the Certificate Authorities that sssd will recognize. Default: use OpenLDAP defaults, typically in /etc/openldap/ldap.conf",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_cacertdir": {
       "name": "ldap_tls_cacertdir",
@@ -5007,7 +5377,8 @@
       ],
       "default": "use OpenLDAP defaults, typically in",
       "doc": "Specifies the path of a directory that contains Certificate Authority certificates in separate individual files. Typically the file names need to be the hash of the certificate followed by '.0'. If available, openssl rehash or c_rehash can...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_cert": {
       "name": "ldap_tls_cert",
@@ -5019,7 +5390,8 @@
       ],
       "default": "not set",
       "doc": "Specifies the file that contains the certificate for the client's key. Default: not set",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_cipher_suite": {
       "name": "ldap_tls_cipher_suite",
@@ -5031,7 +5403,8 @@
       ],
       "default": "use OpenLDAP defaults, typically in",
       "doc": "Specifies acceptable cipher suites. Typically this is a colon separated list. See ldap.conf 5 for format. Default: use OpenLDAP defaults, typically in /etc/openldap/ldap.conf",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_key": {
       "name": "ldap_tls_key",
@@ -5043,7 +5416,8 @@
       ],
       "default": "not set",
       "doc": "Specifies the file that contains the client's key. Default: not set",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_tls_reqcert": {
       "name": "ldap_tls_reqcert",
@@ -5062,7 +5436,8 @@
         "hard"
       ],
       "doc": "Specifies what checks to perform on server certificates in a TLS session, if any. It can be specified as one of the following values: never = The client will not request or check any server certificate. allow = The server certificate is req...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_uri": {
       "name": "ldap_uri",
@@ -5073,7 +5448,8 @@
         "domain/ldap"
       ],
       "doc": "Specifies the comma-separated list of URIs of the LDAP servers to which SSSD should connect in the order of preference. Refer to the FAILOVER section for more information on failover and server redundancy. If neither option is specified, se...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_use_ppolicy": {
       "name": "ldap_use_ppolicy",
@@ -5083,7 +5459,8 @@
       ],
       "default": "true",
       "doc": "Turns on requesting and relying on the server-side password policy controls. Disabling this allows interacting with services which send back invalid ppolicy extension. Default: true",
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_use_tokengroups": {
       "name": "ldap_use_tokengroups",
@@ -5096,7 +5473,8 @@
       ],
       "default": "True for AD and IPA otherwise False.",
       "doc": "This options enables or disables use of Token-Groups attribute when performing initgroup for users from Active Directory Server 2008 and later. This option can be also set per subdomain or inherited via subdomain_inherit . Default: True for...",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_ad_account_expires": {
       "name": "ldap_user_ad_account_expires",
@@ -5104,7 +5482,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_ad_user_account_control": {
       "name": "ldap_user_ad_user_account_control",
@@ -5112,7 +5491,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_auth_type": {
       "name": "ldap_user_auth_type",
@@ -5122,7 +5502,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_authorized_host": {
       "name": "ldap_user_authorized_host",
@@ -5130,7 +5511,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_authorized_rhost": {
       "name": "ldap_user_authorized_rhost",
@@ -5138,7 +5520,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_authorized_service": {
       "name": "ldap_user_authorized_service",
@@ -5146,7 +5529,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_certificate": {
       "name": "ldap_user_certificate",
@@ -5156,7 +5540,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_email": {
       "name": "ldap_user_email",
@@ -5166,7 +5551,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_entry_usn": {
       "name": "ldap_user_entry_usn",
@@ -5176,7 +5562,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_extra_attrs": {
       "name": "ldap_user_extra_attrs",
@@ -5186,7 +5573,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_fullname": {
       "name": "ldap_user_fullname",
@@ -5196,7 +5584,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_gecos": {
       "name": "ldap_user_gecos",
@@ -5206,7 +5595,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_gid_number": {
       "name": "ldap_user_gid_number",
@@ -5216,7 +5606,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_home_directory": {
       "name": "ldap_user_home_directory",
@@ -5226,7 +5617,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_krb_last_pwd_change": {
       "name": "ldap_user_krb_last_pwd_change",
@@ -5236,7 +5628,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_krb_password_expiration": {
       "name": "ldap_user_krb_password_expiration",
@@ -5246,7 +5639,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_member_of": {
       "name": "ldap_user_member_of",
@@ -5256,7 +5650,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_modify_timestamp": {
       "name": "ldap_user_modify_timestamp",
@@ -5266,7 +5661,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_name": {
       "name": "ldap_user_name",
@@ -5276,7 +5672,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_nds_login_allowed_time_map": {
       "name": "ldap_user_nds_login_allowed_time_map",
@@ -5284,7 +5681,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_nds_login_disabled": {
       "name": "ldap_user_nds_login_disabled",
@@ -5292,7 +5690,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_nds_login_expiration_time": {
       "name": "ldap_user_nds_login_expiration_time",
@@ -5300,7 +5699,8 @@
       "sections": [
         "domain/ldap/id"
       ],
-      "source": "sssd-ldap.conf"
+      "source": "sssd-ldap.conf",
+      "confidence": "api"
     },
     "ldap_user_object_class": {
       "name": "ldap_user_object_class",
@@ -5310,7 +5710,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_objectsid": {
       "name": "ldap_user_objectsid",
@@ -5320,7 +5721,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_passkey": {
       "name": "ldap_user_passkey",
@@ -5330,7 +5732,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_primary_group": {
       "name": "ldap_user_primary_group",
@@ -5340,7 +5743,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_principal": {
       "name": "ldap_user_principal",
@@ -5350,7 +5754,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_search_base": {
       "name": "ldap_user_search_base",
@@ -5361,7 +5766,8 @@
         "domain/ldap/id",
         "domain/ldap"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_search_filter": {
       "name": "ldap_user_search_filter",
@@ -5371,7 +5777,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_search_scope": {
       "name": "ldap_user_search_scope",
@@ -5381,7 +5788,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_expire": {
       "name": "ldap_user_shadow_expire",
@@ -5391,7 +5799,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_flag": {
       "name": "ldap_user_shadow_flag",
@@ -5401,7 +5810,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_inactive": {
       "name": "ldap_user_shadow_inactive",
@@ -5411,7 +5821,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_last_change": {
       "name": "ldap_user_shadow_last_change",
@@ -5421,7 +5832,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_max": {
       "name": "ldap_user_shadow_max",
@@ -5431,7 +5843,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_min": {
       "name": "ldap_user_shadow_min",
@@ -5441,7 +5854,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shadow_warning": {
       "name": "ldap_user_shadow_warning",
@@ -5451,7 +5865,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_shell": {
       "name": "ldap_user_shell",
@@ -5461,7 +5876,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_ssh_public_key": {
       "name": "ldap_user_ssh_public_key",
@@ -5471,7 +5887,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_uid_number": {
       "name": "ldap_user_uid_number",
@@ -5481,7 +5898,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "ldap_user_uuid": {
       "name": "ldap_user_uuid",
@@ -5491,7 +5909,8 @@
         "domain/ipa/id",
         "domain/ldap/id"
       ],
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     },
     "local_auth_policy": {
       "name": "local_auth_policy",
@@ -5507,7 +5926,8 @@
         "disable"
       ],
       "doc": "Local authentication methods policy. Some backends (i.e. LDAP, proxy provider) only support a password based authentication, while others can handle PKINIT based Smartcard authentication (AD, IPA), two-factor authentication (IPA), or other...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "lookup_family_order": {
       "name": "lookup_family_order",
@@ -5517,7 +5937,8 @@
       ],
       "default": "ipv4_first",
       "doc": "Provides the ability to select preferred address family to use when performing DNS lookups. Supported values: ipv4_first: Try looking up IPv4 address, if that fails, try IPv6 ipv4_only: Only attempt to resolve hostnames to IPv4 addresses. i...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "maprule": {
       "name": "maprule",
@@ -5526,7 +5947,8 @@
         "certmap"
       ],
       "doc": "Defines how the user is found for a given certificate. Default: LDAP:(userCertificate;binary={cert!bin}) for LDAP based providers like ldap , AD or ipa . If maprule is not set and provider is proxy , the RULE_NAME name is assumed to be the...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "matchrule": {
       "name": "matchrule",
@@ -5536,7 +5958,8 @@
       ],
       "default": "KRB5:\u0026lt;EKU\u0026gt;clientAuth, i.e. only",
       "doc": "Only certificates from the Smartcard which matches this rule will be processed, all others are ignored. Default: KRB5:\u003cEKU\u003eclientAuth, i.e. only certificates which have the Extended Key Usage clientAuth",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "max_ccache_size": {
       "name": "max_ccache_size",
@@ -5546,7 +5969,8 @@
       ],
       "default": "65536",
       "doc": "How big a credential cache be per ccache. Each service ticket counts toward this quota. Default: 65536",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "max_ccaches": {
       "name": "max_ccaches",
@@ -5556,7 +5980,8 @@
       ],
       "default": "0 (unlimited, only the per-UID quota is enforced)",
       "doc": "How many credential caches does the KCM database allow for all users. Default: 0 (unlimited, only the per-UID quota is enforced)",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "max_id": {
       "name": "max_id",
@@ -5566,7 +5991,8 @@
       ],
       "default": "1 for min_id, 0 (no limit) for max_id",
       "doc": "UID and GID limits for the domain. If a domain contains an entry that is outside these limits, it is ignored. For users, this affects the primary GID limit. The user will not be returned to NSS if either the UID or the primary GID is outsid...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "max_uid_ccaches": {
       "name": "max_uid_ccaches",
@@ -5576,7 +6002,8 @@
       ],
       "default": "64",
       "doc": "How many credential caches does the KCM database allow per UID. This is equivalent to with how many principals you can kinit . Default: 64",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "memcache_size_group": {
       "name": "memcache_size_group",
@@ -5586,7 +6013,8 @@
       ],
       "default": "6",
       "doc": "Size (in megabytes) of the data table allocated inside fast in-memory cache for group requests. Setting the size to 0 will disable the group in-memory cache. Default: 6 WARNING: Disabled or too small in-memory cache can have significant neg...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "memcache_size_initgroups": {
       "name": "memcache_size_initgroups",
@@ -5596,7 +6024,8 @@
       ],
       "default": "10",
       "doc": "Size (in megabytes) of the data table allocated inside fast in-memory cache for initgroups requests. Setting the size to 0 will disable the initgroups in-memory cache. Default: 10 WARNING: Disabled or too small in-memory cache can have sign...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "memcache_size_passwd": {
       "name": "memcache_size_passwd",
@@ -5606,7 +6035,8 @@
       ],
       "default": "8",
       "doc": "Size (in megabytes) of the data table allocated inside fast in-memory cache for passwd requests. Setting the size to 0 will disable the passwd in-memory cache. Default: 8 WARNING: Disabled or too small in-memory cache can have significant n...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "memcache_size_sid": {
       "name": "memcache_size_sid",
@@ -5616,7 +6046,8 @@
       ],
       "default": "6",
       "doc": "Size (in megabytes) of the data table allocated inside fast in-memory cache for SID related requests. Only SID-by-ID and ID-by-SID requests are currently cached in fast in-memory cache. Setting the size to 0 will disable the SID in-memory c...",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "memcache_timeout": {
       "name": "memcache_timeout",
@@ -5626,7 +6057,8 @@
       ],
       "default": "300",
       "doc": "Specifies time in seconds for which records in the in-memory cache will be valid. Setting this option to zero will disable the in-memory cache. Default: 300 WARNING: Disabling the in-memory cache will have significant negative impact on SSS...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "min_id": {
       "name": "min_id",
@@ -5636,7 +6068,8 @@
       ],
       "default": "1 for min_id, 0 (no limit) for max_id",
       "doc": "UID and GID limits for the domain. If a domain contains an entry that is outside these limits, it is ignored. For users, this affects the primary GID limit. The user will not be returned to NSS if either the UID or the primary GID is outsid...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "monitor_resolv_conf": {
       "name": "monitor_resolv_conf",
@@ -5646,7 +6079,8 @@
       ],
       "default": "true",
       "doc": "Controls if SSSD should monitor the state of resolv.conf to identify when it needs to update its internal DNS resolver. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_credentials_expiration": {
       "name": "offline_credentials_expiration",
@@ -5656,7 +6090,8 @@
       ],
       "default": "0 (No limit)",
       "doc": "If the authentication provider is offline, how long should we allow cached logins (in days since the last successful online login). Default: 0 (No limit)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_failed_login_attempts": {
       "name": "offline_failed_login_attempts",
@@ -5666,7 +6101,8 @@
       ],
       "default": "0 (No limit)",
       "doc": "If the authentication provider is offline, how many failed login attempts are allowed. Default: 0 (No limit)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_failed_login_delay": {
       "name": "offline_failed_login_delay",
@@ -5676,7 +6112,8 @@
       ],
       "default": "5",
       "doc": "The time in minutes which has to pass after offline_failed_login_attempts has been reached before a new login attempt is possible. If set to 0 the user cannot authenticate offline if offline_failed_login_attempts has been reached. Only a su...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_timeout": {
       "name": "offline_timeout",
@@ -5686,7 +6123,8 @@
       ],
       "default": "60",
       "doc": "When SSSD switches to offline mode the amount of time before it tries to go back online will increase based upon the time spent disconnected. By default SSSD uses incremental behaviour to calculate delay in between retries. So, the wait tim...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_timeout_max": {
       "name": "offline_timeout_max",
@@ -5696,7 +6134,8 @@
       ],
       "default": "3600",
       "doc": "Controls by how much the time between attempts to go online can be incremented following unsuccessful attempts to go online. A value of 0 disables the incrementing behaviour. The value of this parameter should be set in correlation to offli...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "offline_timeout_random_offset": {
       "name": "offline_timeout_random_offset",
@@ -5706,7 +6145,8 @@
       ],
       "default": "30",
       "doc": "When SSSD is in offline mode it keeps probing backend servers in specified time intervals: new_delay = Minimum(old_delay * 2, offline_timeout_max) + random[0...offline_timeout_random_offset] This parameter controls the value of the random o...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "override_gid": {
       "name": "override_gid",
@@ -5716,7 +6156,8 @@
       ],
       "default": "not set (Use the primary GID value retrieved",
       "doc": "Override the primary GID value for all users in the domain with specified value. Default: not set (Use the primary GID value retrieved from the identity provider)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "override_homedir": {
       "name": "override_homedir",
@@ -5725,7 +6166,8 @@
         "nss",
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "override_shell": {
       "name": "override_shell",
@@ -5736,7 +6178,8 @@
       ],
       "default": "not set (SSSD will use the value",
       "doc": "Override the login shell for all users. This option supersedes any other shell options if it takes effect and can be set either in the [nss] section or per-domain. Default: not set (SSSD will use the value retrieved from LDAP)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "override_space": {
       "name": "override_space",
@@ -5746,7 +6189,8 @@
       ],
       "default": "not set (spaces will not be replaced)",
       "doc": "This parameter will replace spaces (space bar) with the given character for user and group names. e.g. (_). User name \"john doe\" will be \"john_doe\" This feature was added to help compatibility with shell scripts that have difficulty handlin...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "p11_child_timeout": {
       "name": "p11_child_timeout",
@@ -5756,7 +6200,8 @@
       ],
       "default": "10",
       "doc": "How many seconds will pam_sss wait for p11_child to finish. Default: 10",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "p11_uri": {
       "name": "p11_uri",
@@ -5766,7 +6211,8 @@
       ],
       "default": "none",
       "doc": "PKCS#11 URI (see RFC-7512 for details) which can be used to restrict the selection of devices used for Smartcard authentication. By default SSSD's p11_child will search for a PKCS#11 slot (reader) where the 'removable' flags is set and read...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "p11_wait_for_card_timeout": {
       "name": "p11_wait_for_card_timeout",
@@ -5776,7 +6222,8 @@
       ],
       "default": "60",
       "doc": "If Smartcard authentication is required how many extra seconds in addition to p11_child_timeout should the PAM responder wait until a Smartcard is inserted. Default: 60",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pac_check": {
       "name": "pac_check",
@@ -5794,7 +6241,8 @@
         "upn_dns_info_ex_present"
       ],
       "doc": "Apply additional checks on the PAC of the Kerberos ticket which is available in Active Directory and FreeIPA domains, if configured. Please note that Kerberos ticket validation must be enabled to be able to check the PAC, i.e. the krb5_vali...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pac_lifetime": {
       "name": "pac_lifetime",
@@ -5804,7 +6252,8 @@
       ],
       "default": "300",
       "doc": "Lifetime of the PAC entry in seconds. As long as the PAC is valid the PAC data can be used to determine the group memberships of a user. Default: 300",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_account_expired_message": {
       "name": "pam_account_expired_message",
@@ -5814,7 +6263,8 @@
       ],
       "default": "none",
       "doc": "Allows a custom expiration message to be set, replacing the default 'Permission denied' message. Note: Please be aware that message is only printed for the SSH service unless pam_verbosity is set to 3 (show all messages and debug informatio...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_account_locked_message": {
       "name": "pam_account_locked_message",
@@ -5824,7 +6274,8 @@
       ],
       "default": "none",
       "doc": "Allows a custom lockout message to be set, replacing the default 'Permission denied' message. example: pam_account_locked_message = Account locked, please contact help desk. Default: none",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_app_services": {
       "name": "pam_app_services",
@@ -5834,7 +6285,8 @@
       ],
       "default": "Not set",
       "doc": "Which PAM services are permitted to contact domains of type application Default: Not set",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_cert_auth": {
       "name": "pam_cert_auth",
@@ -5844,7 +6296,8 @@
       ],
       "default": "False",
       "doc": "Enable certificate based Smartcard authentication. Since this requires additional communication with the Smartcard which will delay the authentication process this option is disabled by default. Default: False Note: In case OpenSC is used f...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_cert_db_path": {
       "name": "pam_cert_db_path",
@@ -5853,7 +6306,8 @@
         "pam"
       ],
       "doc": "The path to the certificate database. Default: /etc/sssd/pki/sssd_auth_ca_db.pem (path to a file with trusted CA certificates in PEM format)",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_cert_verification": {
       "name": "pam_cert_verification",
@@ -5863,7 +6317,8 @@
       ],
       "default": "not set, i.e. use default",
       "doc": "With this parameter the PAM certificate verification can be tuned with a comma separated list of options that override the certificate_verification value in [sssd] section. Supported options are the same of certificate_verification . exampl...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_gssapi_check_upn": {
       "name": "pam_gssapi_check_upn",
@@ -5874,7 +6329,8 @@
       ],
       "default": "True",
       "doc": "If True, SSSD will require that the Kerberos user principal that successfully authenticated through GSSAPI can be associated with the user who is being authenticated. Authentication will fail if the check fails. If False, every user that is...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_gssapi_indicators_apply": {
       "name": "pam_gssapi_indicators_apply",
@@ -5885,7 +6341,8 @@
       ],
       "default": "not set",
       "doc": "Comma separated list of triples to assign additional information from the Kerberos ticket, e.g. a SID from the PAC, to authentication indicators. Currently supported is: SID:S-1-5-[domain]-[RID]:[authentication indicator] Example: To assign...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_gssapi_indicators_map": {
       "name": "pam_gssapi_indicators_map",
@@ -5896,7 +6353,8 @@
       ],
       "default": "not set (use of authentication indicators is not required)",
       "doc": "Comma separated list of authentication indicators required to be present in a Kerberos ticket to access a PAM service that is allowed to try GSSAPI authentication using pam_sss_gss.so module. Each element of the list can be either an authen...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_gssapi_services": {
       "name": "pam_gssapi_services",
@@ -5907,7 +6365,8 @@
       ],
       "default": "- (GSSAPI authentication is disabled)",
       "doc": "Comma separated list of PAM services that are allowed to try GSSAPI authentication using pam_sss_gss.so module. To disable GSSAPI authentication, set this option to - (dash). Note: This option can also be set per-domain which overwrites the...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_id_timeout": {
       "name": "pam_id_timeout",
@@ -5917,7 +6376,8 @@
       ],
       "default": "5",
       "doc": "For any PAM request while SSSD is online, the SSSD will attempt to immediately update the cached identity information for the user in order to ensure that authentication takes place with the latest information. A complete PAM conversation m...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_initgroups_scheme": {
       "name": "pam_initgroups_scheme",
@@ -5931,7 +6391,8 @@
         "never"
       ],
       "doc": "The PAM responder can force an online lookup to get the current group memberships of the user trying to log in. This option controls when this should be done and the following values are allowed: always Always do an online lookup, please no...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_json_services": {
       "name": "pam_json_services",
@@ -5941,7 +6402,8 @@
       ],
       "default": "- (JSON protocol is disabled)",
       "doc": "Comma separated list of PAM services which can handle the JSON protocol for selecting authentication mechanisms To disable JSON protocol, set this option to - (dash). Example: pam_json_services = gdm-switchable-auth Default: - (JSON protoco...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_p11_allowed_services": {
       "name": "pam_p11_allowed_services",
@@ -5951,7 +6413,8 @@
       ],
       "default": "the default set of PAM service names",
       "doc": "A comma-separated list of PAM service names for which it will be allowed to use Smartcards. It is possible to add another PAM service name to the default set by using +service_name or to explicitly remove a PAM service name from the default...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_passkey_auth": {
       "name": "pam_passkey_auth",
@@ -5961,7 +6424,8 @@
       ],
       "default": "True",
       "doc": "Enable passkey device based authentication. Default: True",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_public_domains": {
       "name": "pam_public_domains",
@@ -5971,7 +6435,8 @@
       ],
       "default": "none",
       "doc": "Specifies the comma-separated list of domain names that are accessible even to untrusted users. Two special values for pam_public_domains option are defined: all (Untrusted users are allowed to access all domains in PAM responder.) none (Un...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_pwd_expiration_warning": {
       "name": "pam_pwd_expiration_warning",
@@ -5981,7 +6446,8 @@
       ],
       "default": "0",
       "doc": "Display a warning N days before the password expires. Please note that the backend server has to provide information about the expiration time of the password. If this information is missing, sssd cannot display a warning. If zero is set, t...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_response_filter": {
       "name": "pam_response_filter",
@@ -5993,7 +6459,8 @@
         "env"
       ],
       "doc": "A comma separated list of strings which allows to remove (filter) data sent by the PAM responder to pam_sss PAM module. There are different kind of responses sent to pam_sss e.g. messages displayed to the user or environment variables which...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_trusted_users": {
       "name": "pam_trusted_users",
@@ -6003,7 +6470,8 @@
       ],
       "default": "All users are considered trusted",
       "doc": "Specifies the comma-separated list of UID values or user names that are allowed to run PAM conversations against trusted domains. Users not included in this list can only access domains marked as public with pam_public_domains . User names...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pam_verbosity": {
       "name": "pam_verbosity",
@@ -6013,7 +6481,8 @@
       ],
       "default": "1",
       "doc": "Controls what kind of messages are shown to the user during authentication. The higher the number to more messages are displayed. Currently sssd supports the following values: 0 : do not show any message 1 : show only important messages 2 :...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "passkey_child_timeout": {
       "name": "passkey_child_timeout",
@@ -6023,7 +6492,8 @@
       ],
       "default": "15",
       "doc": "How many seconds will the PAM responder wait for passkey_child to finish. Default: 15",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "passkey_debug_libfido2": {
       "name": "passkey_debug_libfido2",
@@ -6033,7 +6503,8 @@
       ],
       "default": "False",
       "doc": "Enable libfido2 library debug messages. Default: False",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "passkey_verification": {
       "name": "passkey_verification",
@@ -6045,7 +6516,8 @@
         "user_verification"
       ],
       "doc": "With this parameter the passkey verification can be tuned with a comma separated list of options. Supported options are: user_verification (boolean) Enable or disable the user verification (i.e. PIN, fingerprint) during authentication. If e...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "priority": {
       "name": "priority",
@@ -6055,7 +6527,8 @@
       ],
       "default": "the lowest priority",
       "doc": "Unsigned integer value defining the priority of the rule. The higher the number the lower the priority. 0 stands for the highest priority while 4294967295 is the lowest. Default: the lowest priority",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "proxy_fast_alias": {
       "name": "proxy_fast_alias",
@@ -6066,7 +6539,8 @@
       ],
       "default": "false",
       "doc": "When a user or group is looked up by name in the proxy provider, a second lookup by ID is performed to \"canonicalize\" the name in case the requested name was an alias. Setting this option to true would cause the SSSD to perform the ID looku...",
-      "source": "sssd-proxy.conf"
+      "source": "sssd-proxy.conf",
+      "confidence": "api"
     },
     "proxy_lib_name": {
       "name": "proxy_lib_name",
@@ -6076,7 +6550,8 @@
         "domain"
       ],
       "doc": "The name of the NSS library to use in proxy domains. The NSS functions searched for in the library are in the form of _nss_$(libName)_$(function), for example _nss_files_getpwent.",
-      "source": "sssd-proxy.conf"
+      "source": "sssd-proxy.conf",
+      "confidence": "api"
     },
     "proxy_max_children": {
       "name": "proxy_max_children",
@@ -6087,7 +6562,8 @@
       ],
       "default": "10",
       "doc": "This option specifies the number of pre-forked proxy children. It is useful for high-load SSSD environments where sssd may run out of available child slots, which would cause some issues due to the requests being queued. Default: 10",
-      "source": "sssd-proxy.conf"
+      "source": "sssd-proxy.conf",
+      "confidence": "api"
     },
     "proxy_pam_target": {
       "name": "proxy_pam_target",
@@ -6098,7 +6574,8 @@
       ],
       "default": "not set by default, you have to take an",
       "doc": "The proxy target PAM proxies to. Default: not set by default, you have to take an existing pam configuration or create a new one and add the service name here. As an alternative you can enable local authentication with the local_auth_policy...",
-      "source": "sssd-proxy.conf"
+      "source": "sssd-proxy.conf",
+      "confidence": "api"
     },
     "proxy_resolver_lib_name": {
       "name": "proxy_resolver_lib_name",
@@ -6107,7 +6584,8 @@
         "domain"
       ],
       "doc": "The name of the NSS library to use for hosts and networks lookups in proxy domains. The NSS functions searched for in the library are in the form of _nss_$(libName)_$(function), for example _nss_dns_gethostbyname2_r.",
-      "source": "sssd.conf.5.xml"
+      "source": "sssd.conf.5.xml",
+      "confidence": "man"
     },
     "pwd_expiration_warning": {
       "name": "pwd_expiration_warning",
@@ -6117,7 +6595,8 @@
       ],
       "default": "7 (Kerberos), 0 (LDAP)",
       "doc": "Display a warning N days before the password expires. If zero is set, then this filter is not applied, i.e. if the expiration warning was received from backend server, it will automatically be displayed. Please note that the backend server...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "pwfield": {
       "name": "pwfield",
@@ -6126,7 +6605,8 @@
         "nss"
       ],
       "doc": "The value that NSS operations that return users or groups will return for the password field. This option can also be set per-domain, which overwrites the value in the [nss] section for that domain. This is particularly useful when using a...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "re_expression": {
       "name": "re_expression",
@@ -6136,7 +6616,8 @@
         "domain"
       ],
       "doc": "Default regular expression that describes how to parse the string containing user name and domain into these components. Each domain can have an individual regular expression configured. For some ID providers there are also default regular...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "realmd_tags": {
       "name": "realmd_tags",
@@ -6145,7 +6626,8 @@
         "domain"
       ],
       "doc": "Various tags stored by the realmd configuration service for this domain.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "refresh_expired_interval": {
       "name": "refresh_expired_interval",
@@ -6155,7 +6637,8 @@
       ],
       "default": "0 (disabled)",
       "doc": "Specifies how many seconds SSSD has to wait before triggering a background refresh task which will refresh all expired or nearly expired records. The background refresh will process users, groups and netgroups in the cache. For users who ha...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "refresh_expired_interval_offset": {
       "name": "refresh_expired_interval_offset",
@@ -6163,7 +6646,8 @@
       "sections": [
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "resolver_provider": {
       "name": "resolver_provider",
@@ -6173,7 +6657,8 @@
       ],
       "default": "The value of",
       "doc": "The provider which should handle hosts and networks lookups. Supported resolver providers are: proxy to forward lookups to another NSS library. See proxy_resolver_lib_name ldap to fetch hosts and networks stored in LDAP. See sssd-ldap 5 for...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "responder_idle_timeout": {
       "name": "responder_idle_timeout",
@@ -6184,7 +6669,8 @@
       ],
       "default": "300",
       "doc": "This option specifies the number of seconds that an SSSD responder process can be up without being used. This value is limited in order to avoid resource exhaustion on the system. The minimum acceptable value for this option is 60 seconds....",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "scope": {
       "name": "scope",
@@ -6193,7 +6679,8 @@
         "session_recording"
       ],
       "doc": "One of the following strings specifying the scope of session recording: \"none\" No users are recorded.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "selinux_provider": {
       "name": "selinux_provider",
@@ -6203,7 +6690,8 @@
       ],
       "default": "the value of",
       "doc": "The provider which should handle loading of selinux settings. Note that this provider will be called right after access provider ends. Supported selinux providers are: ipa to load selinux settings from an IPA server. See sssd-ipa 5 for more...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "services": {
       "name": "services",
@@ -6213,7 +6701,8 @@
       ],
       "default": "nss",
       "doc": "Comma separated list of services that are started when sssd itself starts. The services' list is optional on platforms where systemd is supported, as they will either be socket or D-Bus activated when needed. Supported services: nss, pam, i...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "session_provider": {
       "name": "session_provider",
@@ -6222,7 +6711,8 @@
         "domain"
       ],
       "doc": "The provider which configures and manages user session related tasks. The only user session task currently provided is the integration with Fleet Commander, which works only with IPA. Supported session providers are: ipa to allow performing...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "shell_fallback": {
       "name": "shell_fallback",
@@ -6232,7 +6722,8 @@
       ],
       "default": "/bin/sh",
       "doc": "The default shell to use if an allowed shell is not installed on the machine. Default: /bin/sh",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "simple_allow_groups": {
       "name": "simple_allow_groups",
@@ -6242,7 +6733,8 @@
         "domain/simple"
       ],
       "doc": "Comma-separated list of groups that are allowed to log in. If this option is specified, all other users are denied unless they are explicitly listed in `simple_allow_users`. OR Logic Applies: A user can log in if they are listed in `simple_...",
-      "source": "sssd-simple.conf"
+      "source": "sssd-simple.conf",
+      "confidence": "api"
     },
     "simple_allow_users": {
       "name": "simple_allow_users",
@@ -6252,7 +6744,8 @@
         "domain/simple"
       ],
       "doc": "Comma-separated list of users who are allowed to log in. If this option is specified, all other users are denied unless they are members of groups listed in`simple_allow_groups`.",
-      "source": "sssd-simple.conf"
+      "source": "sssd-simple.conf",
+      "confidence": "api"
     },
     "simple_deny_groups": {
       "name": "simple_deny_groups",
@@ -6262,7 +6755,8 @@
         "domain/simple"
       ],
       "doc": "Comma-separated list of groups that are explicitly denied access. This applies only to groups within this SSSD domain. Local groups are not evaluated. OR Logic Applies: A user will be denied access if they are listed in `simple_deny_users`...",
-      "source": "sssd-simple.conf"
+      "source": "sssd-simple.conf",
+      "confidence": "api"
     },
     "simple_deny_users": {
       "name": "simple_deny_users",
@@ -6272,7 +6766,8 @@
         "domain/simple"
       ],
       "doc": "Comma-separated list of users who are explicitly denied access. If this option is specified, these users will be denied regardless of whether they appear in `simple_allow_users` or `simple_allow_groups`. OR Logic Applies: A user will be den...",
-      "source": "sssd-simple.conf"
+      "source": "sssd-simple.conf",
+      "confidence": "api"
     },
     "socket_path": {
       "name": "socket_path",
@@ -6281,7 +6776,8 @@
         "kcm"
       ],
       "doc": "The socket the KCM service will listen on. Default: /var/run/.heim_org.h5l.kcm-socket Note: on platforms where systemd is supported, the socket path is overwritten by the one defined in the sssd-kcm.socket unit file.",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "ssh_hash_known_hosts": {
       "name": "ssh_hash_known_hosts",
@@ -6289,7 +6785,8 @@
       "sections": [
         "ssh"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "ssh_known_hosts_timeout": {
       "name": "ssh_known_hosts_timeout",
@@ -6297,7 +6794,8 @@
       "sections": [
         "ssh"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "ssh_use_certificate_keys": {
       "name": "ssh_use_certificate_keys",
@@ -6307,7 +6805,8 @@
       ],
       "default": "true",
       "doc": "If set to true the sss_ssh_authorizedkeys will return ssh keys derived from the public key of X.509 certificates stored in the user entry as well. See sss_ssh_authorizedkeys 1 for details. Default: true",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "ssh_use_certificate_matching_rules": {
       "name": "ssh_use_certificate_matching_rules",
@@ -6317,7 +6816,8 @@
       ],
       "default": "not set, equivalent to 'all_rules',",
       "doc": "By default the ssh responder will use all available certificate matching rules to filter the certificates so that ssh keys are only derived from the matching ones. With this option the used rules can be restricted with a comma separated lis...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "subdomain_homedir": {
       "name": "subdomain_homedir",
@@ -6326,7 +6826,8 @@
         "domain"
       ],
       "doc": "Use this homedir as default value for all subdomains within this domain in IPA AD trust. See override_homedir for info about possible values. In addition to those, the expansion below can only be used with subdomain_homedir . %F flat (NetBI...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "subdomain_inherit": {
       "name": "subdomain_inherit",
@@ -6336,7 +6837,8 @@
       ],
       "default": "none",
       "doc": "Specifies a list of configuration parameters that should be inherited by a subdomain. Please note that only selected parameters can be inherited. Currently the following options can be inherited: ldap_search_timeout ldap_network_timeout lda...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "subdomain_refresh_interval": {
       "name": "subdomain_refresh_interval",
@@ -6344,7 +6846,8 @@
       "sections": [
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "subdomain_refresh_interval_offset": {
       "name": "subdomain_refresh_interval_offset",
@@ -6352,7 +6855,8 @@
       "sections": [
         "domain"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "subdomains_provider": {
       "name": "subdomains_provider",
@@ -6362,7 +6866,8 @@
       ],
       "default": "The value of",
       "doc": "The provider which should handle fetching of subdomains. This value should be always the same as id_provider. Supported subdomain providers are: ipa to load a list of subdomains from an IPA server. See sssd-ipa 5 for more information on con...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "sudo_inverse_order": {
       "name": "sudo_inverse_order",
@@ -6370,7 +6875,8 @@
       "sections": [
         "sudo"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "sudo_provider": {
       "name": "sudo_provider",
@@ -6386,7 +6892,8 @@
         "ldap"
       ],
       "doc": "The SUDO provider used for the domain. Supported SUDO providers are: ldap for rules stored in LDAP. See sssd-ldap 5 for more information on configuring LDAP. ipa the same as ldap but with IPA default settings. ad the same as ldap but with A...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "sudo_threshold": {
       "name": "sudo_threshold",
@@ -6396,7 +6903,8 @@
       ],
       "default": "50",
       "doc": "Maximum number of expired rules that can be refreshed at once. If number of expired rules is below threshold, those rules are refreshed with rules refresh mechanism. If the threshold is exceeded a full refresh of sudo rules is triggered ins...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "sudo_timed": {
       "name": "sudo_timed",
@@ -6406,7 +6914,8 @@
       ],
       "default": "false",
       "doc": "Whether or not to evaluate the sudoNotBefore and sudoNotAfter attributes that implement time-dependent sudoers entries. Default: false",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "tgt_renewal": {
       "name": "tgt_renewal",
@@ -6416,7 +6925,8 @@
       ],
       "default": "False (Automatic renewals disabled)",
       "doc": "Enables TGT renewals functionality. Default: False (Automatic renewals disabled)",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "tgt_renewal_inherit": {
       "name": "tgt_renewal_inherit",
@@ -6426,7 +6936,8 @@
       ],
       "default": "NULL",
       "doc": "Domain to inherit krb5_* options from, for use with TGT renewals. Default: NULL",
-      "source": "sssd-kcm.8.xml"
+      "source": "sssd-kcm.8.xml",
+      "confidence": "man"
     },
     "timeout": {
       "name": "timeout",
@@ -6438,7 +6949,8 @@
       ],
       "default": "10",
       "doc": "Timeout in seconds between heartbeats for this service. This is used to ensure that the process is alive and capable of answering requests. Note that after three missed heartbeats the process will terminate itself. Default: 10",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "try_inotify": {
       "name": "try_inotify",
@@ -6448,7 +6960,8 @@
       ],
       "default": "true on platforms where inotify is",
       "doc": "By default, SSSD will attempt to use inotify to monitor configuration files changes and will fall back to polling every five seconds if inotify cannot be used. There are some limited situations where it is preferred that we should skip even...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "use_fully_qualified_names": {
       "name": "use_fully_qualified_names",
@@ -6458,7 +6971,8 @@
       ],
       "default": "FALSE (TRUE for trusted",
       "doc": "Use the full name and domain (as formatted by the domain's full_name_format) as the user's login name reported to NSS. If set to TRUE, all requests to this domain must use fully qualified names. For example, if used in EXAMPLE domain that c...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "user": {
       "name": "user",
@@ -6466,7 +6980,8 @@
       "sections": [
         "sssd"
       ],
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "user_attributes": {
       "name": "user_attributes",
@@ -6485,7 +7000,8 @@
         "loginshell"
       ],
       "doc": "Some of the additional NSS responder requests can return more attributes than just the POSIX ones defined by the NSS interface. The list of attributes is controlled by this option. It is handled the same way as the user_attributes option of...",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "users": {
       "name": "users",
@@ -6495,7 +7011,8 @@
       ],
       "default": "Empty. Matches no users.",
       "doc": "A comma-separated list of users which should have session recording enabled. Matches user names as returned by NSS. I.e. after the possible space replacement, case changes, etc. Default: Empty. Matches no users.",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "vetoed_shells": {
       "name": "vetoed_shells",
@@ -6505,7 +7022,8 @@
       ],
       "default": "Not set",
       "doc": "Replace any instance of these shells with the shell_fallback Default: Not set",
-      "source": "sssd.api.conf"
+      "source": "sssd.api.conf",
+      "confidence": "api"
     },
     "wildcard_limit": {
       "name": "wildcard_limit",
@@ -6517,7 +7035,8 @@
       ],
       "default": "1000 (often the size of one page)",
       "doc": "Specifies an upper limit on the number of entries that are downloaded during a wildcard lookup. At the moment, only the InfoPipe responder supports wildcard lookups. Default: 1000 (often the size of one page)",
-      "source": "sssd-ad.conf"
+      "source": "sssd-ad.conf",
+      "confidence": "api"
     }
   },
   "option_names": [

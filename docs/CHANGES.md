@@ -1,5 +1,46 @@
 # Implementation Summary
 
+## 2026-09-29 — evidence contract, severity policy, semantic rules
+
+Follow-up pass from the plan-mode review: three structural weaknesses behind
+the recent false positives are fixed, with no new dependencies and the binary
+staying standalone and deterministic.
+
+### Ground-truth confidence on every catalog option
+`OptionMeta` gains `Confidence` (`api` > `man` > `curated`), derived once from
+`Source` by `applyConfidenceTags` at the end of generation. Of the 519 SSSD
+2.14.0 options, 481 are API-backed, 37 man-only and 1 curated. `catalog.md`
+renders the layer per option (`sssd-ad.conf (api)`); findings carry it as
+`confidence`, and unknown-option verdicts cite the full API-backed catalog.
+
+### Central severity policy
+`catalogSeverity` in `config_severity.go` caps every non-allowlisted rule at
+`SevWarning`, so a weak knowledge layer can never sink the health score on
+its own. Pre-existing checks are grandfathered with stable rule IDs
+(`structure:*`, `domain:*`, `idmap:*`, `correlate:*`, `log:*`); user YAML
+rules (`rule:*`) keep their declared severity. Severity is therefore a table,
+not a per-call-site decision.
+
+### Evidence contract
+`ConfigFinding` (and `GraphFindingNode`) gain `rule_id`, `confidence` and
+`doc_ref`, threaded through `addConfigFindingEx`, the correlation graph, the
+HTML template and the Wails `models.ts`. Every finding is now traceable to
+the check and documentation that produced it.
+
+### Provider-aware semantic rules
+`config_semantics.go` adds three cross-option checks the syntactic catalog
+cannot express: `semantic:ldap-uri-without-ldap-provider`,
+`semantic:dead-bind-credentials` (evidence redacts the secret as `***`) and
+`semantic:dead-ldap-options`. All stay `SevWarning`. The user LDAP
+supportconfig from the previous pass still yields exactly its 2 genuine
+findings, plus zero semantic noise.
+
+### Tests
+9 new tests in `config_semantics_test.go`: per-rule positives and negatives
+(including the real LDAP config staying clean), the severity cap, the
+evidence contract on catalog findings, and the confidence tags surviving the
+embed round-trip.
+
 ## 2026-09-28 — fix the provider/* section false positives on a real LDAP domain
 
 A second review of a real supportconfig (SLES 15 SP7, SSSD 2.10.2, `id_provider = ldap`)

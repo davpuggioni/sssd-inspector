@@ -39,6 +39,54 @@ type OptionMeta struct {
 	// the report so every catalog finding can be traced back to the exact
 	// man page it came from.
 	Source string `json:"source,omitempty"`
+	// Confidence records which ground-truth layer produced this entry:
+	//   "api"     - sssd.api.conf / sssd.api.d/*.conf (authoritative for
+	//               existence, types and defaults; written from the C code)
+	//   "man"     - DocBook XML or compiled roff man pages (authoritative
+	//               for documentation, defaults and enumerations only)
+	//   "curated" - hand-verified table for options the daemon accepts but
+	//               some releases fail to document (e.g. config_file_version)
+	// The validator uses it to cap severity: weak layers may only warn.
+	Confidence string `json:"confidence,omitempty"`
+}
+
+// Confidence layers for OptionMeta.Confidence.
+const (
+	ConfidenceAPI     = "api"
+	ConfidenceMan     = "man"
+	ConfidenceCurated = "curated"
+)
+
+// confidenceForSource maps a catalog Source file name to its ground-truth
+// layer. API definitions come from the SSSD configurator code, man pages
+// document it, and "curated" marks hand-verified entries.
+func confidenceForSource(source string) string {
+	if source == ConfidenceCurated {
+		return ConfidenceCurated
+	}
+	base := source
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	lower := strings.ToLower(base)
+	if strings.HasSuffix(lower, ".conf") {
+		return ConfidenceAPI
+	}
+	return ConfidenceMan
+}
+
+// applyConfidenceTags derives OptionMeta.Confidence from OptionMeta.Source
+// for every entry. It runs once at the end of generation so all four
+// ingestion passes (API, DocBook XML, roff, curated) share one mapping and
+// the mapping cannot drift between passes.
+func applyConfidenceTags(catalog *SssdCatalog) {
+	for name, opt := range catalog.Options {
+		want := confidenceForSource(opt.Source)
+		if opt.Confidence != want {
+			opt.Confidence = want
+			catalog.Options[name] = opt
+		}
+	}
 }
 
 // SssdCatalog represents the consolidated schema catalog of SSSD options.
@@ -112,6 +160,10 @@ func RunGenerateCatalog(sourceDir string) error {
 	// Drop any entry that never acquired a section: it cannot be validated
 	// meaningfully and would otherwise mask a genuine typo.
 	pruneSectionlessOptions(catalog)
+
+	// Tag every entry with its ground-truth layer (api > man > curated).
+	// Runs after pruning so no tag is ever attached to a dropped entry.
+	applyConfidenceTags(catalog)
 
 	// Finalize sorted option names and sorted section option lists
 	for name := range catalog.Options {
@@ -864,8 +916,8 @@ func generateCatalogMarkdown(catalog *SssdCatalog) string {
 	for _, sec := range secNames {
 		opts := catalog.Sections[sec]
 		sb.WriteString(fmt.Sprintf("## Section `[%s]`\n\n", sec))
-		sb.WriteString("| Option | Type | Default | Allowed Values |\n")
-		sb.WriteString("|--------|------|---------|----------------|\n")
+		sb.WriteString("| Option | Type | Default | Allowed Values | Source |\n")
+		sb.WriteString("|--------|------|---------|----------------|--------|\n")
 		for _, optName := range opts {
 			opt := catalog.Options[optName]
 			defVal := opt.Default
@@ -876,15 +928,22 @@ func generateCatalogMarkdown(catalog *SssdCatalog) string {
 			if len(opt.Values) > 0 {
 				valStr = strings.Join(opt.Values, ", ")
 			}
-			sb.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` | %s |\n", opt.Name, opt.Type, defVal, valStr))
+			src := opt.Source
+			if src == "" {
+				src = "-"
+			}
+			if opt.Confidence != "" {
+				src += " (" + opt.Confidence + ")"
+			}
+			sb.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` | %s | %s |\n", opt.Name, opt.Type, defVal, valStr, src))
 		}
 		sb.WriteString("\n")
 	}
 
 	// Alphabetical all options table
 	sb.WriteString("## All Options (Alphabetical)\n\n")
-	sb.WriteString("| Option | Type | Sections | Default | Allowed Values |\n")
-	sb.WriteString("|--------|------|----------|---------|----------------|\n")
+	sb.WriteString("| Option | Type | Sections | Default | Allowed Values | Source |\n")
+	sb.WriteString("|--------|------|----------|---------|----------------|--------|\n")
 	for _, name := range catalog.OptionNames {
 		opt := catalog.Options[name]
 		defVal := opt.Default
@@ -899,7 +958,14 @@ func generateCatalogMarkdown(catalog *SssdCatalog) string {
 		if len(opt.Sections) > 0 {
 			secStr = strings.Join(opt.Sections, ", ")
 		}
-		sb.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` | `%s` | %s |\n", opt.Name, opt.Type, secStr, defVal, valStr))
+		src := opt.Source
+		if src == "" {
+			src = "-"
+		}
+		if opt.Confidence != "" {
+			src += " (" + opt.Confidence + ")"
+		}
+		sb.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` | `%s` | %s | %s |\n", opt.Name, opt.Type, secStr, defVal, valStr, src))
 	}
 
 	return sb.String()

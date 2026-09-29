@@ -104,16 +104,16 @@ func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
 			// its own message: the key exists, the placement does not.
 			if msg := wrongSectionReason(opt, sec); msg != "" {
 				line, evidence := firstKeyVal(vals, key)
-				addConfigFinding(report, SevWarning, "config_section", msg, "sssd.conf",
-					sec.Name+"."+key, line, evidence)
+				addConfigFindingEx(report, SevWarning, "config_section", msg, "sssd.conf",
+					sec.Name+"."+key, line, evidence, "catalog:option-in-wrong-section", opt.Confidence, docRefForSource(opt.Source))
 				continue
 			}
 			for _, kv := range vals {
 				if v := invalidValueReason(opt, kv.Value); v != "" {
 					msg := fmt.Sprintf("CONFIGURATION WARNING: '%s = %s' in section [%s] is not valid for the '%s' option (%s). SSSD ignores the setting or falls back to the default '%s'. %s",
 						key, kv.Value, sec.Name, opt.Type, v, opt.Default, prov)
-					addConfigFinding(report, SevWarning, "config_value", msg, "sssd.conf",
-						sec.Name+"."+key, kv.Line, key+" = "+kv.Value)
+					addConfigFindingEx(report, SevWarning, "config_value", msg, "sssd.conf",
+						sec.Name+"."+key, kv.Line, key+" = "+kv.Value, "catalog:invalid-value", opt.Confidence, docRefForSource(opt.Source))
 				}
 			}
 		}
@@ -190,12 +190,32 @@ func reportUnknownOption(report *ReportData, prov string, names []string, sec *S
 	if suggestion := suggestOptionName(names, key); suggestion != "" {
 		msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. Did you mean '%s'? SSSD silently ignores unknown parameters, so this setting has no effect. %s",
 			key, sec.Name, suggestion, prov)
-		addConfigFinding(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence)
+		addConfigFindingEx(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence, "catalog:unknown-option", ConfidenceAPI, "sssd.conf(5)")
 		return
 	}
 	msg := fmt.Sprintf("CONFIGURATION WARNING: unknown parameter '%s' in section [%s]. It is not part of the SSSD option list for this release; SSSD silently ignores it (check for a typo). %s",
 		key, sec.Name, prov)
-	addConfigFinding(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence)
+	addConfigFindingEx(report, SevWarning, "config_unknown", msg, "sssd.conf", sec.Name+"."+key, line, evidence, "catalog:unknown-option", ConfidenceAPI, "sssd.conf(5)")
+}
+
+// docRefForSource converts a catalog Source file name into a man page
+// reference for the evidence contract (e.g. "sssd-ldap.5.xml" ->
+// "sssd-ldap(5)", "sssd-ldap.conf" stays as is).
+func docRefForSource(source string) string {
+	s := strings.TrimSpace(source)
+	if s == "" || s == "curated" {
+		return s
+	}
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	if strings.HasSuffix(s, ".xml") {
+		base := strings.TrimSuffix(s, ".xml")
+		if i := strings.LastIndex(base, "."); i > 0 {
+			return base[:i] + "(" + base[i+1:] + ")"
+		}
+	}
+	return s
 }
 
 // invalidValueReason returns a non-empty human-readable explanation when the
