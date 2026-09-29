@@ -4,6 +4,7 @@
 // in correlationGraph.ts; this section only decides when it is visible and
 // renders the "nothing to show" case.
 import type { ReportData } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { CorrelationGraph } from './CorrelationGraph';
 import { Section } from '../common/Section';
 
@@ -13,7 +14,7 @@ export interface CorrelationGraphSectionProps {
 
 export function CorrelationGraphSection({ report }: CorrelationGraphSectionProps) {
   const graph = report.graph;
-  const nodeCount = (graph?.entities?.length ?? 0) + (graph?.findings?.length ?? 0) + (graph?.sources?.length ?? 0);
+  const nodeCount = listOf(graph?.entities).length + listOf(graph?.findings).length + listOf(graph?.sources).length;
 
   return (
     <Section title="Correlation Graph" className="corr-graph-section" defaultOpen={false}>

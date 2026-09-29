@@ -1,5 +1,40 @@
 # Implementation Summary
 
+## 2026-09-29 — Definitions Studio crash on a machine with no custom rules
+
+Opening the Studio in the GUI failed with
+`null is not an object (evaluating 't.rules.length')`. The cause was a plain
+mismatch between the Go type and the JSON it produces: `DefinitionsInventory.Rules`
+is tagged `json:"rules"` with no `omitempty`, and `encoding/json` renders a **nil
+slice as `null`**, so an installation with no custom rules — the default, and the
+most common one — delivered `"rules": null` while the generated model declares
+`rules: RuleInfo[]`. `DefinitionInventoryPanel` trusted the type and read
+`.length` off it. `Files` had the same hole, as did `RuleTestResult.Outcomes`,
+the catalog sources and every report list.
+
+Fixed on both sides, because either alone leaves a trap:
+
+* **Frontend — `utils/payload.ts`.** `listOf(value)` returns an array for
+  `null`, `undefined` and anything else, and every array read from a payload
+  goes through it (inventory, catalog, editor verdict, dry-run, report, graph).
+  The read is made total instead of trusted: the payload crosses a bridge, so it
+  is only as good as the Go struct behind it, and the UI must not go down with
+  it. It lives outside `api/backend.ts` because tests replace that module
+  wholesale, and a pure helper must not vanish with the bridge it protects.
+* **Backend — `nonNilSlice` in `definitions_service.go`.** The service owns these
+  payloads, so it is where the generated types' promise is kept: slice fields
+  tagged without `omitempty` now always leave the boundary non-nil.
+
+Pinned three ways. `TestServicePayloadsNeverMarshalArraysAsNull` marshals every
+service payload and fails on any field that comes out as `null` — reverting the
+one-line `nonNilSlice` fix makes it report `field "rules" marshals as null`,
+which is the bug verbatim. Two React tests render the Studio against an inventory
+with null arrays, one of them completely empty. And the GUI smoke gained a third
+scene, `studio-empty`, which feeds the built bundle exactly the payload a clean
+installation produces; its render-crash detector turns a regression into a hard
+failure. Gate green: `gofmt`/`go vet`/`go build`/`go test` on the `sssdinspector`
+and `wails` tags, frontend typecheck, build, 72 Vitest tests, smoke 7/7 + 4/4 + 7/7.
+
 ## 2026-09-29 — M3 follow-up: docs, an anonymization gap, and a GUI smoke that runs headless
 
 ### Documentation

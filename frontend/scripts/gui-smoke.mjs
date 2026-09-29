@@ -126,6 +126,16 @@ function shim() {
   };
 
   const scene = new URLSearchParams(location.search).get('scene');
+  // A fresh installation has no custom rules, so Go sends "rules": null: a nil
+  // slice marshals as null, not []. That is the state which crashed the Studio
+  // before listOf() existed, so the smoke drives it instead of only the happy
+  // path. The render-crash detector below turns it into a hard failure.
+  if (scene === 'studio-empty') {
+    inventory.files = null;
+    inventory.rules = null;
+    inventory.diagnostics = null;
+    inventory.rule_count = 0;
+  }
   const byText = (selector, text) =>
     [...document.querySelectorAll(selector)].find((el) => el.textContent.trim().includes(text));
   const type = (input, value) => {
@@ -145,6 +155,8 @@ function shim() {
     setTimeout(() => byText('button', 'Definitions Studio').click(), 150);
     setTimeout(() => byText('button', 'Validate').click(), 400);
     setTimeout(() => byText('button', 'Run dry-run').click(), 600);
+  } else if (scene === 'studio-empty') {
+    setTimeout(() => byText('button', 'Definitions Studio').click(), 150);
   }
 }
 
@@ -174,6 +186,12 @@ const scenes = [
     ['sssd.conf snippet', 'View sssd.conf'],
     ['catalog provenance row', 'Option Catalog'],
     ['correlation graph', 'Correlation Graph'],
+  ] },
+  { name: 'studio-empty', markers: [
+    ['inventory panel', 'Discovery inventory'],
+    ['rule count badge', 'rules loaded'],
+    ['rule editor', 'Rule editor'],
+    ['catalog panel', 'SSSD option catalog'],
   ] },
   { name: 'studio', markers: [
     ['inventory panel', 'Discovery inventory'],

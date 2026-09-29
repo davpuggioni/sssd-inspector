@@ -134,6 +134,29 @@ The rest of the old validator surface (file size, form validation, DOM helpers,
 formatting helpers) had no callers: React does not need them, and the components
 that did are gone.
 
+#### utils/payload.ts
+One function, `listOf`, and every array read from a backend payload goes
+through it. `encoding/json` renders a nil Go slice as `null`, while the
+generated models declare a plain array (`rules: RuleInfo[]`): an installation
+with no custom rules therefore delivers `"rules": null` and the Studio used to
+die on `t.rules.length`. The UI cannot type-check its way out of this — the
+payload crosses a bridge, arrives at runtime and is only as good as the Go
+struct behind it — so the read is made total instead:
+
+```typescript
+export function listOf<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+```
+
+It lives here rather than in `api/backend.ts` because that module is replaced
+wholesale by a stub in tests, and a pure data helper must not vanish with the
+bridge it protects. The Go side keeps the promise too: `nonNilSlice` in
+`definitions_service.go` guarantees the service never marshals a nil slice,
+pinned by `TestServicePayloadsNeverMarshalArraysAsNull`. Defence in both
+directions is deliberate — the frontend survives older payloads, the backend
+stops producing new ones.
+
 ### Main Application
 
 #### App.tsx

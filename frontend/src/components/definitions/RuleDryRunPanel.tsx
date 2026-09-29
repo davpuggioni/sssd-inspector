@@ -3,6 +3,7 @@
 // Firing rules come first (with the evidence line that made them fire);
 // non-firing rules stay listed so "my rule did nothing" is answerable.
 import type { RuleTestResult } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import type { RuleDryRunApi } from '../../hooks/useRuleDryRun';
 import { DiagnosticsList } from '../report/DiagnosticsList';
 
@@ -11,9 +12,10 @@ export interface RuleDryRunPanelProps {
 }
 
 function DryRunResult({ result }: { result: RuleTestResult }) {
-  const fired = result.outcomes.filter((outcome) => outcome.matched);
-  const silent = result.outcomes.filter((outcome) => !outcome.matched);
-  const diagnostics = result.diagnostics ?? [];
+  const outcomes = listOf(result.outcomes);
+  const fired = outcomes.filter((outcome) => outcome.matched);
+  const silent = outcomes.filter((outcome) => !outcome.matched);
+  const diagnostics = listOf(result.diagnostics);
 
   const outcomeRow = (outcome: RuleTestResult['outcomes'][number], key: string) => (
     <div
@@ -46,7 +48,7 @@ function DryRunResult({ result }: { result: RuleTestResult }) {
         </>
       ) : null}
 
-      {result.outcomes.length === 0 ? (
+      {outcomes.length === 0 ? (
         <p className="studio-empty">No rules are loaded, so nothing can fire.</p>
       ) : (
         <>

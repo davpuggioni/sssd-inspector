@@ -5,6 +5,7 @@
 // loader's own parsers produced and a real write probe, not permission bits.
 import type { DefinitionsInventory, DefinitionScope } from '../../api/backend';
 import { SCOPE_SYSTEM, SCOPE_USER } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { DiagnosticsList } from '../report/DiagnosticsList';
 
 export interface DefinitionInventoryPanelProps {
@@ -39,7 +40,10 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
   const { inventory, loading, loadError, onReload, onOpenFolder } = props;
   // The last column counts options for a catalog override and bytes for
   // everything else, so its header follows the rows instead of lying.
-  const hasCatalog = (inventory?.files ?? []).some((info) => info.kind === 'catalog');
+  const files = listOf(inventory?.files);
+  const rules = listOf(inventory?.rules);
+  const diagnostics = listOf(inventory?.diagnostics);
+  const hasCatalog = files.some((info) => info.kind === 'catalog');
 
   return (
     <section className="studio-panel" aria-label="Definition inventory">
@@ -82,7 +86,7 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
               </tr>
             </thead>
             <tbody>
-              {inventory.files.map((info) => (
+              {files.map((info) => (
                 <tr key={info.path}>
                   <td>{info.scope}</td>
                   <td>{info.kind}</td>
@@ -100,7 +104,7 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
             </tbody>
           </table>
 
-          {inventory.rules.length > 0 && (
+          {rules.length > 0 && (
             <>
               <h3>Loaded rules</h3>
               <table className="studio-table">
@@ -113,7 +117,7 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {inventory.rules.map((info) => (
+                  {rules.map((info) => (
                     <tr key={`${info.file}-${info.line}-${info.rule.name}`}>
                       <td className="rule-name">{info.rule.name}</td>
                       <td>{info.rule.severity}</td>
@@ -128,10 +132,10 @@ export function DefinitionInventoryPanel(props: DefinitionInventoryPanelProps) {
             </>
           )}
 
-          {inventory.diagnostics && inventory.diagnostics.length > 0 && (
+          {diagnostics.length > 0 && (
             <>
               <h3>Skipped input</h3>
-              <DiagnosticsList diagnostics={inventory.diagnostics} />
+              <DiagnosticsList diagnostics={diagnostics} />
             </>
           )}
         </>

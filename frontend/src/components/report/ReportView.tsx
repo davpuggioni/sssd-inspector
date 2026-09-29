@@ -2,6 +2,7 @@
 // in the same order and with the same CSS classes as the legacy renderer, but
 // built from typed React components instead of one big HTML template string.
 import type { ReportData } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { Section } from '../common/Section';
 import { ConfigFindingsList } from './ConfigFindingsList';
 import { CorrelationGraphSection } from './CorrelationGraphSection';
@@ -32,9 +33,18 @@ function LinesList({ items, listClass }: { items?: string[]; listClass: string }
 }
 
 export function ReportView({ report }: ReportViewProps) {
-  const diagnostics = report.diagnostics ?? [];
-  const temporalClusters = report.temporal_clusters ?? [];
-  const kbSuggestions = report.kb_suggestions ?? [];
+  // Every array field of a Go payload goes through listOf: a nil slice is
+  // serialised as null, and a report with no findings is the normal case.
+  const diagnostics = listOf(report.diagnostics);
+  const temporalClusters = listOf(report.temporal_clusters);
+  const kbSuggestions = listOf(report.kb_suggestions);
+  const configFindings = listOf(report.config_findings);
+  const problems = listOf(report.problems);
+  const warnings = listOf(report.warnings);
+  const logErrors = listOf(report.sssd_log_errors);
+  const macDenials = listOf(report.mac_denial_examples);
+  const timeline = listOf(report.timeline);
+  const matchedTids = listOf(report.matched_tids);
 
   return (
     <>
@@ -64,60 +74,60 @@ export function ReportView({ report }: ReportViewProps) {
         </Section>
       )}
 
-      {report.config_findings && report.config_findings.length > 0 && (
+      {configFindings.length > 0 && (
         <Section
           title="Configuration Findings (with provenance)"
           headingClass="warn-header"
-          count={report.config_findings.length}
+          count={configFindings.length}
         >
-          <ConfigFindingsList findings={report.config_findings} />
+          <ConfigFindingsList findings={configFindings} />
         </Section>
       )}
 
-      {report.problems && report.problems.length > 0 && (
-        <Section title="Critical Problems Detected" count={report.problems.length}>
-          <LinesList items={report.problems} listClass="problem-list" />
+      {problems.length > 0 && (
+        <Section title="Critical Problems Detected" count={problems.length}>
+          <LinesList items={problems} listClass="problem-list" />
         </Section>
       )}
 
-      {report.warnings && report.warnings.length > 0 && (
-        <Section title={'Warnings & Recommendations'} headingClass="warn-header" count={report.warnings.length}>
-          <LinesList items={report.warnings} listClass="warn-list" />
+      {warnings.length > 0 && (
+        <Section title={'Warnings & Recommendations'} headingClass="warn-header" count={warnings.length}>
+          <LinesList items={warnings} listClass="warn-list" />
         </Section>
       )}
 
-      {report.sssd_log_errors && report.sssd_log_errors.length > 0 && (
-        <Section title="SSSD Log Errors" count={report.sssd_log_errors.length}>
-          <LogErrorsList errors={report.sssd_log_errors} />
+      {logErrors.length > 0 && (
+        <Section title="SSSD Log Errors" count={logErrors.length}>
+          <LogErrorsList errors={logErrors} />
         </Section>
       )}
 
-      {report.mac_denial_examples && report.mac_denial_examples.length > 0 && (
-        <Section title="MAC Security Denials" count={report.mac_denial_examples.length}>
+      {macDenials.length > 0 && (
+        <Section title="MAC Security Denials" count={macDenials.length}>
           <div className="mac-block">
-            {report.mac_denial_examples.map((example, index) => (
+            {macDenials.map((example, index) => (
               <span key={`${index}-${example}`}>
                 {example}
-                {index < report.mac_denial_examples.length - 1 ? <br /> : null}
+                {index < macDenials.length - 1 ? <br /> : null}
               </span>
             ))}
           </div>
         </Section>
       )}
 
-      {report.timeline && report.timeline.length > 0 && (
-        <Section title="Event Timeline" count={report.timeline.length}>
-          <TimelineList events={report.timeline} />
+      {timeline.length > 0 && (
+        <Section title="Event Timeline" count={timeline.length}>
+          <TimelineList events={timeline} />
         </Section>
       )}
 
-      {report.matched_tids && report.matched_tids.length > 0 && (
+      {matchedTids.length > 0 && (
         <Section
           title="Relevant Knowledge Base Articles"
           headingClass="kb-header"
-          count={report.matched_tids.length}
+          count={matchedTids.length}
         >
-          <KbArticlesList articles={report.matched_tids} />
+          <KbArticlesList articles={matchedTids} />
         </Section>
       )}
 

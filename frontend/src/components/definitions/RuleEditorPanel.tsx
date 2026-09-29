@@ -4,6 +4,7 @@
 // document is what the loader (and therefore the analysis) will do with it.
 import type { RuleValidationResult } from '../../api/backend';
 import { SCOPE_SYSTEM, SCOPE_USER } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import type { RuleEditorApi } from '../../hooks/useRuleEditor';
 import { SCHEMA_HELP } from './rulesTemplate';
 
@@ -12,7 +13,7 @@ export interface RuleEditorPanelProps {
 }
 
 function ValidationVerdict({ verdict }: { verdict: RuleValidationResult }) {
-  const diagnostics = verdict.diagnostics ?? [];
+  const diagnostics = listOf(verdict.diagnostics);
   return (
     <div
       className={`studio-verdict ${verdict.valid ? 'studio-verdict-valid' : 'studio-verdict-invalid'}`}

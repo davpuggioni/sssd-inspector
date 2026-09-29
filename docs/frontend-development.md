@@ -82,6 +82,12 @@ dry-run** — then asserts the markers a user would look for and writes a
 screenshot per view to `/tmp/sssd-gui-smoke`. It fails on a render crash (the
 error boundary text) or on a missing bridge.
 
+It drives three scenes, not one: `analysis` and `studio`, plus `studio-empty`,
+which feeds the Studio an inventory whose `files`/`rules`/`diagnostics` are all
+`null` — what Go actually sends on a machine with no custom rules, and the state
+that crashed the GUI before `listOf()` existed. The render-crash detector is what
+turns that scene into a hard failure, so a null array can never come back.
+
 What it covers: the shipped React code, the generated Wails client, the CSS, the
 layout, and a report the engine actually produced. What it cannot cover: the
 Go ↔ WebKitGTK boundary, which needs a desktop session (`wails build` then run

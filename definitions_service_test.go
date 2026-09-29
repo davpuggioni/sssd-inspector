@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -682,4 +683,54 @@ func TestGetCatalogInfo(t *testing.T) {
 	if info.Source == "" || info.Version == "" {
 		t.Errorf("catalog provenance = %q / %q, want both filled", info.Source, info.Version)
 	}
+}
+
+// A nil Go slice marshals to JSON null, and the generated front-end models
+// declare plain arrays (rules: RuleInfo[]). A null field crashed the React
+// Definitions Studio on the most common installation there is: no custom rules.
+// This test pins the wire contract at the boundary that owns it, so the GUI
+// never receives a null array in the first place.
+func TestServicePayloadsNeverMarshalArraysAsNull(t *testing.T) {
+	wd := withTempWorkingDir(t) // an empty definitions root: every list is nil
+
+	cases := []struct {
+		name    string
+		payload any
+	}{
+		{"ListDefinitions", ListDefinitions()},
+		{"GetCatalogInfo", GetCatalogInfo()},
+		{"ValidateRuleYAML", ValidateRuleYAML(validRulesYAML)},
+		{"ValidateRuleYAML empty", ValidateRuleYAML("")},
+		{"TestRulesAgainst", dryRunResult(t, wd)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(tc.payload)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var decoded map[string]any
+			if err := json.Unmarshal(raw, &decoded); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			for field, value := range decoded {
+				if value == nil {
+					t.Errorf("field %q marshals as null, want [] or omitted", field)
+				}
+			}
+		})
+	}
+}
+
+// dryRunResult runs TestRulesAgainst against an empty target directory. An
+// unreadable target is still a payload worth pinning, so the error is logged
+// and the result the service returned is checked as-is.
+func dryRunResult(t *testing.T, target string) RuleTestResult {
+	t.Helper()
+	res, err := TestRulesAgainst(target)
+	if err != nil {
+		t.Logf("dry-run target unreadable, pinning the result it returned anyway: %v", err)
+	}
+	return res
 }

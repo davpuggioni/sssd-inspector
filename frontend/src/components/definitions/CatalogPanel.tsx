@@ -6,6 +6,7 @@
 // (InstallCatalog), validated with the loader's own decoder, so an unusable
 // catalog is refused instead of silently doing nothing.
 import type { CatalogInfo, DefinitionSaveResult } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { DiagnosticsList } from '../report/DiagnosticsList';
 
 export interface CatalogPanelProps {
@@ -24,8 +25,9 @@ export function CatalogPanel({ catalog, loading, installing, lastInstall, onInst
     return <p className="studio-empty">Catalog information unavailable.</p>;
   }
 
-  const diagnostics = catalog.diagnostics ?? [];
-  const overridePaths = catalog.override_paths ?? [];
+  const diagnostics = listOf(catalog.diagnostics);
+  const overridePaths = listOf(catalog.override_paths);
+  const sources = listOf(catalog.sources);
 
   return (
     <>
@@ -58,10 +60,10 @@ export function CatalogPanel({ catalog, loading, installing, lastInstall, onInst
             <th>Contents</th>
             <td>{catalog.option_count} options in {catalog.section_count} sections</td>
           </tr>
-          {catalog.sources && catalog.sources.length > 0 ? (
+          {sources.length > 0 ? (
             <tr>
               <th>Documentation sources</th>
-              <td>{catalog.sources.length} ({catalog.sources.slice(0, 3).join(', ')}{catalog.sources.length > 3 ? ', …' : ''})</td>
+              <td>{sources.length} ({sources.slice(0, 3).join(', ')}{sources.length > 3 ? ', …' : ''})</td>
             </tr>
           ) : null}
           {overridePaths.length > 0 ? (

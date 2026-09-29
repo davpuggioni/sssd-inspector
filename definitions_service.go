@@ -110,6 +110,21 @@ type DefinitionFileInfo struct {
 // location in discovery order; Rules carries the loaded rules with their
 // provenance; Diagnostics is the same skipped-input report the analysis
 // produces, deduplicated.
+// nonNilSlice returns s, or an empty slice when s is nil.
+//
+// encoding/json renders a nil slice as JSON null, which contradicts the
+// generated front-end models: they declare a plain array (rules: RuleInfo[]), so
+// a null is a lie the UI has to defend against at every read. The definitions
+// service is the boundary that owns these payloads, so it is where the promise
+// is kept: slice fields tagged without omitempty always leave here non-nil.
+// Fields tagged omitempty are simply absent and need no help.
+func nonNilSlice[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
 type DefinitionsInventory struct {
 	UserRoot     string               `json:"user_root"`
 	SystemRoot   string               `json:"system_root"`
@@ -289,7 +304,7 @@ func ListDefinitions() DefinitionsInventory {
 	// KB override precedence already applied.
 	infos, ruleDiags := loadAnalysisRuleInfos()
 	articles, kbDiags := loadKBArticlesDiag()
-	inv.Rules = infos
+	inv.Rules = nonNilSlice(infos)
 	inv.RuleCount = len(infos)
 	inv.ArticleCount = len(articles)
 
@@ -611,7 +626,12 @@ func TestRulesAgainst(targetPath string) (RuleTestResult, error) {
 	defer cleanup()
 
 	infos, diags := loadAnalysisRuleInfos()
-	res := RuleTestResult{TargetPath: targetPath, Total: len(infos), Diagnostics: diags}
+	res := RuleTestResult{
+		TargetPath:  targetPath,
+		Total:       len(infos),
+		Outcomes:    []RuleTestOutcome{},
+		Diagnostics: diags,
+	}
 	if len(infos) == 0 {
 		return res, nil
 	}

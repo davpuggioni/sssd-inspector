@@ -2,6 +2,7 @@
 // part of the report. Values come straight from the Go report; React escapes
 // them on render, so supportconfig content can never inject markup.
 import type { ReportData } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { IniSnippet } from './IniSnippet';
 
 function YesNo({ value }: { value: boolean }) {
@@ -9,12 +10,13 @@ function YesNo({ value }: { value: boolean }) {
 }
 
 function ListItems({ items }: { items?: string[] }) {
-  if (!items || items.length === 0) {
+  const list = listOf(items);
+  if (list.length === 0) {
     return null;
   }
   return (
     <>
-      {items.map((item, index) => (
+      {list.map((item, index) => (
         <li key={`${index}-${item}`}>{item}</li>
       ))}
     </>
@@ -60,7 +62,7 @@ export function SystemInfoTable({ report }: SystemInfoTableProps) {
           <th>SSSD Packages</th>
           <td>
             {report.sssd_packages && report.sssd_packages.length > 0
-              ? <pre className="pkg-list">{report.sssd_packages.join('\n')}</pre>
+              ? <pre className="pkg-list">{listOf(report.sssd_packages).join('\n')}</pre>
               : 'None Detected'}
           </td>
         </tr>

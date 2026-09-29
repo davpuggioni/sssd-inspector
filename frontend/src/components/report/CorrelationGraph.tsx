@@ -13,6 +13,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 // share the name CorrelationGraph.
 import type { CorrelationGraph as GraphPayload } from '../../api/backend';
 import { severityLabel } from '../../api/backend';
+import { listOf } from '../../utils/payload';
 import { SEV_FILL, adjacency, canvasSize, layoutGraph } from './correlationGraph';
 import type { LayoutEdge, LayoutNode } from './correlationGraph';
 
@@ -103,15 +104,15 @@ function DetailPanel({ node }: { node: LayoutNode }) {
 }
 
 export function CorrelationGraph({ graph }: CorrelationGraphProps) {
-  const nodeCount = (graph.entities?.length ?? 0) + (graph.findings?.length ?? 0) + (graph.sources?.length ?? 0);
+  const nodeCount = listOf(graph.entities).length + listOf(graph.findings).length + listOf(graph.sources).length;
   const { width, height } = useMemo(() => canvasSize(nodeCount), [nodeCount]);
   const { nodes, edges } = useMemo(
     () => layoutGraph(
       {
-        entities: graph.entities ?? [],
-        findings: graph.findings ?? [],
-        sources: graph.sources ?? [],
-        edges: graph.edges ?? [],
+        entities: listOf(graph.entities),
+        findings: listOf(graph.findings),
+        sources: listOf(graph.sources),
+        edges: listOf(graph.edges),
       },
       width,
       height,

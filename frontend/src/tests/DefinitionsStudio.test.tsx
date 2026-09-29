@@ -75,6 +75,39 @@ describe('DefinitionsStudio — inventory', () => {
   });
 
 
+  it('survives a payload with null arrays, as the Go bridge sends it', async () => {
+    // encoding/json emits null for a nil slice, so an installation with NO
+    // custom rules delivers "rules": null even though the generated model says
+    // rules: RuleInfo[]. The Studio must render that, not crash on .length.
+    const { makeInventory } = await import('./helpers');
+    const payload = { ...makeInventory(), rules: null, diagnostics: null };
+    backend.listDefinitions.mockResolvedValue(payload as unknown as ReturnType<typeof makeInventory>);
+
+    render(<Studio />);
+
+    expect(await screen.findByText('Discovery inventory')).toBeInTheDocument();
+    // The count badge still renders, and no "Loaded rules" table is invented
+    // out of a null array.
+    expect(screen.getByText(/rules loaded/)).toBeInTheDocument();
+    expect(screen.queryByText('Loaded rules')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Install catalog (user)' })).toBeInTheDocument();
+  });
+
+  it('survives a completely empty inventory payload', async () => {
+    const { makeInventory } = await import('./helpers');
+    const payload = {
+      user_root: '/home/u/.sssd-inspector',
+      system_root: '/etc/sssd-inspector',
+      files: null, rules: null, rule_count: 0, article_count: 0, diagnostics: null,
+    };
+    backend.listDefinitions.mockResolvedValue(payload as unknown as ReturnType<typeof makeInventory>);
+
+    render(<Studio />);
+    expect(await screen.findByText('Discovery inventory')).toBeInTheDocument();
+    expect(screen.getByText('Rule editor')).toBeInTheDocument();
+    expect(screen.getByText(/KB articles/)).toBeInTheDocument();
+  });
+
   it('installs a catalog override for the user scope and refreshes', async () => {
     const user = userEvent.setup();
     render(<Studio />);
