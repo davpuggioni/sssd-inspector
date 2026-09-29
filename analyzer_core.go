@@ -281,12 +281,35 @@ type redactToken struct {
 // constants.RawLogModeNA inside the report would corrupt every field that
 // carries it (and the graph would label nodes "redacted-host" without having
 // redacted anything).
+// isRedactableToken reports whether a value carries real identifying data
+// worth replacing, as opposed to a placeholder the report already contains.
 func isRedactableToken(v string) bool {
 	switch v {
 	case "", "None", "Not configured", "Unknown", constants.RawLogModeNA:
 		return false
 	}
 	return !strings.HasPrefix(v, "N/A")
+}
+
+// parentDomain returns the domain shared with a host name under it, e.g.
+// "ad.corp.example" -> "corp.example". It exists because masking a domain as a
+// plain substring only covers hosts that CONTAIN it: a report whose only known
+// identity is ad_domain = "ad.corp.example" would otherwise ship every
+// "dc01.corp.example" the logs mention.
+//
+// It returns "" unless the value has at least three labels. With only two
+// ("corp.example") the full value already covers its subdomains as a substring,
+// and going one label shorter would mask the bare word "corp" everywhere.
+func parentDomain(v string) string {
+	second := strings.LastIndex(v, ".")
+	if second <= 0 {
+		return ""
+	}
+	first := strings.LastIndex(v[:second], ".")
+	if first < 0 {
+		return "" // two labels: the full value is already the shared parent
+	}
+	return v[first+1:]
 }
 
 // applyRedactToken replaces value (and its case variants — realms are
@@ -429,6 +452,16 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 			// "domain/example.com.foo".
 			s = strings.ReplaceAll(s, origAdDomain, "example.com")
 			s = strings.ReplaceAll(s, strings.ToUpper(origAdDomain), "EXAMPLE.COM")
+			// The AD domain is only ONE label of the customer domain, and a log
+			// line naming one of the AD's own hosts does not contain the AD
+			// domain: "dc01.corp.example" does not contain "ad.corp.example", so
+			// the substitution above lets the customer domain through. Mask the
+			// shared parent as well — it is the part that is actually sensitive.
+			if parent := parentDomain(origAdDomain); parent != "" {
+				s = strings.ReplaceAll(s, parent, "example.com")
+				s = strings.ReplaceAll(s, strings.ToUpper(parent), "EXAMPLE.COM")
+				s = strings.ReplaceAll(s, strings.ToLower(parent), "example.com")
+			}
 		}
 		if isRedactableToken(origHostname) {
 			s = strings.ReplaceAll(s, origHostname, "redacted-host")

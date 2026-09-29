@@ -354,6 +354,28 @@ If `sssd_catalog/catalog.json` is missing or malformed the validator degrades
 silently (no findings) instead of failing the analysis run;
 `TestEmbeddedCatalogLoads` fails the build instead.
 
+#### Overriding the catalog per machine
+
+The embedded catalog is frozen at build time, which is right for an air-gapped
+host and wrong for an engineer validating a newer distro. A generated
+`catalog.json` dropped in a definitions root overrides it:
+
+| Scope | Location | Precedence |
+|-------|----------|------------|
+| user | `~/.sssd-inspector/catalog.json` | highest (per-user) |
+| system | `/etc/sssd-inspector/catalog.json` | per-system (needs root) |
+| embedded | in the binary | fallback |
+
+The first candidate that exists **and parses** wins; the report's
+`catalog_provenance` states the release the claims are based on and appends
+`(override in effect: <path>)`. An override that is unreadable, malformed, or has
+an empty `options` map is **reported as a diagnostic and skipped** — validation
+continues against the embedded catalog rather than silently disappearing.
+`-definitions-info` lists the candidate paths and names the catalog in effect;
+the Definitions Studio shows the same, and "Open user folder" takes you straight
+to where to drop the file. The cache is keyed by content, so an edited catalog
+takes effect on the next analysis without restarting the application.
+
 ### Output
 
 The CLI prints a human-readable summary to stdout plus `[Progress N%]` lines,
@@ -383,16 +405,37 @@ wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-w -s" -clean 2>&1
 ### Workflow
 
 1. **Open the application** — A native window appears with the SSSD Inspector interface
-2. **Select a file** — Click "Browse..." or drag a supportconfig.txz file into the input field
+2. **Select a file** — Click "Browse..." or drag a supportconfig.txz (or an already-extracted supportconfig directory) into the input field
 3. **Configure options** — Check "Anonymize PII" if you need to redact sensitive information
-4. **Start analysis** — Click "Analyze" and watch the progress bar fill in real-time
-5. **Review results** — Browse through system info, problems, warnings, error details, timeline, and KB articles
+4. **Start analysis** — Click "Analyze" (or `Ctrl+Enter`) and watch the progress bar fill in real-time
+5. **Review results** — Browse through system info, problems, warnings, error details, timeline, KB articles (each with the log lines that matched) and the correlation graph
 6. **Export** — Click "Export PDF" (print-ready via browser dialog), "Export TXT" or "Export JSON" for the report file
+
+### Definitions Studio (`Ctrl+2`)
+
+The second tab answers the three questions a custom definition raises, through
+the same Go service the `-definitions-info`, `-validate-rules` and
+`-rules-test` flags use:
+
+- **Discovery inventory** — every search location in discovery order, with what
+  is there, whether you can write there, the rules currently loaded and any
+  input that was skipped. "Open user folder" / "Open system folder" take you to
+  where definition files go.
+- **Rule editor** — load the `rules.yaml` of a scope, edit, `Validate` and
+  `Save`. A save is refused when the analysis would skip the document, and the
+  verdict is shown inline with file and line. The system scope needs root.
+- **Dry-run** — point it at a supportconfig and see which loaded rules *would*
+  fire, and on which evidence line, without writing anything. The target is
+  prefilled with the archive the analysis view is holding.
+- **SSSD option catalog** — which release the configuration is validated
+  against, and where to drop a `catalog.json` to override it.
 
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+1` | Switch to the analysis view |
+| `Ctrl+2` | Switch to the Definitions Studio |
 | `Ctrl+O` | Open file browser |
 | `Ctrl+Enter` | Start analysis |
 | `Ctrl+P` | Export PDF report |

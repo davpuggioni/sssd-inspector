@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:gui": "node scripts/gui-smoke.mjs"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",

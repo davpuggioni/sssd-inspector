@@ -128,6 +128,138 @@ try {
 
 ---
 
+## Definitions Studio
+
+The seven methods behind the second GUI view. Every one of them is a thin
+wrapper over `definitions_service.go`, the same implementation the
+`-definitions-info`, `-validate-rules` and `-rules-test` flags use — so the
+Studio and the CLI cannot disagree about what a definition file does. The
+frontend reaches them through `frontend/src/api/backend.ts`, the only importer
+of the generated bindings.
+
+### ListDefinitions
+
+**Signature**: `ListDefinitions() DefinitionsInventory`
+
+**Description**: The full discovery inventory: every location the analysis
+inspects for rules, KB articles and a catalog override, what was found there,
+whether the current user may write there, plus the loaded rules with their
+provenance and the diagnostics for skipped input. Apart from the writability
+probe (a real create-and-remove, not permission bits) it is read-only.
+
+```javascript
+const inv = await ListDefinitions();
+console.log(inv.rule_count, inv.article_count);
+inv.files.filter(f => f.kind === "catalog" && f.exists && !f.writable)
+   .forEach(f => console.warn(`${f.path} is not writable for you`));
+```
+
+### ValidateRuleYAML
+
+**Signature**: `ValidateRuleYAML(content string) RuleValidationResult`
+
+**Description**: Validates a rules document **without saving it**, through
+`parseRulesDocument` — the loader's own validator, so the editor cannot
+disagree with the analysis. A malformed document is not an error: the verdict
+travels in `Valid`/`Diagnostics` and the editor renders it inline.
+
+```javascript
+const verdict = await ValidateRuleYAML(editorText);
+if (!verdict.valid) {
+    verdict.diagnostics.forEach(d => console.warn(`${d.file}:${d.line} ${d.message}`));
+}
+```
+
+### ReadRuleYAML
+
+**Signature**: `ReadRuleYAML(scope string) (RuleDocument, error)`
+
+**Description**: The `rules.yaml` of a scope (`"user"` or `"system"`), so the
+editor opens what is actually in effect instead of an empty buffer. A scope
+without one is the normal state of a fresh installation, not an error:
+`Exists=false`, `Content=""`.
+
+```go
+type RuleDocument struct {
+    Path    string `json:"path"`
+    Scope   string `json:"scope"`
+    Exists  bool   `json:"exists"`
+    Bytes   int    `json:"bytes"`
+    Content string `json:"content"`
+}
+```
+
+### SaveRuleYAML
+
+**Signature**: `SaveRuleYAML(content string, scope string) (DefinitionSaveResult, error)`
+
+**Description**: Validates and writes a rules document into the user or system
+scope. **Invalid documents are refused** (`Saved=false`, verdict in
+`Validation`): the analysis skips bad rules fail-safe, so saving them would
+leave the user believing in definitions that silently do nothing. The write is
+atomic (temp file + rename) and the previous content is kept as
+`rules.yaml.bak`. A system-scope failure that needs root returns an actionable
+hint.
+
+### TestRulesAgainst
+
+**Signature**: `TestRulesAgainst(targetPath string) (RuleTestResult, error)`
+
+**Description**: Dry-runs the rules the analysis would load against a
+supportconfig directory or archive, through `applyAnalysisRules` — the real
+matcher, on a throwaway report. Nothing is written and no report is produced.
+With `match: all` a rule fires only when every pattern is present in the scanned
+files, otherwise the first matching line wins; `pattern_type: regex` compiles
+through RE2 with case-insensitive matching.
+
+```javascript
+const dry = await TestRulesAgainst("/tmp/supportconfig.txz");
+dry.outcomes.filter(o => o.matched)
+   .forEach(o => console.log(`${o.rule.name} fired on: ${o.evidence}`));
+```
+
+### GetCatalogInfo
+
+**Signature**: `GetCatalogInfo() CatalogInfo`
+
+**Description**: The option catalog in effect. Since M3 a `catalog.json` in a
+definitions root overrides the embedded copy (per-user before per-system), so
+this reports the resolution, not just the built-in one.
+
+```go
+type CatalogInfo struct {
+    Source         string   `json:"source"`
+    Version        string   `json:"version"`
+    Generated      string   `json:"generated"`
+    Sources        []string `json:"sources,omitempty"`
+    OptionCount    int      `json:"option_count"`
+    SectionCount   int      `json:"section_count"`
+    Available      bool     `json:"available"`
+    Error          string   `json:"error,omitempty"`
+    Effective      string   `json:"effective"`        // "embedded" or the override path
+    UsingOverride  bool     `json:"using_override"`
+    OverridePaths  []string `json:"override_paths,omitempty"`
+    Diagnostics    []Diagnostic `json:"diagnostics,omitempty"`
+}
+```
+
+`Diagnostics` carries overrides that were skipped (unreadable, malformed, or an
+empty options map). A skipped override never changes what the analysis does: it
+falls back to the embedded catalog, and the report's `CatalogProvenance` states
+the release the claims are based on, with the override path appended when one
+is in effect.
+
+### OpenDefinitionsRoot
+
+**Signature**: `OpenDefinitionsRoot(scope string) error`
+
+**Description**: Creates (if needed) and opens a definitions folder in the
+desktop file manager, so a user can drop definition files in without knowing
+the path. It is the only method that needs the Wails runtime; without an
+attached frontend it returns an error instead of panicking.
+
+---
+
 ## Data Structures
 
 ### ReportData
@@ -212,9 +344,15 @@ type TIDArticle struct {
     Description    string   `json:"description"`
     LogPatterns    []string `json:"log_patterns"`
     ConfigPatterns []string `json:"config_patterns"`
-    Evidence       []string `json:"-"` // Not exported to JSON
+    Evidence       []string `json:"evidence,omitempty"` // log lines that triggered the match
 }
 ```
+
+`Evidence` holds the log lines that made the article match (capped at three by
+the matcher). It was `json:"-"` until M3, which is why the "Evidence Found"
+block in the GUI could never render. It is an ordinary log excerpt and
+`anonymizeReport` scrubs it exactly like `SSSDLogError.Examples` and
+`TimelineEvent.RawLog`.
 
 ### TimelineEvent
 

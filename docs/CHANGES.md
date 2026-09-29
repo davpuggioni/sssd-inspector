@@ -1,5 +1,48 @@
 # Implementation Summary
 
+## 2026-09-29 — M3 follow-up: docs, an anonymization gap, and a GUI smoke that runs headless
+
+### Documentation
+`docs/api.md` had been left behind at M0: it documented `Analyze` and the
+exports but none of the seven Definitions Studio bindings, and still described
+`TIDArticle.Evidence` as `json:"-"`. Both fixed, plus the `CatalogInfo` fields
+the M3 override added. `README.md` now documents the catalog override (precedence
+table, the diagnostic-and-fallback rule, the content-keyed cache) and the Studio
+in the GUI workflow, including the `Ctrl+1`/`Ctrl+2` view switch.
+
+### Anonymization: a real gap, found by fixing a wrong test
+The KB evidence test asserted that a subdomain of the search domain survives
+anonymization. It does not — that assertion was wrong: the fixture used
+`SearchDomain: "example.com"`, which is the *replacement token*, so the
+substitution was a no-op and the "leak" was an artefact. With a realistic
+domain, `dc01.corp.example` → `dc01.example.com` and the IP → `XXX.XXX.XXX.XXX`.
+
+Re-testing all three identities properly did surface a genuine gap: the AD
+domain is masked as a substring, but a log line naming one of the AD's own hosts
+does not contain it (`dc01.corp.example` does not contain `ad.corp.example`), so
+a report whose only known identity is `ad_domain` shipped the customer domain
+through every DC host name. `parentDomain` now masks the shared parent as well,
+and refuses to go below two labels so it cannot mask a bare word. Pinned by
+`TestAnonymizationMasksSubdomainsOfEveryRedactedDomain`,
+`TestParentDomainOnlyForMultiLabelDomains` and
+`TestAnonymizationKeepsTwoLabelAdDomainReadable`.
+
+### GUI smoke without a desktop session
+The Wails window needs a desktop session and WebKitGTK, which a headless build
+agent does not have, so the GUI was never actually looked at. `frontend/scripts/
+gui-smoke.mjs` (`npm run smoke:gui`) loads the **built** `dist/` bundle in
+headless Chromium behind a stubbed `window.go` / `window.runtime` bridge, drives
+the UI (fill the path, tick *Anonymize PII*, **Analyze**, switch to the Studio,
+**Validate**, **Run dry-run**) and asserts the markers a user would look for,
+failing on a render crash or a missing bridge, and writing a screenshot per view.
+
+The report it renders is a real one produced by the engine
+(`-anonymize -json`), not a hand-written fixture, so it also proves the engine's
+output renders in the UI. Both scenes pass 7/7 markers; the screenshots carry
+10k+ distinct colours, i.e. real content. The Go ↔ WebKit boundary still needs a
+manual pass on a workstation, and the guide says so.
+
+
 ## 2026-09-29 — M3: the option catalog can be overridden, KB evidence ships, the legacy JavaScript is gone
 
 Three follow-ups from M0–M2, each closing a gap those milestones documented

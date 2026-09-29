@@ -65,6 +65,29 @@ so the components are tested against the generated Wails payloads, and the stub
 records the event callbacks so a test can fire `analyze-progress`,
 `definitions-warning` or a file drop.
 
+### 6. GUI smoke (no desktop session required)
+```bash
+npm run build
+# Produce a REAL report with the engine, then render the bundle in a browser:
+sssd-inspector -tags cli ... # or the CLI binary
+./sssd-inspector-cli -anonymize -json /path/to/supportconfig /tmp/guismoke
+cd frontend && npm run smoke:gui -- --report /tmp/guismoke/supportconfig_report.json
+```
+
+`scripts/gui-smoke.mjs` loads the **built** `dist/` bundle in headless Chromium
+with a stubbed Wails bridge (`window.go` / `window.runtime`, exactly the surface
+`frontend/wailsjs` uses), drives the UI — fill the path, check *Anonymize PII*,
+click **Analyze**, switch to the **Definitions Studio**, **Validate**, **Run
+dry-run** — then asserts the markers a user would look for and writes a
+screenshot per view to `/tmp/sssd-gui-smoke`. It fails on a render crash (the
+error boundary text) or on a missing bridge.
+
+What it covers: the shipped React code, the generated Wails client, the CSS, the
+layout, and a report the engine actually produced. What it cannot cover: the
+Go ↔ WebKitGTK boundary, which needs a desktop session (`wails build` then run
+the binary). Do that pass by hand on a workstation before a release; on a
+headless agent WebKitGTK is not even installed.
+
 ## Development Workflow
 
 ### 1. Feature Development
