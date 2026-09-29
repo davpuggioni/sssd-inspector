@@ -73,10 +73,10 @@ export namespace main {
 	    source_key?: string;
 	    source_line?: number;
 	    evidence?: string;
+	    event_count?: number;
 	    rule_id?: string;
 	    confidence?: string;
 	    doc_ref?: string;
-	    event_count?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GraphFindingNode(source);
@@ -92,10 +92,10 @@ export namespace main {
 	        this.source_key = source["source_key"];
 	        this.source_line = source["source_line"];
 	        this.evidence = source["evidence"];
+	        this.event_count = source["event_count"];
 	        this.rule_id = source["rule_id"];
 	        this.confidence = source["confidence"];
 	        this.doc_ref = source["doc_ref"];
-	        this.event_count = source["event_count"];
 	    }
 	}
 	export class GraphEntity {
