@@ -160,6 +160,45 @@ sssd-inspector /path/to/supportconfig.txz -txt -html
 | `-json` | Generate a structured JSON report (full findings + graph + clusters) |
 | `-anonymize` | Redact PII (IPs, domains, hostnames, emails) from the report |
 | `-gen-catalog <dir>` | Generate sssd_catalog/catalog.{json,md} from upstream man pages and API definitions |
+| `-definitions-info` | List every definition search path (rules and KB articles), what was found there, and whether it is writable |
+| `-validate-rules` | Validate the installed definition files and exit non-zero if any rule or KB article would be skipped |
+| `-rules-test <path>` | Dry-run the installed analysis rules against a supportconfig directory or archive and show which rules would fire, with the evidence line |
+
+### Analysis definitions (rules and KB articles)
+
+Detectors can be added without recompiling the inspector: the binary ships with
+built-in checks plus an embedded knowledge base, and loads extra definitions
+from the filesystem. Every location is searched in this order (for KB articles
+a later directory overrides an earlier one for the same article):
+
+| Kind | Locations (in order) |
+|------|----------------------|
+| Rules | `<exe dir>/rules.yaml`, `<exe dir>/rules/*.yaml`, `./rules.yaml`, `./rules/*.yaml`, `/etc/sssd-inspector/rules.yaml`, `/etc/sssd-inspector/rules/`, `~/.sssd-inspector/rules.yaml`, `~/.sssd-inspector/rules/` |
+| KB articles | `./kb_articles/*.json`, `<exe dir>/kb_articles/*.json`, `/etc/sssd-inspector/kb_articles/`, `~/.sssd-inspector/kb_articles/`, the embedded corpus |
+
+`~/.sssd-inspector` is the per-user root (no privileges needed);
+`/etc/sssd-inspector` is the system-wide one (root only). The GUI's Definitions
+Studio creates them on demand and can open them in the file manager.
+
+Three commands make the search paths and the definitions verifiable — the GUI
+Studio calls the same Go service, so the answers cannot differ:
+
+```bash
+# 1. Where does the inspector look, what did it find there, is it writable?
+sssd-inspector -definitions-info
+
+# 2. Are the installed definitions valid? Exit code 1 = something would be skipped.
+sssd-inspector -validate-rules
+
+# 3. Would my new rule fire on this supportconfig? Dry-run: no report is written.
+sssd-inspector -rules-test /tmp/supportconfig-abc123.txz
+```
+
+A definition that cannot be loaded is never ignored silently: it is reported
+with its file and line, both in the report (the `diagnostics` section of
+TXT/HTML/JSON) and on stderr. The same validation covers the mistakes that
+silently produce **zero rules**: a missing top-level `rules:` header, a
+different top-level key, a rule without a name, or duplicate rule names.
 
 ### Examples
 
@@ -437,14 +476,18 @@ sssd-inspector/
 ├── errors/                  # Custom error types
 ├── logger/                  # Structured logging
 │
-├── frontend/                # Web UI (Vite + Vanilla JS)
+├── frontend/                # Web UI (Vite + React + TypeScript)
 │   ├── src/
-│   │   ├── main.js          # Application entry point
-│   │   ├── components/      # Reusable UI components
-│   │   ├── styles/          # Modular CSS (layout, components, report)
-│   │   ├── config/          # Frontend configuration & constants
-│   │   └── utils/           # Validation & helper utilities
-│   └── wailsjs/             # Generated Wails bindings
+│   │   ├── main.tsx          # Application entry point
+│   │   ├── App.tsx           # Shell: top bar, view switch, status, shortcuts
+│   │   ├── api/              # Typed façade over the Wails bindings
+│   │   ├── hooks/            # Analysis, theme, status, definitions state
+│   │   ├── components/       # shell/ report/ definitions/ common/
+│   │   ├── styles/           # Modular CSS (layout, components, report, studio)
+│   │   ├── config/           # Frontend configuration & constants
+│   │   └── utils/            # Validation & helper utilities
+│   ├── wailsjs/              # Generated Wails bindings
+│   └── tsconfig.json         # TypeScript (strict)
 │
 ├── kb_articles/             # Knowledge base articles (JSON)
 └── docs/                    # Documentation

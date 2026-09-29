@@ -150,6 +150,11 @@ type ReportData struct {
 	// configuration claims are based on.
 	CatalogProvenance string `json:"catalog_provenance,omitempty"`
 
+	// Diagnostics collects non-fatal definition-loading problems (skipped
+	// YAML rules, malformed external KB articles). Fail-safe loaders drop
+	// bad input; this slice is how the drop becomes visible to users.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+
 	// Log Analysis & Problems
 	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors"`
 	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
@@ -166,6 +171,36 @@ type ReportData struct {
 
 	// Phase 4: interactive correlation graph (built after PII scrubbing)
 	Graph CorrelationGraph `json:"graph"`
+}
+
+// Diagnostic records a non-fatal problem encountered while loading
+// analysis definitions (YAML rules, external KB articles): the loader skips
+// bad input fail-safe, but the skip must never be silent — every skipped
+// file or rule is reported here with its file, line and a human-readable
+// message so the GUI, the CLI and the JSON export can surface it.
+type Diagnostic struct {
+	File     string   `json:"file"`           // path of the offending definition file
+	Line     int      `json:"line,omitempty"` // 1-based line when known
+	Message  string   `json:"message"`        // human-readable explanation
+	Severity Severity `json:"severity"`       // SevWarning: analysis continued without it
+}
+
+// AddDiagnostics appends diagnostics to the report, dropping exact
+// duplicates. Loaders can run more than once per analysis (rules and the KB
+// corpus are re-read per phase) and the same file must not be reported twice.
+func (r *ReportData) AddDiagnostics(diags []Diagnostic) {
+	for _, d := range diags {
+		dup := false
+		for _, e := range r.Diagnostics {
+			if e.File == d.File && e.Line == d.Line && e.Message == d.Message {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			r.Diagnostics = append(r.Diagnostics, d)
+		}
+	}
 }
 
 // TimelineEvent represents a single chronological log occurrence.

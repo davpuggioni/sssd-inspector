@@ -111,6 +111,7 @@
 		<ul>
 			<li><a href="#triage">Triage</a></li>
 			{{if $rows}}<li><a href="#incidents">Root-Cause Incidents ({{len $rows}})</a></li>{{end}}
+			{{if .Diagnostics}}<li><a href="#definitions">Definition Problems ({{len .Diagnostics}})</a></li>{{end}}
 			<li><a href="#findings">Findings &amp; Problems</a></li>
 			{{if .Timeline}}<li><a href="#timeline">Event Timeline ({{timelineTotal .Timeline}} occurrence(s), {{len .Timeline}} shown)</a></li>{{end}}
 			{{if .Timeline}}
@@ -266,6 +267,17 @@
 			<tr><td colspan="2"><span class="success">No critical AD/Kerberos errors found in SSSD logs.</span></td></tr>
 		{{end}}
 	</table>
+
+	{{if .Diagnostics}}
+	<h2 id="definitions">Definition Problems (Skipped Input)</h2>
+	<div class="timeline-note" style="margin-bottom: 0.8em;">The following definition files were loaded with problems and skipped or partially applied. Fix them so the analysis includes your custom checks.</div>
+	{{range .Diagnostics}}
+	<div class="finding warning">
+		<div class="headline">{{.Message}}</div>
+		<div class="finding-meta">Source: {{.File}}{{if .Line}} | Line: {{.Line}}{{end}}</div>
+	</div>
+	{{end}}
+	{{end}}
 
 	<h2 id="findings">Actionable Problems Found</h2>
 	{{if .ConfigFindings}}

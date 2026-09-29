@@ -99,20 +99,23 @@ wails dev
 
 3. **API changes**:
    - Add methods to `App` struct in `app.go`
-   - Update frontend JavaScript to call new methods
+   - Regenerate the bindings: `wails generate module`
+   - Expose them in `frontend/src/api/backend.ts` and use them from a component
    - Update API documentation
 
-#### Frontend Changes (JavaScript)
+#### Frontend changes (React + TypeScript)
 
 1. **UI modifications**:
-   - Edit `frontend/src/main.js`
+   - Edit `frontend/src/App.tsx` and the component under `frontend/src/components/`
+   - Put new state in a hook under `frontend/src/hooks/`
    - Update CSS styles as needed
    - Test with both CLI and GUI modes
 
 2. **Build process**:
    ```bash
    cd frontend
-   npm run build
+   npm test         # vitest: type-safe component tests
+   npm run build    # tsc --noEmit && vite build
    cd ..
    wails build
    ```

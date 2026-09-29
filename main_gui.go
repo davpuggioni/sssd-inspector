@@ -70,6 +70,14 @@ func runHybridCLI(args []string, stdout, stderr io.Writer) (int, bool) {
 		return 0, true
 	}
 
+	// Definitions surface (-definitions-info / -validate-rules / -rules-test):
+	// implemented once in definitions_cli.go and handled here too, so the flag
+	// behaves identically whichever binary the user launched. handled==true
+	// also keeps the GUI from opening for a command-line invocation.
+	if handled, code := runDefinitionsCommand(opts, providedFlags(args), stdout, stderr); handled {
+		return code, true
+	}
+
 	// Raw SSSD log mode: analyze *.log files directly (e.g. /var/log/sssd).
 	// Handled means handled==true so the GUI is NEVER launched for it — an
 	// unhandled invocation would block forever in launchGUI() without a display.

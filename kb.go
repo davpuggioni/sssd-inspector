@@ -4,6 +4,8 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -80,76 +82,188 @@ func truncateText(s string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
-// loadEmbeddedKBArticles reads all knowledge base articles compiled into the binary.
-func loadEmbeddedKBArticles() []TIDArticle {
+// jsonErrorLine converts a json.Unmarshal byte-offset error into a 1-based
+// source line, so a malformed KB article points the user at the exact line.
+func jsonErrorLine(data []byte, err error) int {
+	var synErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	offset := int64(-1)
+	if errors.As(err, &synErr) {
+		offset = synErr.Offset
+	} else if errors.As(err, &typeErr) {
+		offset = typeErr.Offset
+	}
+	if offset <= 0 || offset > int64(len(data)) {
+		return 0
+	}
+	return strings.Count(string(data[:offset]), "\n") + 1
+}
+
+// loadEmbeddedKBArticles reads all knowledge base articles compiled into the
+// binary. A malformed embedded file is a build defect but is still reported
+// as a diagnostic instead of vanishing silently.
+func loadEmbeddedKBArticles() ([]TIDArticle, []Diagnostic) {
 	entries, err := fs.ReadDir(embeddedKBFS, "kb_articles")
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	var articles []TIDArticle
+	var diags []Diagnostic
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		data, err := embeddedKBFS.ReadFile("kb_articles/" + entry.Name())
+		name := "kb_articles/" + entry.Name()
+		data, err := embeddedKBFS.ReadFile(name)
 		if err != nil {
+			diags = append(diags, Diagnostic{
+				File:     name,
+				Message:  fmt.Sprintf("cannot read embedded KB article: %v", err),
+				Severity: SevWarning,
+			})
 			continue
 		}
 		var article TIDArticle
 		if err := json.Unmarshal(data, &article); err != nil {
+			diags = append(diags, Diagnostic{
+				File:     name,
+				Line:     jsonErrorLine(data, err),
+				Message:  fmt.Sprintf("invalid embedded KB article JSON: %v", err),
+				Severity: SevWarning,
+			})
 			continue
 		}
 		normalizeTIDArticle(&article)
 		articles = append(articles, article)
 	}
-	return articles
+	return articles, diags
 }
 
-// loadExternalKBArticles searches for external KB articles next to the executable
-// or in the current working directory, allowing users to drop custom TID JSONs
-// without recompiling the inspector.
-func loadExternalKBArticles() []TIDArticle {
-	kbDir := "kb_articles"
+// externalKBDirs returns every directory scanned for external TID JSONs, in
+// ascending precedence (later entries override earlier ones by article key):
+// the working directory (historical), next to the executable (historical,
+// which used to win over the working directory), then the system-wide and
+// per-user definition roots that match the config.yaml search convention.
+// Duplicate locations are collapsed by absolute path so the same directory
+// is never scanned twice when the executable IS the working directory.
+func externalKBDirs() []string {
+	var raw []string
+	raw = append(raw, "kb_articles")
 	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Join(filepath.Dir(exePath), "kb_articles")
-		if info, err := os.Stat(exeDir); err == nil && info.IsDir() {
-			kbDir = exeDir
+		raw = append(raw, filepath.Join(filepath.Dir(exePath), "kb_articles"))
+	}
+	for _, root := range []string{systemDefinitionsRoot(), userDefinitionsRoot()} {
+		if root == "" {
+			continue
+		}
+		raw = append(raw, filepath.Join(root, "kb_articles"))
+	}
+
+	seen := make(map[string]bool, len(raw))
+	dirs := make([]string, 0, len(raw))
+	for _, d := range raw {
+		key := d
+		if abs, err := filepath.Abs(d); err == nil {
+			key = abs
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		dirs = append(dirs, d)
+	}
+	return dirs
+}
+
+// loadExternalKBArticles searches every externalKBDirs() location for TID
+// JSONs, allowing users to drop custom articles without recompiling the
+// inspector. Articles are merged across directories (highest-precedence
+// directory wins per article key); malformed files are skipped and reported
+// as diagnostics instead of disappearing silently.
+func loadExternalKBArticles() ([]TIDArticle, []Diagnostic) {
+	var diags []Diagnostic
+	articles := []TIDArticle{}
+	index := map[string]int{}
+
+	for _, kbDir := range externalKBDirs() {
+		dirArticles, dirDiags := loadKBArticlesFromDir(kbDir)
+		diags = append(diags, dirDiags...)
+		for _, article := range dirArticles {
+			key := article.TIDID
+			if key == "" {
+				key = article.KbID
+			}
+			if key == "" {
+				articles = append(articles, article)
+				continue
+			}
+			if pos, ok := index[key]; ok {
+				articles[pos] = article // higher-precedence directory overrides
+			} else {
+				index[key] = len(articles)
+				articles = append(articles, article)
+			}
 		}
 	}
-	if info, err := os.Stat(kbDir); err != nil || !info.IsDir() {
-		return nil
+	return articles, diags
+}
+
+// loadKBArticlesFromDir parses every *.json of ONE directory of curated KB
+// articles. Malformed or unreadable files are skipped and reported as
+// diagnostics instead of disappearing silently; a missing directory is not an
+// error (articles are optional). Splitting this out of
+// loadExternalKBArticles lets the Definitions Studio report per-location
+// counts through exactly the same parser.
+func loadKBArticlesFromDir(kbDir string) ([]TIDArticle, []Diagnostic) {
+	info, err := os.Stat(kbDir)
+	if err != nil || !info.IsDir() {
+		return nil, nil
 	}
 	files, err := filepath.Glob(filepath.Join(kbDir, "*.json"))
 	if err != nil || len(files) == 0 {
-		return nil
+		return nil, nil
 	}
-	var articles []TIDArticle
+
+	var diags []Diagnostic
+	articles := make([]TIDArticle, 0, len(files))
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {
+			diags = append(diags, Diagnostic{
+				File:     absPath(file),
+				Message:  fmt.Sprintf("cannot read KB article: %v", err),
+				Severity: SevWarning,
+			})
 			continue
 		}
 		var article TIDArticle
 		if err := json.Unmarshal(data, &article); err != nil {
+			diags = append(diags, Diagnostic{
+				File:     absPath(file),
+				Line:     jsonErrorLine(data, err),
+				Message:  fmt.Sprintf("invalid KB article JSON: %v", err),
+				Severity: SevWarning,
+			})
 			continue
 		}
 		normalizeTIDArticle(&article)
 		articles = append(articles, article)
 	}
-	return articles
+	return articles, diags
 }
 
-// loadKBArticles returns the combined knowledge base corpus: embedded articles
-// are loaded first, then any external kb_articles/*.json found next to the
-// binary or in the current directory are merged (external articles with the same
-// TIDID or KbID take precedence over the embedded copy).
+// loadKBArticlesDiag returns the combined knowledge base corpus plus any
+// loading diagnostics. Embedded articles load first, then external articles
+// from every externalKBDirs() location are merged (external articles with
+// the same TIDID or KbID take precedence over the embedded copy).
 //
 // Variadic args are ignored for backward-compatibility with callers passing dirPath.
-func loadKBArticles(args ...string) []TIDArticle {
-	embedded := loadEmbeddedKBArticles()
-	external := loadExternalKBArticles()
+func loadKBArticlesDiag(args ...string) ([]TIDArticle, []Diagnostic) {
+	embedded, embDiags := loadEmbeddedKBArticles()
+	external, extDiags := loadExternalKBArticles()
+	diags := append(embDiags, extDiags...)
 	if len(external) == 0 {
-		return embedded
+		return embedded, diags
 	}
 
 	index := make(map[string]int, len(embedded)+len(external))
@@ -176,13 +290,21 @@ func loadKBArticles(args ...string) []TIDArticle {
 			result = append(result, a)
 		}
 	}
-	return result
+	return result, diags
+}
+
+// loadKBArticles is the diagnostics-free convenience wrapper over
+// loadKBArticlesDiag for callers that only need the corpus.
+func loadKBArticles(args ...string) []TIDArticle {
+	articles, _ := loadKBArticlesDiag(args...)
+	return articles
 }
 
 // matchKBArticles loads KB articles (embedded + external overrides) and correlates
 // them with supportconfig data via streaming.
 func matchKBArticles(dirPath string, report *ReportData) {
-	articles := loadKBArticles()
+	articles, diags := loadKBArticlesDiag()
+	report.AddDiagnostics(diags)
 	if len(articles) == 0 {
 		return
 	}

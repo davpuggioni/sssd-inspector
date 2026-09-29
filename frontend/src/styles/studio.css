@@ -1,0 +1,354 @@
+/* ==========================================================================
+   Definitions Studio + top-bar view switch (M2)
+
+   The legacy report styles are shared; this file only adds what the React
+   migration introduces: the tab bar, the two-column studio layout and the
+   rule editor / dry-run widgets. Palette and button classes come from
+   layout.css and components.css so both themes stay consistent.
+   ========================================================================== */
+
+/* --- Top bar view switch ------------------------------------------------ */
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: center;
+  margin: 0 0 12px 0;
+}
+
+.tab-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #0f3460;
+  border-radius: 999px;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 5px 16px;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tab-btn-active {
+  background: #0056b3;
+  border-color: #0056b3;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.theme-toggle {
+  font-size: 18px;
+  padding: 5px 10px;
+}
+
+/* --- Studio shell ------------------------------------------------------- */
+.definitions-area {
+  text-align: left;
+}
+
+.studio-header {
+  align-items: baseline;
+  border-bottom: 1px solid #d0d0dd;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+}
+
+.studio-header h1 {
+  border-bottom: none;
+  margin: 0;
+  padding: 0;
+}
+
+.studio-header p {
+  color: #666;
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.studio-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+}
+
+.studio-panel {
+  background: #ffffff;
+  border: 1px solid #d0d0dd;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.studio-panel > h2 {
+  font-size: 1.05em;
+  margin: 0 0 10px 0;
+}
+
+.studio-panel h3 {
+  font-size: 0.95em;
+  margin: 14px 0 6px 0;
+}
+
+.studio-panel .panel-note {
+  color: #666;
+  font-size: 0.82em;
+  margin: 0 0 10px 0;
+}
+
+.studio-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.studio-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.studio-field > label {
+  color: #555;
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.studio-field input[type='text'],
+.studio-editor {
+  border: 1px solid #c3c3cf;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9em;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.studio-editor {
+  font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+  min-height: 340px;
+  resize: vertical;
+  white-space: pre;
+}
+
+.studio-scope {
+  display: flex;
+  gap: 12px;
+}
+
+.studio-scope label {
+  align-items: center;
+  display: flex;
+  font-size: 0.85em;
+  gap: 4px;
+}
+
+/* --- Inventory table ---------------------------------------------------- */
+.studio-table {
+  border-collapse: collapse;
+  font-size: 0.82em;
+  width: 100%;
+}
+
+.studio-table th,
+.studio-table td {
+  border-bottom: 1px solid #e3e3ea;
+  padding: 5px 7px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.studio-table th {
+  background: #eef0f6;
+  color: #333;
+  font-size: 0.95em;
+}
+
+.studio-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.studio-path {
+  color: #555;
+  font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+  font-size: 0.95em;
+  word-break: break-all;
+}
+
+.studio-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px 0;
+  padding: 0;
+}
+
+.studio-badge {
+  background: #eef0f6;
+  border-radius: 4px;
+  font-size: 0.82em;
+  padding: 4px 10px;
+}
+
+.studio-badge strong {
+  font-size: 1.05em;
+}
+
+/* --- Validation / dry-run result panels --------------------------------- */
+.studio-verdict {
+  border-left: 4px solid #6c757d;
+  border-radius: 3px;
+  font-size: 0.88em;
+  margin-top: 10px;
+  padding: 8px 10px;
+}
+
+.studio-verdict-valid {
+  background: #e8f6ec;
+  border-left-color: #28a745;
+}
+
+.studio-verdict-invalid {
+  background: #fdeaea;
+  border-left-color: #dc3545;
+}
+
+.studio-diagnostics {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+}
+
+.studio-diagnostics li {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 5px 0;
+}
+
+.studio-diagnostics .diag-location {
+  color: #666;
+  font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.studio-outcome {
+  border-bottom: 1px solid #e3e3ea;
+  font-size: 0.85em;
+  padding: 6px 0;
+}
+
+.studio-outcome-fired {
+  border-left: 3px solid #0056b3;
+  padding-left: 8px;
+}
+
+.studio-outcome .rule-name {
+  font-weight: 600;
+}
+
+.studio-outcome .rule-meta {
+  color: #666;
+  font-size: 0.95em;
+}
+
+.studio-evidence {
+  background: #f4f4f9;
+  border-radius: 3px;
+  font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+  font-size: 0.92em;
+  margin-top: 4px;
+  padding: 4px 7px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.studio-empty {
+  color: #666;
+  font-size: 0.85em;
+}
+
+.studio-schema {
+  background: #f7f7fb;
+  border: 1px dashed #c3c3cf;
+  border-radius: 4px;
+  font-size: 0.8em;
+  margin-top: 10px;
+
+/* --- Dark mode ---------------------------------------------------------- */
+.dark-mode .tab-btn {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dark-mode .studio-panel {
+  background: #16213e;
+  border-color: #0f3460;
+}
+
+.dark-mode .studio-header {
+  border-bottom-color: #0f3460;
+}
+
+.dark-mode .studio-header p,
+.dark-mode .studio-panel .panel-note,
+.dark-mode .studio-field > label,
+.dark-mode .studio-outcome .rule-meta,
+.dark-mode .studio-diagnostics .diag-location,
+.dark-mode .studio-empty {
+  color: #a8b3c7;
+}
+
+.dark-mode .studio-table th,
+.dark-mode .studio-badge,
+.dark-mode .studio-schema {
+  background: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .studio-table td,
+.dark-mode .studio-diagnostics li,
+.dark-mode .studio-outcome {
+  border-bottom-color: #0f3460;
+}
+
+.dark-mode .studio-field input[type='text'],
+.dark-mode .studio-editor {
+  background: #1a1a2e;
+  border-color: #0f3460;
+  color: #e0e0e0;
+}
+
+.dark-mode .studio-verdict-valid {
+  background: #14301f;
+}
+
+.dark-mode .studio-verdict-invalid {
+  background: #3a1d1d;
+}
+
+.dark-mode .studio-evidence {
+  background: #0f3460;
+  color: #e0e0e0;
+}
+
+/* --- Print: the studio is an editor, never part of an exported report ---- */
+@media print {
+  .tab-bar,
+  .studio-toolbar,
+  .studio-editor,
+  .definitions-area {
+    display: none !important;
+  }
+}
+
+  padding: 8px 10px;
+}
+
+.studio-schema code {
+  font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+}
+

@@ -150,6 +150,15 @@ func TestMainCoverage_CLIEntryPointIsFullyCovered(t *testing.T) {
 	runCoveredInvocation(t, bin, covDir, "-gen-catalog", writeCatalogSourceFixture(t))
 	runCoveredInvocation(t, bin, covDir, "-gen-catalog", filepath.Join(t.TempDir(), "missing"))
 
+	// Definitions surface: all three commands, including their failure codes
+	// (-validate-rules exits 1 when a definition would be skipped, -rules-test
+	// exits 2 without a target path).
+	defsFixture := writeRulesFixture(t, validRulesYAML)
+	runCoveredInvocation(t, bin, covDir, "-definitions-info")
+	runCoveredInvocation(t, bin, covDir, "-validate-rules")
+	runCoveredInvocation(t, bin, covDir, "-rules-test", defsFixture)
+	runCoveredInvocation(t, bin, covDir, "-rules-test", "")
+
 	coverage := entryPointCoverage(t, covDir, "main_cli.go")
 
 	if got := coverage["main"]; got < 100 {
@@ -192,6 +201,14 @@ func TestMainCoverage_HybridEntryPoint(t *testing.T) {
 	// generation from a minimal fixture and a missing source directory.
 	runCoveredInvocation(t, bin, covDir, "-gen-catalog", writeCatalogSourceFixture(t))
 	runCoveredInvocation(t, bin, covDir, "-gen-catalog", filepath.Join(t.TempDir(), "missing"))
+
+	// Definitions surface: handled by the hybrid binary without starting the
+	// GUI (the branch that keeps a headless machine usable).
+	defsFixture := writeRulesFixture(t, validRulesYAML)
+	runCoveredInvocation(t, bin, covDir, "-definitions-info")
+	runCoveredInvocation(t, bin, covDir, "-validate-rules")
+	runCoveredInvocation(t, bin, covDir, "-rules-test", defsFixture)
+	runCoveredInvocation(t, bin, covDir, "-rules-test", "")
 
 	coverage := entryPointCoverage(t, covDir, "main_gui.go")
 

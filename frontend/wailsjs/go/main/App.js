@@ -6,8 +6,24 @@ export function Analyze(arg1, arg2) {
   return window['go']['main']['App']['Analyze'](arg1, arg2);
 }
 
+export function GetCatalogInfo() {
+  return window['go']['main']['App']['GetCatalogInfo']();
+}
+
+export function ListDefinitions() {
+  return window['go']['main']['App']['ListDefinitions']();
+}
+
+export function OpenDefinitionsRoot(arg1) {
+  return window['go']['main']['App']['OpenDefinitionsRoot'](arg1);
+}
+
 export function OpenFileBrowser() {
   return window['go']['main']['App']['OpenFileBrowser']();
+}
+
+export function ReadRuleYAML(arg1) {
+  return window['go']['main']['App']['ReadRuleYAML'](arg1);
 }
 
 export function SaveJSON(arg1) {
@@ -18,6 +34,18 @@ export function SavePDF(arg1) {
   return window['go']['main']['App']['SavePDF'](arg1);
 }
 
+export function SaveRuleYAML(arg1, arg2) {
+  return window['go']['main']['App']['SaveRuleYAML'](arg1, arg2);
+}
+
 export function SaveTXT(arg1) {
   return window['go']['main']['App']['SaveTXT'](arg1);
+}
+
+export function TestRulesAgainst(arg1) {
+  return window['go']['main']['App']['TestRulesAgainst'](arg1);
+}
+
+export function ValidateRuleYAML(arg1) {
+  return window['go']['main']['App']['ValidateRuleYAML'](arg1);
 }

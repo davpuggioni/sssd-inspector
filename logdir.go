@@ -324,7 +324,8 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	// The KB corpus ships next to the binary; it does not depend on the
 	// supportconfig being present (unlike the historical implementation, which
 	// passed a nil list and silently disabled every KB feature).
-	kbArticles := loadKBArticles(dirPath)
+	kbArticles, kbDiags := loadKBArticlesDiag(dirPath)
+	report.AddDiagnostics(kbDiags)
 
 	singlePassResult := performSinglePassScanOnFiles(dirPath, logFiles, report.MACType, kbArticles)
 	report.SSSDLogErrors = singlePassResult.SSSDLogErrors

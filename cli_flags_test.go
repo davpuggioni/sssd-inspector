@@ -39,6 +39,12 @@ var cliFlagContract = []string{
 	constants.FlagAnonymize,
 	constants.FlagCompare,    // CLI-only: present only with includeCompare=true
 	constants.FlagGenCatalog, // "gen-catalog"
+
+	// Definitions surface (both binaries): the CLI face of the Definitions
+	// Studio. Read-only diagnostics of the definition search paths.
+	constants.FlagDefinitionsInfo, // "definitions-info"
+	constants.FlagValidateRules,   // "validate-rules"
+	constants.FlagRulesTest,       // "rules-test"
 }
 
 // registryFlagNames returns the flag names registered by registerCLIFlags.

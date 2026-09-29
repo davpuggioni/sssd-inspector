@@ -138,6 +138,13 @@ func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 
 	report := analyzeData(dirPath, anonymize, progressFunc)
 	progressFunc(constants.MsgAnalysisComplete, constants.ProgressComplete)
+
+	// Surface definition-loading problems (skipped rules/KB articles) to the
+	// GUI: the report carries them too, but the event lets the frontend
+	// banner them immediately.
+	if len(report.Diagnostics) > 0 {
+		a.emitEvent(constants.EventDefinitionsWarning, report.Diagnostics)
+	}
 	return report, nil
 }
 

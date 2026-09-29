@@ -76,6 +76,15 @@ const (
 	FlagLogDir     = "logdir"
 	FlagGenCatalog = "gen-catalog"
 
+	// Definitions flags: the CLI face of the Definitions Studio
+	// (definitions_service.go). They answer the three questions users ask
+	// about data-driven definitions — "where does the inspector look for my
+	// rules?", "is my rules file valid?" and "does my rule actually fire?" —
+	// through the same code the analysis runs.
+	FlagDefinitionsInfo = "definitions-info"
+	FlagValidateRules   = "validate-rules"
+	FlagRulesTest       = "rules-test"
+
 	// Flag descriptions
 	DescVersion    = "Print program version"
 	DescAnalyze    = "Path to the supportconfig directory or log file"
@@ -86,6 +95,10 @@ const (
 	DescCompare    = "Compare two supportconfig paths (format: pathA:pathB)"
 	DescLogDir     = "Analyze raw SSSD logs from a directory or file (e.g., /var/log/sssd)"
 	DescGenCatalog = "Generate sssd_catalog/catalog.{json,md} from upstream man pages and API definitions"
+
+	DescDefinitionsInfo = "List every definition search path (rules and KB articles), what was found and whether it is writable"
+	DescValidateRules   = "Validate the installed definition files; exits non-zero if any rule or KB article would be skipped"
+	DescRulesTest       = "Dry-run the installed analysis rules against a supportconfig directory or archive"
 
 	// Default behavior
 	DefaultGenerateBothFormats = true
@@ -226,6 +239,10 @@ const (
 const (
 	// Event names
 	EventAnalyzeProgress = "analyze-progress"
+	// EventDefinitionsWarning is emitted with a []Diagnostic payload when an
+	// analysis loaded at least one definition (YAML rule, KB article) that
+	// had to be skipped, so the GUI can banner it without polling the report.
+	EventDefinitionsWarning = "definitions-warning"
 
 	// Event messages
 	MsgInitializing     = "Initializing streaming engine..."

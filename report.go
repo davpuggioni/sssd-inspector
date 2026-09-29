@@ -54,6 +54,22 @@ func buildTextReport(report ReportData) string {
 	}
 	sb.WriteString(strings.Repeat("-", 60) + "\n")
 
+	// Definition-loading diagnostics: skipped rules/KB articles must be
+	// visible, otherwise the analysis looks complete while silently missing
+	// the user's own checks.
+	if len(report.Diagnostics) > 0 {
+		sb.WriteString("       DEFINITION PROBLEMS (SKIPPED INPUT)\n")
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+		for _, d := range report.Diagnostics {
+			location := d.File
+			if d.Line > 0 {
+				location = fmt.Sprintf("%s:%d", d.File, d.Line)
+			}
+			sb.WriteString(fmt.Sprintf(" [!] %s: %s\n", location, d.Message))
+		}
+		sb.WriteString(strings.Repeat("-", 60) + "\n")
+	}
+
 	sb.WriteString(fmt.Sprintf("[+] OS Release:        %s\n", report.SLESRlease))
 	sb.WriteString(fmt.Sprintf("[+] Kernel:            %s\n", report.KernelVersion))
 	sb.WriteString(fmt.Sprintf("[+] SCC Status:        %s\n", report.SCCStatus))

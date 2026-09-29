@@ -30,6 +30,16 @@ func init() {
 	}
 }
 
+// printDefinitionDiagnostics writes skipped-definition warnings to stderr so
+// CLI users see them even when the report body goes to stdout or into a file.
+// The GUI gets the same payload through the "definitions-warning" event and
+// the report's Diagnostics field.
+func printDefinitionDiagnostics(report ReportData) {
+	for _, d := range report.Diagnostics {
+		fmt.Fprintf(os.Stderr, "[!] definitions: %s: %s\n", diagnosticLocation(d), d.Message)
+	}
+}
+
 // runCLI executes the application in command-line mode
 // It handles both directory and archive inputs, performs analysis, and generates reports.
 // Returns an error if any step of the CLI execution fails.
@@ -63,6 +73,8 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool, genJSON bool
 
 	// Use the updated analyzeData signature
 	report := analyzeData(dirPath, anonymize, progressFunc)
+
+	printDefinitionDiagnostics(report)
 
 	report.Timestamp = time.Now().Format(constants.TimestampFormat)
 	report.AppVersion = constants.AppVersion
@@ -135,6 +147,8 @@ func runLogDirAnalyze(path string, genTxt bool, genHtml bool, anonymize bool, ge
 	}
 
 	report := analyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+
+	printDefinitionDiagnostics(report)
 
 	report.Timestamp = time.Now().Format(constants.TimestampFormat)
 	report.AppVersion = constants.AppVersion

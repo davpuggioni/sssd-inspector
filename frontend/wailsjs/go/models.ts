@@ -1,5 +1,57 @@
 export namespace main {
 	
+	export class AnalysisRule {
+	    name: string;
+	    severity: string;
+	    category: string;
+	    files: string[];
+	    patterns: string[];
+	    match: string;
+	    pattern_type: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalysisRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.severity = source["severity"];
+	        this.category = source["category"];
+	        this.files = source["files"];
+	        this.patterns = source["patterns"];
+	        this.match = source["match"];
+	        this.pattern_type = source["pattern_type"];
+	        this.message = source["message"];
+	    }
+	}
+	export class CatalogInfo {
+	    source: string;
+	    version: string;
+	    generated: string;
+	    sources?: string[];
+	    option_count: number;
+	    section_count: number;
+	    available: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.source = source["source"];
+	        this.version = source["version"];
+	        this.generated = source["generated"];
+	        this.sources = source["sources"];
+	        this.option_count = source["option_count"];
+	        this.section_count = source["section_count"];
+	        this.available = source["available"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ConfigFinding {
 	    severity: number;
 	    category: string;
@@ -156,6 +208,231 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class Diagnostic {
+	    file: string;
+	    line?: number;
+	    message: string;
+	    severity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.line = source["line"];
+	        this.message = source["message"];
+	        this.severity = source["severity"];
+	    }
+	}
+	export class DefinitionFileInfo {
+	    path: string;
+	    kind: string;
+	    scope: string;
+	    exists: boolean;
+	    is_dir: boolean;
+	    writable: boolean;
+	    rule_count: number;
+	    article_count: number;
+	    size_bytes?: number;
+	    mod_time?: string;
+	    diagnostics?: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DefinitionFileInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.kind = source["kind"];
+	        this.scope = source["scope"];
+	        this.exists = source["exists"];
+	        this.is_dir = source["is_dir"];
+	        this.writable = source["writable"];
+	        this.rule_count = source["rule_count"];
+	        this.article_count = source["article_count"];
+	        this.size_bytes = source["size_bytes"];
+	        this.mod_time = source["mod_time"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RuleInfo {
+	    rule: AnalysisRule;
+	    file: string;
+	    scope: string;
+	    line?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RuleInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rule = this.convertValues(source["rule"], AnalysisRule);
+	        this.file = source["file"];
+	        this.scope = source["scope"];
+	        this.line = source["line"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RuleValidationResult {
+	    label: string;
+	    valid: boolean;
+	    rule_count: number;
+	    rules?: RuleInfo[];
+	    diagnostics?: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RuleValidationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.valid = source["valid"];
+	        this.rule_count = source["rule_count"];
+	        this.rules = this.convertValues(source["rules"], RuleInfo);
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DefinitionSaveResult {
+	    path: string;
+	    scope: string;
+	    saved: boolean;
+	    backup?: string;
+	    bytes: number;
+	    validation: RuleValidationResult;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefinitionSaveResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.scope = source["scope"];
+	        this.saved = source["saved"];
+	        this.backup = source["backup"];
+	        this.bytes = source["bytes"];
+	        this.validation = this.convertValues(source["validation"], RuleValidationResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DefinitionsInventory {
+	    user_root: string;
+	    system_root: string;
+	    files: DefinitionFileInfo[];
+	    rules: RuleInfo[];
+	    rule_count: number;
+	    article_count: number;
+	    diagnostics?: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DefinitionsInventory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_root = source["user_root"];
+	        this.system_root = source["system_root"];
+	        this.files = this.convertValues(source["files"], DefinitionFileInfo);
+	        this.rules = this.convertValues(source["rules"], RuleInfo);
+	        this.rule_count = source["rule_count"];
+	        this.article_count = source["article_count"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ExecutiveSummary {
 	    health_score: number;
 	    critical_count: number;
@@ -375,6 +652,7 @@ export namespace main {
 	    hostname: string;
 	    config_findings: ConfigFinding[];
 	    catalog_provenance?: string;
+	    diagnostics?: Diagnostic[];
 	    sssd_log_errors: SSSDLogError[];
 	    sssd_config_snippet: string;
 	    mac_denial_examples: string[];
@@ -428,6 +706,7 @@ export namespace main {
 	        this.hostname = source["hostname"];
 	        this.config_findings = this.convertValues(source["config_findings"], ConfigFinding);
 	        this.catalog_provenance = source["catalog_provenance"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
 	        this.sssd_log_errors = this.convertValues(source["sssd_log_errors"], SSSDLogError);
 	        this.sssd_config_snippet = source["sssd_config_snippet"];
 	        this.mac_denial_examples = source["mac_denial_examples"];
@@ -458,6 +737,108 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class RuleDocument {
+	    path: string;
+	    scope: string;
+	    exists: boolean;
+	    bytes: number;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RuleDocument(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.scope = source["scope"];
+	        this.exists = source["exists"];
+	        this.bytes = source["bytes"];
+	        this.content = source["content"];
+	    }
+	}
+	
+	export class RuleTestOutcome {
+	    rule: AnalysisRule;
+	    file: string;
+	    scope: string;
+	    line?: number;
+	    matched: boolean;
+	    evidence?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RuleTestOutcome(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rule = this.convertValues(source["rule"], AnalysisRule);
+	        this.file = source["file"];
+	        this.scope = source["scope"];
+	        this.line = source["line"];
+	        this.matched = source["matched"];
+	        this.evidence = source["evidence"];
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RuleTestResult {
+	    target_path: string;
+	    total: number;
+	    matched: number;
+	    outcomes: RuleTestOutcome[];
+	    diagnostics?: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RuleTestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target_path = source["target_path"];
+	        this.total = source["total"];
+	        this.matched = source["matched"];
+	        this.outcomes = this.convertValues(source["outcomes"], RuleTestOutcome);
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	
 	

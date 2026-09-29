@@ -353,11 +353,31 @@ func TestLoadAnalysisRules_FromWorkingDirectory(t *testing.T) {
 	}
 	defer os.Chdir(oldWd)
 
-	rules := loadAnalysisRules()
+	rules, diags := loadAnalysisRules()
 	if len(rules) != 1 {
 		t.Fatalf("expected 1 valid rule, got %d: %+v", len(rules), rules)
 	}
 	if rules[0].Name != "test-rule" {
 		t.Errorf("loaded rule = %q", rules[0].Name)
+	}
+
+	// M0 regression: both skipped rules must be reported as diagnostics with
+	// the file and the source line, not printed to an invisible stdout.
+	if len(diags) != 2 {
+		t.Fatalf("expected 2 diagnostics for the 2 skipped rules, got %d: %+v", len(diags), diags)
+	}
+	for _, d := range diags {
+		if !strings.HasSuffix(d.File, "rules.yaml") {
+			t.Errorf("diagnostic file = %q, want .../rules.yaml", d.File)
+		}
+		if d.Line <= 0 {
+			t.Errorf("diagnostic for %q has no line number (got %d)", d.Message, d.Line)
+		}
+	}
+	if !strings.Contains(diags[0].Message, "bad-severity") || !strings.Contains(diags[0].Message, "loud") {
+		t.Errorf("first diagnostic = %q, want it to name the rule and the bad severity", diags[0].Message)
+	}
+	if diags[0].Line != 8 {
+		t.Errorf("first diagnostic line = %d, want 8 (line of the bad-severity rule)", diags[0].Line)
 	}
 }

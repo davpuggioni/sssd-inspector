@@ -13,9 +13,14 @@ import (
 )
 
 func TestKBArticles_EmbeddedCorpusNotEmpty(t *testing.T) {
-	articles := loadEmbeddedKBArticles()
+	articles, diags := loadEmbeddedKBArticles()
 	if len(articles) == 0 {
 		t.Fatalf("embedded KB corpus is empty — verify //go:embed kb_articles/*.json in kb.go")
+	}
+	// The embedded corpus is compiled in: any diagnostic here is a build
+	// defect and must never be silently swallowed.
+	for _, d := range diags {
+		t.Errorf("embedded KB article failed to load: %s: %s", d.File, d.Message)
 	}
 	foundKnown := false
 	for _, a := range articles {

@@ -78,7 +78,7 @@ class MockWailsRuntime {
 }
 
 /**
- * Drag-and-Drop Tests for main.js UI
+ * Drag-and-Drop Tests for App.tsx shell
  */
 class DragDropTests {
   static runAll() {
@@ -101,7 +101,7 @@ class DragDropTests {
     const mockRuntime = new MockWailsRuntime();
     const filePathInput = { value: '' };
 
-    // Simulate what main.js does: OnFileDrop((x, y, files) => { ... })
+    // Simulate what App.tsx does (useAnalysis): OnFileDrop((x, y, files) => { ... })
     mockRuntime.OnFileDrop((x, y, files) => {
       if (files.length > 0) filePathInput.value = files[0];
     });
@@ -197,7 +197,7 @@ class DragDropTests {
     
     const mockRuntime = new MockWailsRuntime();
     
-    // Simulate the two EventsOn calls from main.js
+    // Simulate the two EventsOn calls from useAnalysis
     mockRuntime.EventsOn('analyze-progress', () => {});
 
     TestUtils.assert(
@@ -222,7 +222,7 @@ class DragDropTests {
       disabled: false
     };
 
-    // Simulate EventsOn('analyze-progress', ...) from main.js
+    // Simulate EventsOn('analyze-progress', ...) from useAnalysis
     mockRuntime.EventsOn('analyze-progress', (message, percentage) => {
       if (percentage > 0 && percentage < 100) {
         analyzeBtn.textContent = `${percentage}% - ${message}`;
@@ -311,7 +311,7 @@ class KeyboardShortcutTests {
     let browseClicked = false;
     const browseBtn = { click: () => { browseClicked = true; } };
 
-    // Simulate the keydown handler from main.js
+    // Simulate the keydown handler from App.tsx
     const keyHandler = (e) => {
       if (e.ctrlKey || e.metaKey) {
         switch(e.key) {

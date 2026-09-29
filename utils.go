@@ -16,6 +16,16 @@ import (
 // DefaultFileScanTimeout is the maximum time to spend scanning a single file
 const DefaultFileScanTimeout = 30 * time.Second
 
+// absPath returns the absolute form of p for diagnostics: definition files
+// are discovered as relative candidates ("rules.yaml", "kb_articles/x.json")
+// but a user reading a warning needs a path they can navigate to.
+func absPath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
+}
+
 // FileProcessor provides streaming file processing capabilities
 type FileProcessor struct {
 	bufferSize    int

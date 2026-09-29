@@ -1,5 +1,124 @@
 # Implementation Summary
 
+## 2026-09-29 — Definitions Studio M2: the GUI is React + TypeScript, and the Studio exists
+
+M1 built the service and the CLI surface but left the rules editor with nothing
+to talk to. M2 migrates the whole frontend to React 18 + TypeScript and builds
+the Definitions Studio on top of the M1 service.
+
+### The migration
+`src/main.js` (one 537-line file, imperative DOM, one `innerHTML` template per
+report) is now `src/main.tsx` + typed components. The report is no longer a
+string of HTML: `ReportView` and its section components (exec summary, system
+info, diagnostics, config findings, timeline, KB articles, temporal clusters,
+correlation graph) are React elements typed against the **generated Wails
+models** (`wailsjs/go/models.ts`), so a field rename in Go breaks the build
+instead of rendering `undefined`. Escaping is now a property of the framework
+rather than a function that must be remembered. `CorrelationGraph.js` is
+untouched and mounted through a ref — it is a self-contained SVG renderer and
+rewriting it is not part of this migration. Dead legacy files (`main_old.js`,
+`main_original.js`, `style.css`, `app.css`) are gone; the browser test-runner
+and the JS utilities it exercises are kept.
+
+Toolchain: React 18.3, Vite 5, TypeScript 5.9 in `strict` mode. `npm run build`
+now runs `tsc --noEmit` first, so the Wails build fails on a type error. New
+`npm test` (vitest + jsdom + Testing Library): 23 tests over the report view,
+the Studio and the bridge guard.
+
+### api/backend.ts
+One typed façade over the generated bindings. Components never import
+`wailsjs/*` directly, and every call is guarded by `backendAvailable()`: running
+`npm run dev` in a plain browser now explains itself instead of throwing a
+`TypeError` on `window.go`.
+
+### The Definitions Studio
+Second tab (`Ctrl+2`; analysis is `Ctrl+1`), four panels:
+
+- **Discovery inventory** — every search location in loader order with its
+  state, rule/article counts, size and a real write probe; the loaded rules with
+  their file and line; the skipped inputs. "Open user/system folder" calls
+  `OpenDefinitionsRoot`.
+- **Rule editor** — load, edit, validate, save, per scope. Changing the scope
+  reloads the document so the editor can never show one scope while saving into
+  another. A refused save renders the diagnostics and says "refused"; it is
+  never reported as a success.
+- **Dry-run** — prefilled with the path the analysis view holds; firing rules
+  first with the evidence line, silent rules listed too ("my rule did nothing"
+  is answerable). A refresh back to the inventory happens on a successful save.
+- **Option catalog** — the embedded catalog's provenance (read-only).
+
+A "Schema reference" table in the editor mirrors `rules_engine.go`: the loader is
+the authority, and a starter template that is valid by construction.
+
+### New Go surface
+`ReadRuleYAML(scope)` (`RuleDocument`): the editor needs the document that is
+actually in effect, and a scope without one is the normal state of a fresh
+install — `Exists=false` is not an error. Exposed as the seventh Wails binding
+and covered by `TestReadRuleYAML*`.
+
+### Known gap found on the way
+`TIDArticle.Evidence` is tagged `json:"-"` in `types.go`, so the legacy "Evidence
+Found" block in the KB articles section could never render. The React port does
+not fake it; shipping that evidence needs a backend decision (it is scrubbed
+only in anonymize mode) and is left to a later milestone.
+
+
+
+## 2026-09-29 — Definitions Studio M0+M1: definition loading is visible and verifiable
+
+Every data-driven definition (YAML rules, external KB articles) has always been
+loaded fail-safe — a bad file is skipped — but silently, from a set of search
+paths a user could not discover. That is now impossible: the loader reports
+what it skipped, and a new service exposes the search paths, the validation and
+a rule dry-run to both the CLI and the GUI.
+
+### M0 — loading diagnostics (never silent)
+`Diagnostic{File,Line,Message,Severity}` is attached to every report
+(`ReportData.Diagnostics`, `omitempty` so existing consumers keep parsing) and
+`ReportData.AddDiagnostics` deduplicates. The rules loader (`loadAnalysisRules`)
+and the KB loaders (`loadKBArticlesDiag`, external directories merged by
+precedence) return diagnostics with real line numbers (`yaml.Node`,
+`jsonErrorLine`) and absolute paths. They reach the user through the
+TXT/HTML/JSON reports, a stderr banner (`[!] definitions: file:line: message`)
+and the `definitions-warning` GUI event; anonymization scrubs `File`/`Message`.
+
+### M1 — definitions service, CLI surface, Wails bindings
+`definitions_service.go` is the single implementation behind both front-ends:
+`ListDefinitions` (every candidate path, what is there, whether it is
+writable), `ValidateRuleYAML` (`parseRulesDocument` — the loader's own
+validator, so the editor cannot disagree with the analysis), `TestRulesAgainst`
+(`applyAnalysisRules` on a throwaway report: the real matcher, no side
+effects), `SaveRuleYAML` (refuses documents the analysis would skip, atomic
+write, keeps `rules.yaml.bak`, only the user/system scopes) and
+`GetCatalogInfo`.
+
+Rules parsing now has one validation path shared by the loader, the editor and
+the CLI gate. It also catches the mistakes that silently produced **zero**
+rules: a missing top-level `rules:` header, another top-level key, a rule
+without a name, and duplicate names — within a file and across files.
+
+New CLI flags, registered for BOTH binaries (`definitions_cli.go` dispatches
+them through one implementation, so they cannot drift as `-logdir` once did):
+
+| Flag | Behaviour |
+|------|-----------|
+| `-definitions-info` | prints every definition search path, its contents and writability |
+| `-validate-rules` | validates the installed definitions; exits 1 if anything would be skipped |
+| `-rules-test <path>` | dry-runs the loaded rules against a supportconfig; exits 2 without a path |
+
+Wails bindings (`app_definitions.go`) expose the same five operations plus
+`OpenDefinitionsRoot`, which opens the definitions folder in the file manager;
+`frontend/wailsjs` was regenerated with `wails generate module`.
+
+### Tests
+`definitions_service_test.go`, `definitions_cli_test.go`,
+`app_definitions_test.go` and `definitions_e2e_test.go` (real binaries: exit
+codes 0/1/2 of the three flags, on both the CLI and the hybrid binary). M0
+added `definitions_diagnostics_test.go` plus `main_test.go` (TestMain isolates
+the definition roots from the machine's real ones). The entry-point coverage
+guard now drives the three new flags as well.
+
+
 ## 2026-09-29 — evidence contract, severity policy, semantic rules
 
 Follow-up pass from the plan-mode review: three structural weaknesses behind

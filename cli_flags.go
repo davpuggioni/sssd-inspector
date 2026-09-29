@@ -29,6 +29,14 @@ type cliOptions struct {
 	Anonymize  *bool
 	GenCatalog *string
 
+	// Definitions surface (definitions_cli.go), registered for BOTH binaries:
+	// they are read-only diagnostics of the definition search paths and share
+	// one implementation, so the GUI binary must not advertise a different
+	// surface than the CLI one.
+	DefinitionsInfo *bool
+	ValidateRules   *bool
+	RulesTest       *string
+
 	// Compare is only registered when includeCompare is true (CLI binary);
 	// it is nil otherwise, so callers must not dereference it blindly.
 	Compare *string
@@ -50,6 +58,10 @@ func registerCLIFlags(fs *flag.FlagSet, includeCompare bool) *cliOptions {
 		JSON:       fs.Bool(constants.FlagJSON, false, constants.DescJSON),
 		Anonymize:  fs.Bool(constants.FlagAnonymize, false, constants.DescAnonymize),
 		GenCatalog: fs.String(constants.FlagGenCatalog, "", constants.DescGenCatalog),
+
+		DefinitionsInfo: fs.Bool(constants.FlagDefinitionsInfo, false, constants.DescDefinitionsInfo),
+		ValidateRules:   fs.Bool(constants.FlagValidateRules, false, constants.DescValidateRules),
+		RulesTest:       fs.String(constants.FlagRulesTest, "", constants.DescRulesTest),
 	}
 	if includeCompare {
 		opts.Compare = fs.String(constants.FlagCompare, "", constants.DescCompare)

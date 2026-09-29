@@ -46,7 +46,8 @@ func runCLIEntry(args []string, stdout, stderr io.Writer) int {
 }
 
 // dispatchCLI applies the documented dispatch order:
-// -v (version) -> -compare -> -analyze -> positional path.
+// -v (version) -> -gen-catalog -> definitions -> -compare -> -logdir -> -analyze
+// -> positional path.
 func dispatchCLI(rawArgs, positional []string, opts *cliOptions, stdout, stderr io.Writer) int {
 	if *opts.Version {
 		fmt.Fprintf(stdout, "%s version %s (CLI)\n", constants.AppName, constants.AppVersion)
@@ -60,6 +61,14 @@ func dispatchCLI(rawArgs, positional []string, opts *cliOptions, stdout, stderr 
 			return 1
 		}
 		return 0
+	}
+
+	// Definitions surface (-definitions-info / -validate-rules / -rules-test).
+	// Handled before compare/analyze because these are read-only diagnostics of
+	// the definition search paths: they must never trigger an analysis. The
+	// implementation is shared with the hybrid binary (definitions_cli.go).
+	if handled, code := runDefinitionsCommand(opts, providedFlags(rawArgs), stdout, stderr); handled {
+		return code
 	}
 
 	// Compare mode: differential analysis between two supportconfigs

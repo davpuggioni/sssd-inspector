@@ -4,10 +4,24 @@ import {main} from '../models';
 
 export function Analyze(arg1:string,arg2:boolean):Promise<main.ReportData>;
 
+export function GetCatalogInfo():Promise<main.CatalogInfo>;
+
+export function ListDefinitions():Promise<main.DefinitionsInventory>;
+
+export function OpenDefinitionsRoot(arg1:string):Promise<void>;
+
 export function OpenFileBrowser():Promise<string>;
+
+export function ReadRuleYAML(arg1:string):Promise<main.RuleDocument>;
 
 export function SaveJSON(arg1:main.ReportData):Promise<string>;
 
 export function SavePDF(arg1:string):Promise<string>;
 
+export function SaveRuleYAML(arg1:string,arg2:string):Promise<main.DefinitionSaveResult>;
+
 export function SaveTXT(arg1:main.ReportData):Promise<string>;
+
+export function TestRulesAgainst(arg1:string):Promise<main.RuleTestResult>;
+
+export function ValidateRuleYAML(arg1:string):Promise<main.RuleValidationResult>;

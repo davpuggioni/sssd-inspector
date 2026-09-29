@@ -7,10 +7,9 @@ This guide provides comprehensive instructions for developing and maintaining th
 ## Prerequisites
 
 ### Required Tools
-- **Node.js** (v16 or higher)
-- **npm** or **yarn** package manager
-- **Modern web browser** (Chrome, Firefox, Safari, Edge)
-- **Code editor** with JavaScript/HTML/CSS support
+- **Node.js** (v18 or higher; v24 recommended)
+- **npm**
+- **Wails CLI** (only to rebuild the Go binary or regenerate `wailsjs/`)
 
 ### Recommended Tools
 - **VS Code** with extensions:
@@ -33,27 +32,36 @@ cd sssd-inspector
 ```bash
 cd frontend
 npm install
-# or
-yarn install
 ```
 
 ### 3. Development Server
 ```bash
 npm run dev
-# or
-yarn dev
 ```
 
 This will start the Vite development server at `http://localhost:5173`
 
 ### 4. Build for Production
 ```bash
-npm run build
-# or
-yarn build
+npm run build     # tsc --noEmit && vite build
 ```
 
-The built files will be in the `dist/` directory.
+`npm run build` type-checks first, so a type error fails the build instead of
+shipping. The built files land in `dist/` and are embedded into the Go binary by
+`//go:embed all:frontend/dist` — do not change the output layout
+(`index.html` + `assets/`), which `integration_test.go` relies on.
+
+### 5. Test
+```bash
+npm test          # vitest run (jsdom + Testing Library)
+```
+
+`src/tests/` holds the vitest suites: the bridge guard (`backend.test.ts`), the
+report view (`ReportView.test.tsx`) and the Definitions Studio
+(`DefinitionsStudio.test.tsx`). Backend calls are mocked through
+`api/backend.ts` (see `src/tests/helpers.ts`), so the components are tested
+against the generated Wails payloads. The older plain-JavaScript suites under
+`tests/` still run in the browser via `tests/test-runner.html`.
 
 ## Development Workflow
 
@@ -105,21 +113,22 @@ npm run test:watch
 ## Architecture Overview
 
 ### Module System
-The frontend uses ES6 modules for code organization:
+The frontend is a React 18 + TypeScript application (`strict` mode):
 
-```javascript
-// Import statements
-import { Button, ProgressBar } from './components/UIComponents.js';
-import { FileValidator } from './utils/validators.js';
-import { UI, COLORS } from './config/constants.js';
+```typescript
+// Components never import the generated bindings directly.
+import { analyze, listDefinitions } from './api/backend';
+import type { ReportData } from './api/backend';
 
-// Export statements
-export class MyComponent {
-  // Component implementation
-}
-
-export default MyComponent;
+// State lives in hooks; components stay declarative.
+const { report, run } = useAnalysis(status);
+return <ReportView report={report} />;
 ```
+
+Legacy JavaScript modules (`config/constants.js`, `utils/validators.js`,
+`components/UIComponents.js`) are still available; wrap them in
+`src/utils/fileValidation.ts` rather than forking their logic, so the browser
+test-runner and the React UI keep testing the same implementation.
 
 ### Component Structure
 Each component follows a consistent structure:
@@ -445,35 +454,24 @@ const component = new NewComponent({
 
 ### 2. Component Integration
 
-#### Add to Main Application
-```javascript
-// In main.js
-import { NewComponent } from './components/NewComponent.js';
+#### Add to the Shell
+```tsx
+// A component is just a function: render it where it belongs and give it the
+// state it needs through props or a hook. No registration step exists.
+import { NewComponent } from './components/NewComponent';
 
-class SSSDInspectorApp {
-  createComponents() {
-    // ... existing components ...
-    
-    this.components.newComponent = new NewComponent({
-      id: 'new-component',
-      onClick: () => this.onNewComponentClick()
-    });
-  }
-
-  mountComponents() {
-    // ... existing mounting ...
-    
-    const container = DOMHelper.findElement('#new-component-container');
-    if (container) {
-      container.appendChild(this.components.newComponent.getElement());
-    }
-  }
-
-  onNewComponentClick() {
-    // Handle component click
-  }
+function AnalysisView() {
+  const { report } = useAnalysis(status);
+  return (
+    <div className="pdf-content-area">
+      {report ? <ReportView report={report} /> : <NewComponent onReady={() => undefined} />}
+    </div>
+  );
 }
 ```
+
+Legacy imperative components (`UIComponents.js`) are still mounted the old
+way, from a ref, if you need one — see `CorrelationGraphSection.tsx`.
 
 ## Testing Guidelines
 
@@ -810,24 +808,16 @@ npm run preview
 ```
 
 #### Build Configuration
-```javascript
-// vite.config.js
-export default {
+```typescript
+// vite.config.ts
+export default defineConfig({
+  plugins: [react()],
   build: {
-    outDir: 'dist',
-    assetsDir: 'assets',
-    sourcemap: true,
-    minify: 'terser',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['src/components/UIComponents.js'],
-          utils: ['src/utils/validators.js', 'src/utils/helpers.js']
-        }
-      }
-    }
-  }
-};
+    outDir: 'dist',      // embedded by //go:embed all:frontend/dist
+    assetsDir: 'assets', // integration_test.go looks for dist/assets/*.js
+    sourcemap: false,    // do not ship source maps in the embedded binary
+  },
+});
 ```
 
 ### 2. Environment Configuration

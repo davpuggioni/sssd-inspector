@@ -106,7 +106,8 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	}
 
 	// Load KB articles for combined pattern matching
-	kbArticles := loadKBArticles(dirPath)
+	kbArticles, kbDiags := loadKBArticlesDiag(dirPath)
+	report.AddDiagnostics(kbDiags)
 	singlePassResult := performSinglePassScan(dirPath, report.MACType, kbArticles)
 
 	// Apply single-pass results to report
@@ -187,7 +188,12 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	report.KBSuggestions = analyzeKBSuggestions(report.Timeline, kbArticles, report.MatchedTIDs)
 
 	// ---- Phase 6c: data-driven YAML rules (optional, additive) ----
-	if customRules := loadAnalysisRules(); len(customRules) > 0 {
+	// Loader problems (invalid severity, unreadable file, syntax error)
+	// are diagnostics, not stdout noise: they must reach the report so the
+	// GUI can tell the user their rule was skipped and why.
+	customRules, ruleDiags := loadAnalysisRules()
+	report.AddDiagnostics(ruleDiags)
+	if len(customRules) > 0 {
 		applyAnalysisRules(dirPath, &report, customRules)
 	}
 
@@ -485,6 +491,13 @@ func anonymizeReport(r *ReportData, dirPath string, extraTokens ...redactToken) 
 		// redacted.
 		r.ConfigFindings[i].SourceKey = maskString(r.ConfigFindings[i].SourceKey)
 		r.ConfigFindings[i].SourcePath = maskString(r.ConfigFindings[i].SourcePath)
+	}
+
+	// Definition diagnostics embed local file paths (home directories, host
+	// names in file names): scrub them like every other provenance field.
+	for i := range r.Diagnostics {
+		r.Diagnostics[i].File = maskString(r.Diagnostics[i].File)
+		r.Diagnostics[i].Message = maskString(r.Diagnostics[i].Message)
 	}
 
 	// The executive-summary headline embeds finding text (domains, realms):

@@ -233,6 +233,28 @@ func DefaultConfig() *Config {
 	}
 }
 
+// UserDefinitionsRoot returns the per-user definitions directory
+// ($HOME/.sssd-inspector), mirroring the config.yaml lookup locations.
+// Returns "" when no home directory can be determined.
+func UserDefinitionsRoot() string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		}
+	}
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".sssd-inspector")
+}
+
+// SystemDefinitionsRoot returns the system-wide definitions directory
+// (/etc/sssd-inspector), shared by every user of the machine.
+func SystemDefinitionsRoot() string {
+	return "/etc/sssd-inspector"
+}
+
 // LoadConfig loads configuration from file or returns default
 func LoadConfig(configPath string) (*Config, error) {
 	// Try to load from specified path

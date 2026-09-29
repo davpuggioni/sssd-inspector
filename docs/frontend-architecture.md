@@ -29,27 +29,36 @@ This document provides a comprehensive overview of the frontend architecture, co
 ```
 frontend/
 ├── src/
-│   ├── config/
-│   │   ├── constants.js          # Centralized constants
-│   │   └── FrontendConfig.js     # Dynamic configuration manager
+│   ├── main.tsx                  # React entry point (mounts #app)
+│   ├── App.tsx                   # Shell: top bar, view switch, status, shortcuts
+│   ├── api/
+│   │   └── backend.ts            # Typed façade over the generated Wails bindings
+│   ├── hooks/
+│   │   ├── useStatus.ts          # Single transient status message
+│   │   ├── useTheme.ts           # Dark/light mode with persistence
+│   │   ├── useAnalysis.ts        # Analyze, export, zoom, progress events
+│   │   ├── useDefinitionsInventory.ts
+│   │   ├── useRuleEditor.ts      # Load → edit → validate → save
+│   │   └── useRuleDryRun.ts      # Dry-run against a supportconfig
 │   ├── components/
-│   │   └── UIComponents.js       # Reusable UI components
-│   ├── utils/
-│   │   ├── validators.js         # Input validation utilities
-│   │   └── helpers.js            # General helper functions
-│   ├── styles/
-│   │   ├── layout.css            # Layout and responsive design
-│   │   ├── components.css        # Component-specific styles
-│   │   └── report.css            # Report display styles
-│   ├── main.js                   # Main application entry point
-│   ├── style.css                 # Legacy styles (deprecated)
-│   └── app.css                   # Legacy styles (deprecated)
-├── tests/
-│   ├── validators.test.js        # Validator unit tests
-│   ├── components.test.js        # Component unit tests
-│   └── test-runner.html          # Test runner interface
-└── package.json                  # Dependencies and build scripts
+│   │   ├── common/               # Section, ErrorBoundary
+│   │   ├── shell/                # TopBar, ProgressPanel, StatusBanner
+│   │   ├── report/               # ReportView and one component per section
+│   │   └── definitions/          # Definitions Studio panels
+│   ├── config/                   # Legacy JS constants/UI components
+│   ├── utils/                    # Legacy JS validators + typed wrappers
+│   ├── styles/                   # layout.css, components.css, report.css, studio.css
+│   └── tests/                    # vitest suites (backend, ReportView, Studio)
+├── tests/                        # Legacy browser test-runner (JS)
+├── wailsjs/                      # Generated Wails bindings — DO NOT EDIT
+├── tsconfig.json
+├── vite.config.ts
+└── package.json
 ```
+
+`wailsjs/` is regenerated with `wails generate module` after any Go signature
+change; `api/backend.ts` is the only place that imports it, so the rest of the
+UI depends on its types and never on the raw bindings.
 
 ## Core Modules
 
@@ -213,42 +222,43 @@ export class StorageHelper {
 
 ### Main Application
 
-#### main.js
-The main application class orchestrates all components:
+#### App.tsx
+`App.tsx` is the shell: it composes the hooks, the top bar, the progress panel
+and the status banner, and switches between the two views (Analysis and
+Definitions Studio). It renders a Fragment on purpose — `layout.css` styles
+`#app` as a flex column, so the top bar, progress, banner and content area must
+stay its direct children.
 
-```javascript
-class SSSDInspectorApp {
-  constructor() {
-    this.config = getConfig();
-    this.state = {
-      currentReport: null,
-      currentZoom: ZOOM.DEFAULT,
-      isAnalyzing: false,
-      selectedFile: null,
-    };
-    this.components = {};
-    this.init();
-  }
-  
-  async init() {
-    this.setupConfiguration();
-    this.createComponents();
-    this.render();
-    this.setupEventListeners();
-    this.setupBackendEvents();
-    this.setupKeyboardShortcuts();
-    this.loadSavedState();
-  }
+```tsx
+export function App({ initialTab = 'analysis' }: AppProps) {
+  const status = useStatus();           // one transient message
+  const analysis = useAnalysis(status); // path, run, exports, zoom
+  const { theme, toggle } = useTheme();
+  const [tab, setTab] = useState<TabKey>(initialTab);
+  // ...
+  return (
+    <>
+      <TopBar ... />
+      {analysis.progress !== null && <ProgressPanel ... />}
+      <StatusBanner status={status.status} onDismiss={status.dismiss} />
+      <div className="pdf-content-area">
+        {tab === 'analysis' ? <ReportView ... /> : <DefinitionsStudio ... />}
+      </div>
+    </>
+  );
 }
 ```
 
 **Key Features:**
-- Component lifecycle management
-- Event-driven architecture
-- State management with persistence
-- Keyboard shortcuts support
-- Responsive design adaptation
-- Error handling and user feedback
+- State lives in hooks (`useStatus`, `useAnalysis`, `useTheme`, …), so the
+  components stay declarative
+- Backend access only through `api/backend.ts` (typed, bridge-guarded)
+- An error boundary around the whole UI: a rendering bug must not leave a dead
+  window
+- Keyboard shortcuts: `Ctrl+O` browse, `Ctrl+Enter` analyze, `Ctrl+P/S/J`
+  export, `Ctrl+1/2` switch view
+- Wails events (`analyze-progress`, `definitions-warning`) and OS drag & drop
+  are subscribed in effects, with cleanup
 
 ## CSS Architecture
 
@@ -464,10 +474,17 @@ tests/
 ## Future Enhancements
 
 ### Planned Features
-- **TypeScript migration**: Add static type checking
 - **Web Components**: Framework-agnostic components
 - **PWA support**: Offline functionality
 - **Internationalization**: Multi-language support
+
+> **TypeScript migration**: done (M2, 2026-09-29) — the shell, the report view
+> and the Definitions Studio are React 18 + TypeScript in `strict` mode, typed
+> against the generated Wails models. `npm run build` type-checks first, and
+> `npm test` runs the vitest suites. The remaining legacy JavaScript
+> (`config/`, `utils/validators.js`, `components/UIComponents.js`,
+> `components/CorrelationGraph.js`) is still exercised by the browser
+> test-runner; porting or dropping it is a separate cleanup.
 
 ### Technical Debt
 - **Legacy code removal**: Clean up deprecated files
