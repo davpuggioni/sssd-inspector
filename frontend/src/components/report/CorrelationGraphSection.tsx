@@ -1,11 +1,10 @@
-// CorrelationGraphSection — hosts the dependency-free force-directed SVG graph.
+// CorrelationGraphSection — hosts the interactive correlation graph.
 //
-// CorrelationGraph.js is a self-contained imperative renderer (no dependencies,
-// built for the legacy DOM frontend); React mounts it into a host element and
-// clears it on unmount instead of rewriting 346 lines of layout math.
-import { useEffect, useRef } from 'react';
+// The graph itself is a React component (CorrelationGraph.tsx) with the layout
+// in correlationGraph.ts; this section only decides when it is visible and
+// renders the "nothing to show" case.
 import type { ReportData } from '../../api/backend';
-import { renderCorrelationGraph } from '../CorrelationGraph.js';
+import { CorrelationGraph } from './CorrelationGraph';
 import { Section } from '../common/Section';
 
 export interface CorrelationGraphSectionProps {
@@ -13,22 +12,18 @@ export interface CorrelationGraphSectionProps {
 }
 
 export function CorrelationGraphSection({ report }: CorrelationGraphSectionProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) {
-      return undefined;
-    }
-    renderCorrelationGraph(host, report);
-    return () => {
-      host.innerHTML = '';
-    };
-  }, [report]);
+  const graph = report.graph;
+  const nodeCount = (graph?.entities?.length ?? 0) + (graph?.findings?.length ?? 0) + (graph?.sources?.length ?? 0);
 
   return (
     <Section title="Correlation Graph" className="corr-graph-section" defaultOpen={false}>
-      <div className="corr-graph-host" ref={hostRef} data-testid="correlation-graph" />
+      {nodeCount === 0 ? (
+        <p className="studio-empty">
+          No entities, findings or evidence to correlate in this report.
+        </p>
+      ) : (
+        <CorrelationGraph graph={graph} />
+      )}
     </Section>
   );
 }
