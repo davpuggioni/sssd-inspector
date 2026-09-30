@@ -136,6 +136,26 @@ describe('CorrelationGraph (component)', () => {
     expect(detail).toHaveTextContent('ldap_default_authtok = rc4-hmac');
   });
 
+  // Regression: pressing a node calls svg.getScreenCTM, which jsdom does not
+  // implement. The optional chain on the element passed, the call threw, and
+  // the exception escaped as an unhandled error even though every test passed.
+  // The component must degrade to "no drag" in a DOM without SVG geometry.
+  it('survives pressing a node in a DOM without SVG geometry', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<CorrelationGraphView graph={makeGraph()} />);
+    const node = container.querySelector('[data-id="f1"]') as Element;
+
+    // jsdom has no SVG geometry: the prototype genuinely lacks the method.
+    // The cast is deliberate — TypeScript types it from the SVG 2 DOM, which
+    // is the very mismatch that made the unguarded call throw here.
+    expect(typeof (SVGElement.prototype as unknown as Record<string, unknown>).getScreenCTM).toBe('undefined');
+    await user.pointer([{ keys: '[MouseLeft>]', target: node }]);
+    await user.pointer([{ keys: '[/MouseLeft]', target: node }]);
+
+    // The graph is still rendered and still interactive after the gesture.
+    expect(screen.getByTestId('corr-detail')).toHaveTextContent('RC4 enctype found');
+  });
+
   it('hides findings of a severity the user switched off', async () => {
     const user = userEvent.setup();
     const { container } = render(<CorrelationGraphView graph={makeGraph()} />);

@@ -50,6 +50,12 @@ const (
 	HostsStatusPresent      = "present"
 	HostsStatusMissingHost  = "missing_on_host"
 	HostsStatusNotCollected = "not_collected"
+	// HostsStatusMalformed means the file was collected and read, but it does
+	// not parse as /etc/hosts at all. It is deliberately distinct from
+	// "present": a present file that simply lacks a loopback line is valid
+	// syntax, and conflating the two tells the operator to look for corruption
+	// that is not there.
+	HostsStatusMalformed = "malformed"
 )
 
 // locateConfFile searches the given supportconfig bundles (in order) for the

@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"net"
 	"strconv"
 	"strings"
 
@@ -263,6 +264,15 @@ func analyzeHosts(dirPath string, report *ReportData) {
 		shortHost = shortHost[:idx]
 	}
 
+	// "Malformed" has to mean the file could not be read as /etc/hosts, not
+	// merely that it lacks an entry we would have liked to see. A file that
+	// parses but has no loopback line is a configuration gap, and telling the
+	// operator their file is corrupt sends them looking for corruption that
+	// does not exist. So the two are counted separately: unparsable lines make
+	// the file malformed, a clean parse without a loopback does not.
+	var malformedLines []string
+	entryCount := 0
+
 	for _, rawLine := range strings.Split(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -270,13 +280,25 @@ func analyzeHosts(dirPath string, report *ReportData) {
 		}
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
+			malformedLines = append(malformedLines, line)
 			continue
 		}
-		ip := fields[0]
+		// The first field must be an address. A line that starts with a word is
+		// not a hosts entry; treating it as one would silently count it towards
+		// entryCount and hide the corruption.
+		addr := net.ParseIP(fields[0])
+		if addr == nil {
+			malformedLines = append(malformedLines, line)
+			continue
+		}
+		entryCount++
 		aliases := fields[1:]
 
-		// Loopback check
-		if ip == "127.0.0.1" || ip == "::1" {
+		// Loopback check. Compare the parsed address, not the raw text: an
+		// operator who writes the expanded form (0:0:0:0:0:0:0:1), or points
+		// at 127.0.0.2, has a working loopback and must not be warned about a
+		// file that is fine. A string comparison would flag both.
+		if addr.IsLoopback() {
 			hasLocalhost = true
 		}
 		for _, a := range aliases {
@@ -289,9 +311,36 @@ func analyzeHosts(dirPath string, report *ReportData) {
 		}
 	}
 
+	// A file with no parsable entry at all is unusable: whatever the
+	// collected text says, /etc/hosts cannot resolve anything. That is the
+	// only case that justifies the malformed verdict, because the collector
+	// gave us something that is not a hosts file.
+	if entryCount == 0 {
+		report.HostsFileStatus = HostsStatusMalformed
+		detail := "no address entries could be parsed"
+		if len(malformedLines) > 0 {
+			detail = fmt.Sprintf("%d line(s) are not valid address entries, starting with %q", len(malformedLines), malformedLines[0])
+		}
+		report.HostsIssues = append(report.HostsIssues, "Malformed /etc/hosts file: "+detail)
+		report.Problems = append(report.Problems, fmt.Sprintf("[HOSTS] Malformed /etc/hosts file: %s. Name resolution for the local host and localhost cannot be served from this file.", detail))
+		return
+	}
+
+	// The file is structurally sound. A missing loopback line is a real
+	// problem, but it is a configuration gap and is reported as such: calling
+	// it malformed would misdescribe the file the operator has to fix.
+	//
+	// Individual unusable lines are still named, so a file that works but
+	// carries one bad entry does not hide it.
+	if len(malformedLines) > 0 {
+		report.HostsIssues = append(report.HostsIssues, fmt.Sprintf(
+			"%d line(s) in /etc/hosts are not valid address entries and are ignored: %q",
+			len(malformedLines), malformedLines[0]))
+	}
+
 	if !hasLocalhost {
-		report.HostsIssues = append(report.HostsIssues, "Missing 127.0.0.1 loopback entry")
-		report.Problems = append(report.Problems, "Malformed /etc/hosts file.")
+		report.HostsIssues = append(report.HostsIssues, "Missing loopback entry")
+		report.Warnings = append(report.Warnings, "[HOSTS] /etc/hosts has no loopback entry (any 127.0.0.0/8 address, or ::1). The file parses correctly, but localhost may fall back to DNS, which breaks software that assumes the loopback is local (and NSS ordering becomes host-dependent).")
 	}
 
 	if report.Hostname != "" && !hasHostname && hasLocalhost {

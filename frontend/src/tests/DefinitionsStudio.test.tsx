@@ -162,7 +162,6 @@ describe('DefinitionsStudio — inventory', () => {
     expect(screen.queryByTestId('catalog-install-result')).toBeNull();
   });
 
-});
   it('opens the definitions folder of the chosen scope', async () => {
     const user = userEvent.setup();
 
@@ -172,6 +171,65 @@ describe('DefinitionsStudio — inventory', () => {
     await user.click(screen.getByRole('button', { name: 'Open system folder' }));
     expect(backend.openDefinitionsRoot).toHaveBeenCalledWith('system');
   });
+
+  it('reports a folder it cannot open instead of failing silently', async () => {
+    const user = userEvent.setup();
+    backend.openDefinitionsRoot.mockRejectedValue(
+      new Error('cannot create /etc/sssd-inspector: permission denied'),
+    );
+
+    render(<Studio />);
+    await user.click(screen.getByRole('button', { name: 'Open system folder' }));
+
+    await waitFor(() => expect(screen.getByTestId('status-message')).toHaveTextContent('permission denied'));
+  });
+
+  it('re-reads the inventory on demand, so an edit made outside the app shows up', async () => {
+    const user = userEvent.setup();
+    render(<Studio />);
+    await screen.findByText('legacy-rc4');
+    const before = backend.listDefinitions.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+    await waitFor(() => expect(backend.listDefinitions.mock.calls.length).toBeGreaterThan(before));
+    // The catalog travels with the inventory: a half-refreshed panel would mix
+    // the new file list with the previous release description.
+    expect(backend.getCatalogInfo.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('disables Reload while one is in flight, so a double click cannot race', async () => {
+    const user = userEvent.setup();
+    let release: () => void = () => undefined;
+    render(<Studio />);
+    await screen.findByRole('button', { name: 'Reload' });
+
+    // Hold open only the reload triggered by the click: the mount already
+    // resolved, otherwise the button would never become clickable again.
+    backend.listDefinitions.mockImplementationOnce(
+      () => new Promise((resolve) => { release = () => resolve(makeInventory()); }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+    expect(screen.getByRole('button', { name: 'Reloading…' })).toBeDisabled();
+    release();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reload' })).toBeEnabled());
+  });
+
+  it('keeps the previous inventory visible when a reload fails', async () => {
+    const user = userEvent.setup();
+    render(<Studio />);
+    await screen.findByText('legacy-rc4');
+
+    backend.listDefinitions.mockRejectedValue(new Error('definitions service unreachable'));
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+    // A failed reload must not blank the panel: the user would read "no rules
+    // loaded" as fact when the truth is "I could not look".
+    expect(screen.getByText('legacy-rc4')).toBeInTheDocument();
+    expect(screen.getByText('definitions service unreachable')).toBeInTheDocument();
+  });
+});
 
 describe('DefinitionsStudio — rule editor', () => {
   it('loads the current document of the selected scope', async () => {

@@ -105,10 +105,10 @@ git checkout -b feature/new-feature-name
 # ... develop your feature ...
 
 # Run tests
-npm run test
+npm test
 
-# Run linting
-npm run lint
+# Typecheck (strict); there is no separate linter configured
+npm run typecheck
 
 # Commit changes
 git add .
@@ -127,19 +127,16 @@ git push origin feature/new-feature-name
 
 ### 3. Testing Strategy
 ```bash
-# Run all tests
-npm run test
-
-# Run specific test file
-npm run test:validators
-npm run test:components
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests in watch mode
-npm run test:watch
+npm test              # vitest run (jsdom + Testing Library)
+npm run typecheck     # tsc --noEmit, strict
+npm run build         # typecheck, then vite build
+npm run smoke:gui     # headless GUI smoke on the built bundle (see below)
 ```
+
+These are the only scripts; there is no coverage, no per-area and no watch
+script. For a single suite, pass the path to Vitest
+(`npx vitest run src/tests/DefinitionsStudio.test.tsx`) or add `-t '<name>'` to
+run one test.
 
 ## Architecture Overview
 
@@ -156,62 +153,44 @@ const { report, run } = useAnalysis(status);
 return <ReportView report={report} />;
 ```
 
-Everything is TypeScript. The only JavaScript left is
-`components/CorrelationGraph.js` (a self-contained SVG renderer mounted through
-a ref); everything else lives in `src/` as `.ts`/`.tsx` with `strict` types
-from the generated Wails models.
+Everything is TypeScript: there is no `.js` or `.jsx` file left under `src/`.
+The graph renderer that used to be a legacy SVG class is now
+`components/report/CorrelationGraph.tsx`, a normal React component rendered by
+`CorrelationGraphSection.tsx`; its layout maths was extracted to the pure
+`correlationGraph.ts` so it can be unit-tested without a DOM. Types come from
+the generated Wails models.
 
 ### Component Structure
-Each component follows a consistent structure:
+A component is a function that returns JSX. State, effects and subscriptions go
+in a hook or React state, not in a `destroy()` method — there is no manual
+teardown, because React owns the lifecycle.
 
-```javascript
-/**
- * Component Description
- * @version 2.0.0
- */
-
-export class ComponentName {
-  /**
-   * Creates a new component instance
-   * @param {Object} options - Component configuration
-   */
-  constructor(options = {}) {
-    // Initialize properties
-    this.options = options;
-    this.element = this.createElement();
-    this.setupEventListeners();
-  }
-
-  /**
-   * Creates the DOM element
-   * @returns {HTMLElement} Component element
-   */
-  createElement() {
-    // Element creation logic
-  }
-
-  /**
-   * Sets up event listeners
-   */
-  setupEventListeners() {
-    // Event listener setup
-  }
-
-  /**
-   * Public method
-   */
-  publicMethod() {
-    // Method implementation
-  }
-
-  /**
-   * Destroys the component
-   */
-  destroy() {
-    // Cleanup logic
-  }
+```tsx
+// src/components/definitions/DefinitionInventoryPanel.tsx
+export interface DefinitionInventoryPanelProps {
+  inventory: DefinitionsInventory | null;
+  loading: boolean;
+  onReload: () => void;
 }
+
+export function DefinitionInventoryPanel({ inventory, loading, onReload }: DefinitionInventoryPanelProps) {
+  const rules = listOf(inventory?.rules);
+  return <section className="studio-panel">{/* ... */}</section>;
+}
+
+export default DefinitionInventoryPanel;
 ```
+
+Conventions worth keeping:
+
+- Named export for the component, default export as well, so both import styles
+  resolve.
+- Props are a plain interface; behaviour arrives as callbacks (`onReload`),
+  never as an import of the backend module. The component must stay testable
+  without the Wails bridge.
+- Render `null` fields through `listOf()` from `utils/payload`. Go can send
+  `null` for a slice, and `listOf` is what stopped the GUI from crashing on a
+  machine with no custom rules.
 
 ## Coding Standards
 
@@ -377,47 +356,28 @@ function processFile(filePath) {
 
 ### 1. Creating a New Component
 
-#### Step 1: Define Component Class
-```javascript
-// src/components/NewComponent.js
-export class NewComponent {
-  constructor(options = {}) {
-    this.id = options.id || `component-${Date.now()}`;
-    this.className = options.className || 'new-component';
-    this.onClick = options.onClick || null;
-    
-    this.element = this.createElement();
-    this.setupEventListeners();
-  }
-
-  createElement() {
-    return DOMHelper.createElement('div', {
-      attributes: { id: this.id },
-      className: this.className,
-      textContent: 'New Component'
-    });
-  }
-
-  setupEventListeners() {
-    if (this.onClick) {
-      this.cleanup = DOMHelper.addEventListener(
-        this.element,
-        'click',
-        this.onClick
-      );
-    }
-  }
-
-  destroy() {
-    if (this.cleanup) {
-      this.cleanup();
-    }
-    if (this.element && this.element.parentNode) {
-      this.element.parentNode.removeChild(this.element);
-    }
-  }
+#### Step 1: Write the component
+```tsx
+// src/components/NewComponent.tsx
+export interface NewComponentProps {
+  title: string;
+  onSelect?: () => void;
 }
+
+export function NewComponent({ title, onSelect }: NewComponentProps) {
+  return (
+    <div className="new-component" onClick={onSelect}>
+      {title}
+    </div>
+  );
+}
+
+export default NewComponent;
 ```
+
+No class, no constructor, no `destroy()`: React mounts and unmounts it. Put
+anything stateful in `useState`/`useEffect`, and keep backend calls out of the
+component — pass a callback in and let the caller decide.
 
 #### Step 2: Add Styles
 ```css
@@ -436,51 +396,46 @@ export class NewComponent {
 ```
 
 #### Step 3: Write Tests
-```javascript
-// tests/components/new-component.test.js
-class NewComponentTests {
-  static runAll() {
-    this.testComponentCreation();
-    this.testComponentEvents();
-    this.testComponentDestruction();
-  }
+```tsx
+// src/tests/NewComponent.test.tsx
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { NewComponent } from '../components/NewComponent';
 
-  static testComponentCreation() {
-    const component = new NewComponent({ id: 'test-component' });
-    const element = component.getElement();
-    
-    TestUtils.assert(element !== null, 'Component element should be created');
-    TestUtils.assertEqual(element.id, 'test-component', 'Component should have correct ID');
-    
-    component.destroy();
-  }
+describe('NewComponent', () => {
+  it('shows its title', () => {
+    render(<NewComponent title="Definitions" />);
+    expect(screen.getByText('Definitions')).toBeInTheDocument();
+  });
 
-  // ... more tests
-}
+  it('reports a selection', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<NewComponent title="Definitions" onSelect={onSelect} />);
+    await user.click(screen.getByText('Definitions'));
+    expect(onSelect).toHaveBeenCalled();
+  });
+});
 ```
+
+Add the suite to the gate: a component without a test is unfinished, and a
+test that has never been seen to fail has not been shown to work.
 
 #### Step 4: Update Documentation
 ```markdown
 ## NewComponent
 
-A reusable component for [purpose].
+Renders [purpose].
 
 ### Usage
-```javascript
-const component = new NewComponent({
-  id: 'my-component',
-  onClick: () => console.log('Clicked!')
-});
+```tsx
+<NewComponent title="Definitions" onSelect={handleSelect} />
 ```
 
-### Options
-- `id` (string): Component ID
-- `className` (string): Additional CSS classes
-- `onClick` (function): Click event handler
-
-### Methods
-- `getElement()`: Returns the DOM element
-- `destroy()`: Cleans up the component
+### Props
+- `title` (string): what to show
+- `onSelect` (function, optional): called on click
 ```
 
 ### 2. Component Integration
@@ -501,152 +456,95 @@ function AnalysisView() {
 }
 ```
 
-Legacy imperative components (`UIComponents.js`) are still mounted the old
-way, from a ref, if you need one — see `CorrelationGraphSection.tsx`.
+There is no legacy imperative layer left: `UIComponents.js` and `DOMHelper.js`
+were deleted, and every component is mounted by rendering it. See
+`CorrelationGraphSection.tsx` for the pattern.
 
 ## Testing Guidelines
 
-### 1. Unit Testing
+Tests are **Vitest** with **React Testing Library**, in `src/tests/`, run by
+`npm test`. There is no browser test-runner and no `TestUtils` helper: RTL
+queries the DOM the way a user reads it, so a test that cannot find a control
+by role is telling you the control is unreachable, not that the query is wrong.
 
-#### Test Structure
-```javascript
-class MyComponentTests {
-  static runAll() {
-    this.testComponentCreation();
-    this.testComponentMethods();
-    this.testComponentEvents();
-    this.testComponentDestruction();
-  }
+### 1. Unit and Component Testing
 
-  static testComponentCreation() {
-    console.log('Testing component creation...');
-    
-    // Arrange
-    const options = { id: 'test-component', text: 'Test' };
-    
-    // Act
-    const component = new MyComponent(options);
-    
-    // Assert
-    TestUtils.assert(component !== null, 'Component should be created');
-    TestUtils.assertEqual(component.getElement().id, 'test-component', 'ID should match');
-    
-    // Cleanup
-    component.destroy();
-    
-    console.log('Component creation tests passed');
-  }
-}
+#### Test structure
+
+One suite per unit, in `src/tests/`, named after the unit under test:
+
+```tsx
+// src/tests/DefinitionsStudio.test.tsx
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { mockBackend, makeInventory } from './helpers';
+
+const backend = mockBackend();
+vi.mock('../api/backend', () => backend);
+
+const { DefinitionsStudio } = await import('../components/definitions/DefinitionsStudio');
+
+beforeEach(() => {
+  // Re-seed every mock: a mockResolvedValue set by a previous test would
+  // otherwise leak into the next one.
+  Object.assign(backend, mockBackend());
+});
+
+describe('DefinitionsStudio — inventory', () => {
+  it('re-reads the inventory on demand', async () => {
+    const user = userEvent.setup();
+    render(<DefinitionsStudio status={status} />);
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(backend.listDefinitions).toHaveBeenCalledTimes(2));
+  });
+});
 ```
 
-#### Test Utilities
-```javascript
-class TestUtils {
-  static assert(condition, message) {
-    if (!condition) {
-      throw new Error(`Assertion failed: ${message}`);
-    }
-  }
+Rules that keep the suite honest:
 
-  static assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-      throw new Error(`Assertion failed: ${message}. Expected: ${expected}, Actual: ${actual}`);
-    }
-  }
+- **Query by role, label or text**, never by test id, unless the element has no
+  accessible identity. `getByRole('button', { name: 'Reload' })` also asserts
+  the control is reachable and named, which a `getElementById` never did.
+- **Drive it like a user**: `userEvent.click`, then `await` the outcome. Never
+  assert synchronously on a promise the component has not resolved yet.
+- **Assert what the user must not be misled about.** A refused save has to read
+  as refused; a reload that fails must not blank the panel, because "no rules
+  loaded" would otherwise be read as fact.
+- **Keep each `it` inside its `describe`.** A stray `it` after a closing `});`
+  still runs, but it escapes the group and hides which area regressed.
+- **Prove the test bites.** A green test that passes against broken code is
+  worse than no test: flip the behaviour, watch it go red, flip it back.
 
-  static createMockElement(tag = 'div', attributes = {}) {
-    const element = document.createElement(tag);
-    Object.entries(attributes).forEach(([key, value]) => {
-      element.setAttribute(key, value);
-    });
-    return element;
-  }
+#### Fixtures
 
-  static triggerEvent(element, eventType, eventData = {}) {
-    const event = new Event(eventType, { bubbles: true, ...eventData });
-    element.dispatchEvent(event);
-  }
-}
-```
+`src/tests/helpers.ts` holds the builders (`makeInventory`, `makeCatalog`,
+`makeValidation`, `makeDryRun`, `makeReport`, `mockBackend`) so no suite
+hand-rolls a payload. Two things it provides matter:
 
-### 2. Integration Testing
+- `mockBackend()` returns benign defaults for every call, so a test only
+  overrides the one method it is about.
+- `mockBackend().events` records the Wails callbacks the shell registered, so a
+  test can fire `analyze-progress`, `definitions-warning` or an OS file drop
+  without a real backend.
 
-#### Backend Integration Tests
-```javascript
-class BackendIntegrationTests {
-  static async runAll() {
-    await this.testAnalyzeFunction();
-    await this.testFileBrowser();
-    await this.testExportFunction();
-  }
+### 2. Backend Integration Tests
 
-  static async testAnalyzeFunction() {
-    console.log('Testing analyze function...');
-    
-    try {
-      // Mock the Go function for testing
-      const mockReport = {
-        timestamp: new Date().toISOString(),
-        sles_release: 'Test OS',
-        problems: [],
-        warnings: []
-      };
-      
-      // Test successful analysis
-      const result = await mockAnalyze('/path/to/test.txz', false);
-      TestUtils.assert(result !== null, 'Analysis should return result');
-      
-      console.log('Analyze function tests passed');
-    } catch (error) {
-      console.error('Analyze function tests failed:', error);
-      throw error;
-    }
-  }
-}
-```
+`api/backend.ts` is mocked wholesale, so the suites assert against the
+**generated Wails payloads**, not against a hand-written imitation of them.
+A payload shape change breaks the suites loudly, which is the point.
+
+Anything that only the Go side can decide is covered by Go tests next to the
+code it owns: `openDefinitionsRoot` has its own in `app_definitions_test.go`
+(including the case where the folder does not exist yet and must be created).
 
 ### 3. End-to-End Testing
 
-#### User Workflow Tests
-```javascript
-class E2ETests {
-  static async runAll() {
-    await this.testCompleteAnalysisWorkflow();
-    await this.testExportWorkflow();
-    await this.testKeyboardShortcuts();
-  }
-
-  static async testCompleteAnalysisWorkflow() {
-    console.log('Testing complete analysis workflow...');
-    
-    try {
-      // Initialize app
-      const app = new SSSDInspectorApp();
-      
-      // Select file
-      const fileInput = app.components.fileInput;
-      fileInput.setValue('/path/to/test.txz');
-      
-      // Start analysis
-      await app.startAnalysis();
-      
-      // Verify results
-      TestUtils.assert(app.state.currentReport !== null, 'Report should be generated');
-      
-      // Test export
-      await app.exportTXT();
-      
-      // Cleanup
-      app.destroy();
-      
-      console.log('Complete workflow tests passed');
-    } catch (error) {
-      console.error('Complete workflow tests failed:', error);
-      throw error;
-    }
-  }
-}
-```
+Covered by `npm run smoke:gui` (`scripts/gui-smoke.mjs`), which loads the
+**built** `dist/` bundle in headless Chromium with a stubbed Wails bridge and
+drives the real UI. What it cannot cover is the Go ↔ WebKitGTK boundary,
+which needs a desktop session; run that pass by hand before a release. See
+"GUI smoke" above for the exact commands.
 
 ## Debugging
 
@@ -776,31 +674,30 @@ input.addEventListener('input', debouncedValidation);
 ### 2. Memory Management
 
 #### Event Listener Cleanup
-```javascript
-class ComponentWithEvents {
-  setupEventListeners() {
-    this.eventCleanup = [];
-    
-    const clickCleanup = DOMHelper.addEventListener(
-      this.element,
-      'click',
-      this.handleClick.bind(this)
-    );
-    this.eventCleanup.push(clickCleanup);
-  }
+React owns the lifecycle: an effect that subscribes returns its own cleanup,
+and React calls it on unmount. There is no `destroy()` to remember to invoke.
 
-  destroy() {
-    // Clean up all event listeners
-    this.eventCleanup.forEach(cleanup => cleanup());
-    this.eventCleanup = [];
-    
-    // Remove DOM element
-    if (this.element && this.element.parentNode) {
-      this.element.parentNode.removeChild(this.element);
-    }
-  }
-}
+```tsx
+useEffect(() => {
+  const onProgress = (message: string, percentage: number) => setProgress({ message, percentage });
+  return backend.onAnalyzeProgress(onProgress);
+}, []);
 ```
+
+For a window or document listener added outside React, clean it up in the same
+effect:
+
+```tsx
+useEffect(() => {
+  const onDrop = (e: DragEvent) => { e.preventDefault(); void onPaths([...e.dataTransfer.files].map((f) => f.name)); };
+  window.addEventListener('drop', onDrop);
+  return () => window.removeEventListener('drop', onDrop);
+}, [onPaths]);
+```
+
+Worth stating plainly: a missing cleanup leaks a listener, and a leaked
+listener keeps a stale closure alive, so the bug shows up later and somewhere
+else. That is why `App.test.tsx` asserts the shell unsubscribes.
 
 #### Object Reference Management
 ```javascript

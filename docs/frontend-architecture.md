@@ -45,7 +45,7 @@ frontend/
 │   │   ├── shell/                # TopBar, ProgressPanel, StatusBanner
 │   │   ├── report/               # ReportView and one component per section
 │   │   ├── definitions/          # Definitions Studio panels
-│   │   └── CorrelationGraph.js   # the one imperative renderer, mounted via ref
+│   │   └── CorrelationGraph.tsx  # SVG graph, a normal React component
 │   ├── config/                   # ui.ts — strings, zoom bounds, archive formats
 │   ├── utils/                    # fileValidation.ts (the one input check)
 │   ├── styles/                   # layout.css, components.css, report.css, studio.css
@@ -97,7 +97,7 @@ App                          shell: top bar, view switch, status, shortcuts
 │   ├── DiagnosticsList, ConfigFindingsList
 │   ├── LogErrorsList, TimelineList, KbArticlesList
 │   ├── TemporalClustersList, KbSuggestionsList
-│   └── CorrelationGraphSection   (mounts CorrelationGraph.js through a ref)
+│   └── CorrelationGraphSection   (renders CorrelationGraph.tsx)
 ├── components/definitions/  Studio panels (inventory, editor, dry-run, catalog)
 └── components/common/       Section, ErrorBoundary
 ```
@@ -106,9 +106,10 @@ App                          shell: top bar, view switch, status, shortcuts
 uses: it sets the initial `open` state imperatively so the user keeps control of
 the toggle afterwards.
 
-`CorrelationGraph.js` is the one imperative survivor — a self-contained
-force-directed SVG renderer with no dependencies. It is mounted into a host
-`div` from an effect, not rewritten.
+`CorrelationGraph.tsx` is the force-directed SVG renderer. It is an ordinary
+React component: the layout maths lives in the pure `correlationGraph.ts` so it
+can be tested without a DOM, and the component only draws what that function
+returns. Nothing is mounted imperatively any more.
 
 `ErrorBoundary` wraps the whole app: a rendering bug must not leave the user
 with a blank window and a dead Analyze button.
@@ -395,8 +396,8 @@ hand-written fake runtime objects, now against the components that ship.
 > `components/UIComponents.js` and the browser test-runner were deleted; the
 > behaviour that was actually used moved to `config/ui.ts` and
 > `utils/fileValidation.ts`, and the drag & drop / Wails event coverage moved
-> into `App.test.tsx`. The only remaining JavaScript is
-> `components/CorrelationGraph.js`, mounted through a ref.
+> into `App.test.tsx`. `CorrelationGraph.js` was the last file ported, so **no
+> JavaScript remains** under `src/`.
 
 ### Technical Debt
 - **Legacy code removal**: Clean up deprecated files

@@ -118,6 +118,98 @@ func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
 	}
 }
 
+// knownSectionFamilies is the set of section kinds the option catalog
+// documents, derived from the catalog's own section map rather than from a
+// literal here, so the two cannot drift.
+func knownSectionFamilies(c *SssdCatalog) map[string]bool {
+	families := make(map[string]bool)
+	for name := range c.Sections {
+		f := sectionFamily(name)
+		if f == "" || f == "*" {
+			continue
+		}
+		families[f] = true
+	}
+	// "*" in the catalog means "any section", which is a statement about
+	// option placement, not a section kind in its own right.
+	return families
+}
+
+// validateSectionHeaders checks that every [section] in the file is a section
+// SSSD documents.
+//
+// The catalog's keys are man-page section names ("domain/ldap/id"), not the
+// literal headers a user writes, so a raw membership test would be wrong in
+// both directions: it would reject the perfectly valid [domain/example.com],
+// and it would accept nothing useful. The check is therefore on the section
+// KIND — the part before the first slash — which is what SSSD itself dispatches
+// on.
+//
+// An unknown kind is worth a warning: SSSD ignores an unrecognised section
+// entirely, so the options inside it never take effect, and the operator
+// usually typed the header wrong. It is a warning rather than an error because
+// a section this SSSD build does not document is not proof of a mistake.
+func validateSectionHeaders(cfg *ParsedConfig, report *ReportData) {
+	cat, res, diags := loadOptionCatalog()
+	report.AddDiagnostics(diags)
+	if cat == nil {
+		return // no catalog: stay silent rather than guess
+	}
+	families := knownSectionFamilies(cat)
+	// The override in effect is part of the verdict: a section rejected by a
+	// locally generated catalog is a weaker claim than one rejected upstream.
+	prov := catalogProvenance(cat) + catalogSourceNote(res)
+	names := catalogSectionNames(cat)
+
+	for _, name := range cfg.Order {
+		sec := cfg.Sections[name]
+		if sec.Kind == "" {
+			continue
+		}
+		if families[sec.Kind] {
+			continue
+		}
+		suggestion := suggestSectionName(names, sec.Kind)
+		msg := fmt.Sprintf("CONFIGURATION WARNING: section [%s] is not a section SSSD documents (%s). SSSD ignores the whole section, so every option inside it has no effect. %s",
+			name, strings.Join(sortedKeys(families), ", "), prov)
+		if suggestion != "" {
+			msg = fmt.Sprintf("CONFIGURATION WARNING: section [%s] is not a section SSSD documents. Did you mean [%s]? SSSD ignores the whole section, so every option inside it has no effect. %s",
+				name, suggestion, prov)
+		}
+		addConfigFindingEx(report, SevWarning, "config_section", msg, "sssd.conf",
+			name, 0, "["+name+"]", "catalog:unknown-section", ConfidenceHeuristic, "sssd.conf(5)")
+	}
+}
+
+// catalogSectionNames returns the documented section kinds, for typo
+// suggestions. A wildcard entry is not a kind and is filtered out.
+func catalogSectionNames(c *SssdCatalog) []string {
+	families := knownSectionFamilies(c)
+	names := make([]string, 0, len(families))
+	for f := range families {
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// suggestSectionName finds the closest documented section kind, if one is
+// close enough to be a credible correction. The same edit-distance budget as
+// option names: a distant match would be a misleading suggestion.
+func suggestSectionName(names []string, target string) string {
+	return suggestOptionName(names, target)
+}
+
+// sortedKeys returns the keys of m in a stable order, for message building.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // firstKeyVal returns the line number and rendered evidence of the first
 // occurrence of a key, used by findings that are not value-specific.
 func firstKeyVal(vals []SssdKeyVal, key string) (int, string) {

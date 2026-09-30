@@ -422,7 +422,9 @@ the same Go service the `-definitions-info`, `-validate-rules` and
 - **Discovery inventory** — every search location in discovery order, with what
   is there, whether you can write there, the rules currently loaded and any
   input that was skipped. "Open user folder" / "Open system folder" take you to
-  where definition files go.
+  where definition files go, and **Reload** re-reads the inventory, so a file
+  you edited outside the app shows up without restarting. A reload that fails
+  says so and keeps the previous view rather than showing an empty one.
 - **Rule editor** — load the `rules.yaml` of a scope, edit, `Validate` and
   `Save`. A save is refused when the analysis would skip the document, and the
   verdict is shown inline with file and line. The system scope needs root.

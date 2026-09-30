@@ -153,6 +153,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		validateConfigStructure(cfg, &report)      // Phase 2: domains + responders
 		validateIDMapRanges(cfg, &report)          // Phase 2: idmap range overlaps
 		validateConfigAgainstCatalog(cfg, &report) // Embedded catalog: unknown keys, bad types, bad enum values
+		validateSectionHeaders(cfg, &report)       // Section kinds the catalog does not document: SSSD ignores them entirely
 		validateConfigSemantics(cfg, &report)      // Provider-aware semantic rules: dead settings given the domain provider
 	} else {
 		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")

@@ -557,3 +557,112 @@ func TestCatalog_IdProviderFilesIsAccepted(t *testing.T) {
 		t.Error("an invalid id_provider must still be reported as an error")
 	}
 }
+
+// --- section header validation -------------------------------------------------
+//
+// The catalog stores man-page section names, not the headers a user writes, so
+// these tests pin the two directions that matter: a real domain name must never
+// be reported, and a genuinely unknown kind must be.
+
+// A user-named domain is the single most common header in a real sssd.conf. It
+// appears in no catalog (the catalog documents domain/ad, domain/ldap, ...), so
+// a naive "is this header in the catalog" check would condemn every working
+// configuration. This is the regression that test guards.
+func TestSectionHeaders_AcceptUserNamedDomain(t *testing.T) {
+	cfg := parseSssdConfig("[sssd]\ndebug_level = 0x1F0\n[domain/example.com]\nid_provider = ldap\n")
+	report := &ReportData{}
+	validateSectionHeaders(cfg, report)
+
+	for _, f := range report.ConfigFindings {
+		if f.RuleID == "catalog:unknown-section" {
+			t.Errorf("a user-named domain must not be reported: %s", f.Message)
+		}
+	}
+}
+
+func TestSectionHeaders_AcceptsEveryDocumentedKind(t *testing.T) {
+	cfg := parseSssdConfig(strings.Join([]string{
+		"[sssd]",
+		"config_file_version = 2",
+		"[nss]",
+		"memcache_timeout = 600",
+		"[pam]",
+		"offline_credentials_expiration = 2",
+		"[sudo]",
+		"ldap_sudo_smart_refresh = true",
+		"[domain/ad]",
+		"id_provider = ad",
+		"[domain/example.test]",
+		"id_provider = ldap",
+		"[ifp]",
+		"curl_timeout = 10",
+		"[autofs]",
+		"map-to-user = sssd",
+	}, "\n"))
+	report := &ReportData{}
+	validateSectionHeaders(cfg, report)
+
+	for _, f := range report.ConfigFindings {
+		if f.RuleID == "catalog:unknown-section" {
+			t.Errorf("documented section kind rejected: %s", f.Message)
+		}
+	}
+}
+
+func TestSectionHeaders_UnknownKindIsReported(t *testing.T) {
+	cfg := parseSssdConfig("[sssd]\ndebug_level = 1\n[domian/example.com]\nid_provider = ldap\n")
+	report := &ReportData{}
+	validateSectionHeaders(cfg, report)
+
+	found := false
+	for _, f := range report.ConfigFindings {
+		if f.RuleID == "catalog:unknown-section" {
+			found = true
+			if !strings.Contains(f.Message, "domian/example.com") {
+				t.Errorf("finding does not name the offending section: %s", f.Message)
+			}
+			// A typo gets a correction, not just a rejection.
+			if !strings.Contains(f.Message, "Did you mean") {
+				t.Errorf("a near-miss section kind should be corrected: %s", f.Message)
+			}
+			// SSSD ignores the section: the operator has to be told that every
+			// option inside it is dead, which is the consequence that matters.
+			if !strings.Contains(f.Message, "no effect") {
+				t.Errorf("finding should state the consequence: %s", f.Message)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected an unknown-section finding, got %+v", report.ConfigFindings)
+	}
+}
+
+// The wildcard entry "*" in the catalog means "any section" for option
+// placement. Treating it as a section kind would let a bogus header pass.
+func TestSectionHeaders_WildcardIsNotASectionKind(t *testing.T) {
+	cat, err := loadEmbeddedCatalog()
+	if err != nil {
+		t.Fatalf("loadEmbeddedCatalog: %v", err)
+	}
+	if _, ok := knownSectionFamilies(cat)["*"]; ok {
+		t.Error(`the catalog wildcard "*" must not be treated as a section kind`)
+	}
+}
+
+// The verdict has to say which catalog produced it, exactly like every other
+// catalog finding, or the operator cannot tell what "documented" means here.
+func TestSectionHeaders_CitesCatalogProvenance(t *testing.T) {
+	cfg := parseSssdConfig("[bogus]\nfoo = bar\n")
+	report := &ReportData{}
+	validateSectionHeaders(cfg, report)
+
+	for _, f := range report.ConfigFindings {
+		if f.RuleID == "catalog:unknown-section" {
+			if !strings.Contains(f.Message, "option catalog") {
+				t.Errorf("finding should cite the catalog it checked against: %s", f.Message)
+			}
+			return
+		}
+	}
+	t.Error("expected an unknown-section finding to check provenance on")
+}

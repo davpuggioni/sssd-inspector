@@ -28,7 +28,15 @@ function HostsStatusBadge({ status }: { status: string }) {
     return <span className="status-badge error">Missing from Host</span>;
   }
   if (status === 'not_collected') {
+    // The supportconfig did not include the file. Saying "Present" here would
+    // be a claim we cannot support, and saying "Missing" would be a false
+    // alarm: neither is knowable from what we were given.
     return <span className="status-badge warn">Not Collected</span>;
+  }
+  if (status === 'malformed') {
+    // Collected, but not readable as /etc/hosts. Distinct from "present" so a
+    // file that parses but lacks a loopback is not shown as corrupt.
+    return <span className="status-badge error">Present but Malformed</span>;
   }
   return <span className="status-badge success">Present</span>;
 }

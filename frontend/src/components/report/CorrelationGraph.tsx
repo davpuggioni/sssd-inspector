@@ -143,8 +143,18 @@ export function CorrelationGraph({ graph }: CorrelationGraphProps) {
 
   const toSvgPoint = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
-    const ctm = svg?.getScreenCTM();
-    if (!svg || !ctm) {
+    // Guard the methods, not just the element. getScreenCTM and
+    // createSVGPoint are part of the SVG 2 DOM, which a real browser
+    // implements and a headless DOM (jsdom) does not: there the optional
+    // chain on `svg` passes but the call throws, and an exception thrown
+    // inside a mousemove handler is reported as an unhandled error that
+    // outlives the test. Returning null degrades the interaction to "no
+    // drag in progress" instead.
+    if (!svg || typeof svg.getScreenCTM !== 'function' || typeof svg.createSVGPoint !== 'function') {
+      return null;
+    }
+    const ctm = svg.getScreenCTM();
+    if (!ctm) {
       return null;
     }
     const point = svg.createSVGPoint();
