@@ -624,7 +624,7 @@ The application supports YAML-based configuration in multiple locations (checked
 # SSSD Inspector Configuration
 app:
   name: "SSSD Inspector"
-  version: "0.2.3"
+  version: "0.2.4"
 
 analysis:
   max_file_size: "100MB"

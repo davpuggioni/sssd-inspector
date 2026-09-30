@@ -588,7 +588,7 @@ go tool pprof http://localhost:6060/debug/pprof/goroutine
 5. **Test binaries** on target platforms
 6. **Create release tag**:
    ```bash
-   git tag -a v0.2.3 -m "Release version 0.2.3"
-   git push origin v0.2.3
+   git tag -a v0.2.4 -m "Release version 0.2.4"
+   git push origin v0.2.4
    ```
 7. **Upload binaries** to release platform

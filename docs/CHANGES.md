@@ -1,5 +1,49 @@
 # Implementation Summary
 
+## 2026-09-30 — Version 0.2.4: /etc/hosts verdicts, sssd.conf section headers, graph colours
+
+* **`/etc/hosts` states are now four, not two.** A supportconfig that never
+  collected the file, one that records it missing on the host, and one whose
+  content cannot be read as a hosts file used to share a verdict. Only the last
+  earns the word *malformed*, and only when not a single entry parsed; a file
+  that parses but lacks a loopback line is a configuration gap, reported as a
+  warning against a *present* file. Unparsable lines are still named when other
+  entries keep the file usable. Parsing uses `net.ParseIP` on the first field, so
+  a line starting with a word is not silently counted as an entry.
+* **The loopback check compared raw text.** It rejected the expanded IPv6 form
+  (`0:0:0:0:0:0:0:1`) and the rest of `127.0.0.0/8`, warning about a loopback
+  that was present — the operator was sent to repair a correct file. Now
+  `addr.IsLoopback()`, and the issue text asks the question that is actually
+  asked.
+* **`sssd.conf` section headers are validated against the man-page-derived
+  catalog**, warning on an unknown section kind and suggesting near matches.
+  The kind is read before `/`, so a user-defined `[domain/example.com]` is not
+  reported as unknown.
+* **The correlation graph drew its nodes black on a near-black canvas.** The
+  React port dropped the `fill` and `stroke` the imperative renderer had set;
+  the layout still computed a fill per node and nothing rendered it. SVG
+  defaulted to black, invisible against `#1e1e24`, and every existing test
+  passed because they check structure rather than presentation.
+* **The graph drag crashed in a DOM without SVG geometry.** The null check on
+  the element passed while `getScreenCTM` threw, since those are SVG 2 DOM
+  methods. Vitest reported the resulting unhandled error with all tests green.
+  Guarding the methods degrades the gesture to "no drag" instead.
+* **The correlation graph CSS was three overlapping blocks**, each redefining
+  the same selectors, so the file said one thing and rendered another. Merged,
+  keeping the value the cascade actually applied for every property.
+* **The GUI smoke never looked at the graph.** It had a `Correlation Graph`
+  marker that passed while the screenshot stopped above the fold. A scene now
+  opens the section and scrolls the canvas into view, and a check reads the
+  fill of every rendered shape to fail on a black or missing one.
+* **Documentation is corrected against the tree** and `docs_freshness_test.go`
+  keeps it so: docs describing deleted files as existing, naming a renderer
+  the code does not use, or documenting an npm script that is gone now fail the
+  build. The checks are in Go because the frontend is browser-only and has no
+  `@types/node`.
+
+`constants.AppVersion` is the single literal; `config.yaml`, `README.md` and
+`docs/configuration.md` follow it, enforced by `TestCurrentDocsQuoteAppVersion`.
+
 ## 2026-09-29 — Definitions Studio crash on a machine with no custom rules
 
 Opening the Studio in the GUI failed with

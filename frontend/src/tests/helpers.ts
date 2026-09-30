@@ -7,7 +7,7 @@ import type { CatalogInfo, DefinitionsInventory, RuleTestResult, RuleValidationR
 /** Minimal ReportData with the fields the report view actually reads. */
 export function makeReport(overrides: Partial<ReportData> = {}): ReportData {
   const base = {
-    app_version: '0.2.3',
+    app_version: '0.2.4',
     timestamp: '2026-09-29 10:00:00',
     support_case_id: 'SR#12345',
     kernel_version: '5.14.21',
