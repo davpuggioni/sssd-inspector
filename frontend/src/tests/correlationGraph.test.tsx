@@ -9,7 +9,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CorrelationGraph } from '../api/backend';
 import { CorrelationGraph as CorrelationGraphView } from '../components/report/CorrelationGraph';
-import { NODE_R, adjacency, canvasSize, layoutGraph } from '../components/report/correlationGraph';
+import { KIND_FILL, NODE_R, SEV_FILL, adjacency, canvasSize, layoutGraph } from '../components/report/correlationGraph';
 
 function makeGraph(): CorrelationGraph {
   return {
@@ -114,6 +114,39 @@ describe('CorrelationGraph (component)', () => {
     expect(container.querySelectorAll('.corr-entity circle')).toHaveLength(2);
     expect(container.querySelectorAll('.corr-finding polygon')).toHaveLength(2);
     expect(container.querySelectorAll('.corr-source rect')).toHaveLength(1);
+  });
+
+  it('fills and outlines every shape, so no node renders black on a dark canvas', () => {
+    const { container } = render(<CorrelationGraphView graph={makeGraph()} />);
+
+    // Regression: the port to React dropped the fill and stroke attributes the
+    // imperative renderer had, leaving every shape on the SVG default of black
+    // over a near-black .corr-svg. The layout already computes a fill per node;
+    // it simply stopped being rendered, so nothing in the tests failed.
+    const shapes = Array.from(container.querySelectorAll('.corr-shape'));
+    expect(shapes).toHaveLength(5);
+    for (const shape of shapes) {
+      const fill = shape.getAttribute('fill');
+      expect(fill, `${shape.tagName} has no fill attribute`).toBeTruthy();
+      // Black on the #1e1e24 canvas is the exact regression being pinned.
+      expect(fill?.toLowerCase(), `${shape.tagName} is black on a dark canvas`).not.toBe('#000');
+      expect(fill?.toLowerCase()).not.toBe('black');
+      expect(shape.getAttribute('stroke')).toBe('#fff');
+    }
+  });
+
+  it('colours each node by severity or by kind', () => {
+    const { container } = render(<CorrelationGraphView graph={makeGraph()} />);
+    const fillOf = (id: string) =>
+      container.querySelector(`[data-id="${id}"] .corr-shape`)?.getAttribute('fill');
+
+    // Findings carry the severity colour: f1 is severity 2 (critical, red),
+    // f2 is severity 0 (warning, cyan). Entities and sources are fixed.
+    expect(fillOf('f1')).toBe(SEV_FILL[2]);
+    expect(fillOf('f2')).toBe(SEV_FILL[0]);
+    expect(fillOf('e1')).toBe(KIND_FILL.entity);
+    expect(fillOf('e2')).toBe(KIND_FILL.entity);
+    expect(fillOf('s1')).toBe(KIND_FILL.source);
   });
 
   it('escapes node labels coming from the supportconfig', () => {

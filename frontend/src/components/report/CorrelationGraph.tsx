@@ -38,13 +38,18 @@ function shortLabel(s: string): string {
 
 function shapeOf(node: LayoutNode) {
   const r = node.r;
+  // fill comes from the layout, which already picks a severity colour for
+  // findings and a fixed colour per kind. It has to be rendered here: without
+  // it SVG falls back to black, and the shapes disappear into the dark canvas.
+  // The white stroke is what keeps a node legible against that background.
+  const style = { className: 'corr-shape', fill: node.fill, stroke: '#fff', strokeWidth: '1.5' };
   if (node.kind === 'finding') {
-    return <polygon className="corr-shape" points={`0,${-r} ${r},0 0,${r} ${-r},0`} />;
+    return <polygon {...style} points={`0,${-r} ${r},0 0,${r} ${-r},0`} />;
   }
   if (node.kind === 'source') {
-    return <rect className="corr-shape" x={-r} y={-r} width={r * 2} height={r * 2} />;
+    return <rect {...style} x={-r} y={-r} width={r * 2} height={r * 2} />;
   }
-  return <circle className="corr-shape" r={r} />;
+  return <circle {...style} r={r} />;
 }
 
 function SeverityFilters(props: { enabled: Set<number>; toggle: (sev: number) => void }) {
