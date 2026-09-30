@@ -157,6 +157,27 @@ function shim() {
     setTimeout(() => byText('button', 'Run dry-run').click(), 600);
   } else if (scene === 'studio-empty') {
     setTimeout(() => byText('button', 'Definitions Studio').click(), 150);
+  } else if (scene === 'graph') {
+    // The analysis scene stops at the top of the report, so the graph is below
+    // the fold and its screenshot never showed it. This scene runs the same
+    // analysis, opens the graph section, scrolls the canvas into view and
+    // clicks a node, so the screenshot contains the drawn shapes rather than
+    // an empty area of the page. The node colour is asserted from the DOM
+    // below: a black shape on the dark canvas passes every other marker here.
+    setTimeout(() => {
+      type(document.querySelector('#filePath'), '/tmp/supportconfig.txz');
+      byText('button', 'Analyze').click();
+    }, 150);
+    setTimeout(() => {
+      const section = document.querySelector('.corr-graph-section');
+      if (section) {
+        const details = section.closest('details');
+        if (details) details.open = true;
+        section.scrollIntoView({ block: 'center' });
+      }
+      const node = document.querySelector('.corr-node');
+      if (node) node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }, 900);
   }
 }
 
@@ -186,6 +207,12 @@ const scenes = [
     ['sssd.conf snippet', 'View sssd.conf'],
     ['catalog provenance row', 'Option Catalog'],
     ['correlation graph', 'Correlation Graph'],
+  ] },
+  { name: 'graph', markers: [
+    ['graph section', 'Correlation Graph'],
+    ['graph canvas', 'corr-svg'],
+    ['drawn node shape', 'corr-shape'],
+    ['node detail panel', 'corr-detail'],
   ] },
   { name: 'studio-empty', markers: [
     ['inventory panel', 'Discovery inventory'],
@@ -227,6 +254,25 @@ for (const scene of scenes) {
     if (stdout.includes(marker)) {
       console.log(`         [FAIL] ${name} in the rendered page`);
       failures += 1;
+    }
+  }
+
+  // The graph drawn in the page has to be visible, not merely present. A shape
+  // with no fill attribute renders black, and black on the #1e1e24 canvas is
+  // invisible: the DOM still contains the node and every text marker above
+  // passes, which is why this needed a check of its own.
+  if (scene.name === 'graph') {
+    const shapes = [...stdout.matchAll(/class="corr-shape"[^>]*?fill="([^"]*)"/g)].map((m) => m[1].toLowerCase());
+    if (shapes.length === 0) {
+      console.log('         [FAIL] no corr-shape carries a fill attribute — nodes would render black on the dark canvas');
+      failures += 1;
+    }
+    const black = shapes.filter((f) => f === '#000' || f === 'black' || f === '');
+    if (black.length > 0) {
+      console.log(`         [FAIL] ${black.length} node shape(s) filled black: ${black.join(', ')}`);
+      failures += 1;
+    } else {
+      console.log(`         [ok] ${shapes.length} node shape(s) filled, none black: ${[...new Set(shapes)].join(', ')}`);
     }
   }
 }
