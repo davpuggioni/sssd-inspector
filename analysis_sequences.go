@@ -26,6 +26,33 @@ import (
 // causation and we abstain (single-line correlations would be false positives).
 const minTimelineEvents = 3
 
+// rootCauseHeadline maps a synthesized root-cause category to the short triage
+// statement shown at the top of the report. The correlate* emitters below
+// produce a LONG, evidence-carrying message ("[CORRELATED ROOT CAUSE] ...")
+// that stays in the findings list; this map gives the headline the one-line
+// summary a support engineer reads first, so the triage says what broke
+// instead of repeating the whole finding.
+//
+// Categories are the ones correlateSequences emits (dns, krb5, overload,
+// offline) plus the neighbouring domains the sequence engine is planned to
+// cover (net, keytab, tls, crypto, gpo, idmap, access).
+//
+// A category that is absent falls back to the finding message, so adding a
+// new emitter never produces an empty headline.
+var rootCauseHeadline = map[string]string{
+	"dns":      "DNS/SRV service discovery failure - the DC could not be located or reached via DNS.",
+	"net":      "Network/backend connectivity failure - SSSD could not reach an AD/LDAP/Kerberos endpoint.",
+	"offline":  "Backend went OFFLINE - SSSD exhausted retries and is falling back to cached credentials.",
+	"keytab":   "Machine credentials unavailable - the host keytab or principal is missing/mismatched.",
+	"krb5":     "Kerberos exchange failure - clock skew, preauth, or a missing machine account.",
+	"tls":      "TLS/SSL negotiation failure - certificate chain, CA, or cipher incompatibility.",
+	"crypto":   "Encryption-type mismatch - AD forcing RC4 that the local crypto policy rejects.",
+	"gpo":      "Group-Policy access/control failure - the machine account cannot read GPOs.",
+	"idmap":    "Identity mapping failure - SID-to-UID/GID translation is out of range or colliding.",
+	"access":   "Access-control policy denial - account disabled/expired or HBAC/simple rules.",
+	"overload": "Backend overload/restart storm - the machine account is overloaded by group or socket size.",
+}
+
 // timelineEpoch parses a timeline event timestamp (normalized) into Unix seconds.
 func timelineEpoch(ev TimelineEvent) (int64, bool) {
 	ts := normalizeTimestamp(ev.Timestamp)
@@ -246,7 +273,12 @@ func emitOverloadChain(links []seqLink, report *ReportData, emitted map[string]b
 				break
 			}
 		}
-		addConfigFindingEx(report, SevWarning, "ad_server",
+		// Category "overload", not "ad_server": "ad_server" elsewhere means
+		// "ad_server points at an IP" (config_parser.go) and is also a graph
+		// entity kind, so reusing it here grouped a backend performance
+		// problem under DC configuration in the root-cause breakdown and gave
+		// it the wrong headline.
+		addConfigFindingEx(report, SevWarning, "overload",
 			"[CORRELATED ROOT CAUSE] Backend overload/restart storm: watchdog terminations co-occur with oversized packets/shell limits. Consider 'ignore_group_members = true' and reviewing AD group sizes.",
 			"timeline", "sequence:overload", 0, ev, "correlate:backend-overload", ConfidenceLog, "")
 		emitted["overload"] = true

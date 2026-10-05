@@ -131,11 +131,18 @@ func dominantCategory(r *ReportData, weightedLog map[string]int) (string, int) {
 // a detected sequence) is appended when present to explain the dominant cause.
 func buildHeadline(r *ReportData, s *ExecutiveSummary, weightedLog map[string]int) string {
 	// A detected sequence finding overrides the generic headline so the triage
-	// immediately explains the cause->effect chain.
+	// immediately explains the cause->effect chain. rootCauseHeadline gives
+	// the short summary for the categories it knows; anything else (a new
+	// emitter, or an unknown category) falls back to the finding message so
+	// the headline is never empty.
 	for _, f := range r.ConfigFindings {
-		if strings.HasPrefix(f.Message, "[CORRELATED ROOT CAUSE]") {
-			return "[ROOT CAUSE] " + strings.TrimPrefix(f.Message, "[CORRELATED ROOT CAUSE] ")
+		if !strings.HasPrefix(f.Message, "[CORRELATED ROOT CAUSE]") {
+			continue
 		}
+		if h, ok := rootCauseHeadline[f.Category]; ok {
+			return "[ROOT CAUSE] " + h
+		}
+		return "[ROOT CAUSE] " + strings.TrimPrefix(f.Message, "[CORRELATED ROOT CAUSE] ")
 	}
 	if s.CriticalCount > 0 {
 		if h, ok := categoryHeadlines[s.TopCategory]; ok {

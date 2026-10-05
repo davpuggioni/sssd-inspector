@@ -19,8 +19,13 @@ func TestEmitOverloadChain_Fires(t *testing.T) {
 	if !emitOverloadChain(links, &report, emitted) {
 		t.Fatalf("expected the overload chain to fire")
 	}
-	if !containsStringCategory(&report, "ad_server") {
-		t.Errorf("expected an 'ad_server' root-cause finding, got %v", findingCategories(&report))
+	if !containsStringCategory(&report, "overload") {
+		t.Errorf("expected an 'overload' root-cause finding, got %v", findingCategories(&report))
+	}
+	// The overload chain must not be filed under "ad_server", which means
+	// "ad_server points at an IP" everywhere else.
+	if containsStringCategory(&report, "ad_server") {
+		t.Errorf("overload chain must not reuse the ad_server category: %v", findingCategories(&report))
 	}
 	// Second call with the same key must be a no-op (dedup guard).
 	if emitOverloadChain(links, &report, emitted) {

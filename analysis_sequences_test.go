@@ -82,6 +82,30 @@ func TestHeadline_sequenceOverride(t *testing.T) {
 	if !strings.Contains(report.Summary.Headline, "[ROOT CAUSE]") {
 		t.Errorf("headline did not override to root cause: %q", report.Summary.Headline)
 	}
+	// The headline must be the SHORT summary from rootCauseHeadline, not the
+	// long evidence-carrying finding message: the triage line is what an
+	// engineer reads first, the detail stays in the findings list.
+	if want := "[ROOT CAUSE] " + rootCauseHeadline["dns"]; report.Summary.Headline != want {
+		t.Errorf("headline = %q, want the mapped summary %q", report.Summary.Headline, want)
+	}
+}
+
+// TestHeadline_rootCauseCategoryFallback pins the fallback branch: a category
+// the map does not know must still yield a usable headline instead of an
+// empty string. This is what protects a future correlate* emitter.
+func TestHeadline_rootCauseCategoryFallback(t *testing.T) {
+	const msg = "[CORRELATED ROOT CAUSE] something the map has never seen"
+	var report ReportData
+	report.ConfigFindings = append(report.ConfigFindings, ConfigFinding{
+		Severity: SevError,
+		Category: "brand-new-domain",
+		Message:  msg,
+	})
+	computeExecutiveSummary(&report)
+
+	if got := report.Summary.Headline; got != "[ROOT CAUSE] something the map has never seen" {
+		t.Errorf("headline = %q, want the finding message as fallback", got)
+	}
 }
 
 // TestCorrelateSequences_DNSChain verifies that a DNS/SRV→connect→offline
