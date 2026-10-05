@@ -73,6 +73,12 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 			_, err = io.CopyN(outFile, tr, hdr.Size)
 			if err != nil {
 				outFile.Close()
+				// A truncated/failed copy leaves a PARTIAL file behind. Leaving
+				// it in place is worse than skipping the entry: the analysis
+				// would read a half-written sssd.conf or etc.txt and report
+				// invented findings (missing sections, invalid ranges, ...)
+				// as if they were real. Remove it and move on.
+				os.Remove(targetPath)
 				continue
 			}
 			outFile.Close()

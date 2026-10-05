@@ -459,11 +459,46 @@ var exclusionPatterns = []string{
 // logPatternCategory are the descriptive prefix of the full findings produced by
 // buildErrorPatterns), then falls back to a keyword scan so new patterns that
 // forget to register keep working (defensive default).
+// logPatternCategorySortedKeys holds the keys of logPatternCategory in the
+// order categoryFor must test them: longest key first, then lexicographic.
+// Go randomizes map iteration, so ranging over logPatternCategory directly
+// made the classification of any description matching more than one prefix
+// non-deterministic across runs (different TopCategory, different headline,
+// phantom deltas in -compare).
+//
+// The ORIGINAL (non-lowercased) keys are kept: categoryFor lowercases both
+// sides at match time, and the table lookup must use the declared key.
+// Longest-first makes the choice stable and prefers the most specific prefix
+// ("Kerberos Locator Error" wins over the shorter "Kerberos:").
+//
+// It is derived from the map in init(), so the table stays the single source
+// of truth: adding a pattern needs no index to be kept in sync.
+var logPatternCategorySortedKeys []string
+
+func init() {
+	logPatternCategorySortedKeys = make([]string, 0, len(logPatternCategory))
+	for k := range logPatternCategory {
+		logPatternCategorySortedKeys = append(logPatternCategorySortedKeys, k)
+	}
+	sort.Slice(logPatternCategorySortedKeys, func(i, j int) bool {
+		li, lj := strings.ToLower(logPatternCategorySortedKeys[i]), strings.ToLower(logPatternCategorySortedKeys[j])
+		if len(li) != len(lj) {
+			return len(li) > len(lj) // longest (most specific) prefix first
+		}
+		return li < lj
+	})
+}
+
+// categoryFor assigns a coarse failure domain to a diagnostic description.
 func categoryFor(description string) string {
 	l := strings.ToLower(description)
-	for key, cat := range logPatternCategory {
+	// Iterate the prefix table in a fixed order: map iteration is randomized
+	// in Go, and several keys share a prefix, so the previous map range could
+	// classify the same description differently on every run. Longest-prefix
+	// first makes the choice both stable and the most specific one.
+	for _, key := range logPatternCategorySortedKeys {
 		if strings.HasPrefix(l, strings.ToLower(key)) {
-			return cat
+			return logPatternCategory[key]
 		}
 	}
 	switch {

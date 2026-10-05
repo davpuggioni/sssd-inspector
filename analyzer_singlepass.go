@@ -187,12 +187,24 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 	// allowed") cannot be matched by the trie and are evaluated with RE2
 	// on the pre-filtered lines only, so their cost stays negligible.
 	acLiterals := make([]string, len(literalPatterns))
-	patternInfos := make([]patternInfo, len(literalPatterns))
 	for i, cp := range literalPatterns {
 		acLiterals[i] = cp.pattern
-		patternInfos[i] = cp.info
 	}
+
+	// The automaton deduplicates literals, so its canonical indices do NOT
+	// line up with the positions in literalPatterns (e.g. "service key not
+	// available" is registered both as mcError and mcCryptoBug). Indexing a
+	// parallel table by the canonical index would therefore attribute every
+	// literal after the first duplicate to the wrong metadata. Build the
+	// mapping through CanonicalIndex instead; several patternInfo may share
+	// one canonical index, and all of them must run for a match.
 	acMatcher := globalACCache.Get(acLiterals)
+	infosByCanonical := make([][]patternInfo, acMatcher.Len())
+	for _, cp := range literalPatterns {
+		if ci, ok := acMatcher.CanonicalIndex(cp.pattern); ok {
+			infosByCanonical[ci] = append(infosByCanonical[ci], cp.info)
+		}
+	}
 
 	// Pre-compile the regex-routed patterns (cached, case-insensitive like AC).
 	type compiledRegex struct {
@@ -331,9 +343,13 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		// Single O(n) pass: match ALL literal patterns via the
 		// Aho-Corasick automaton (case-insensitive, overlapping matches
 		// included). `lowered` is already lowercased above, matching the
-		// automaton's folded patterns.
+		// automaton's folded patterns. Every registered role of a matched
+		// literal runs, so a literal registered twice (error + quick flag)
+		// sets both the description and the boolean flag.
 		acMatcher.Match(lowered, func(idx int) {
-			handlePattern(patternInfos[idx])
+			for _, info := range infosByCanonical[idx] {
+				handlePattern(info)
+			}
 		})
 
 		// Regex-routed patterns: evaluated only on pre-filtered lines.

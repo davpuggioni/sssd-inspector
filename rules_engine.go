@@ -477,9 +477,25 @@ func applyAnalysisRules(dirPath string, report *ReportData, rules []AnalysisRule
 				}
 			}
 		} else {
+			// The automaton deduplicates literals, so its canonical indices
+			// are not positions in rule.Patterns. Translate them back to
+			// pattern positions here: otherwise a rule listing the same
+			// pattern twice (or twice with different case) mis-indexes the
+			// hit table — with match: all it can never be satisfied, and
+			// with match: any it can report a match no pattern produced.
 			ac := globalACCache.Get(rule.Patterns)
+			toPatternPos := make([][]int, ac.Len())
+			for pos, p := range rule.Patterns {
+				if ci, ok := ac.CanonicalIndex(p); ok {
+					toPatternPos[ci] = append(toPatternPos[ci], pos)
+				}
+			}
 			matchLine = func(line string, hit func(patternIdx int)) {
-				ac.Match(strings.ToLower(line), hit)
+				ac.Match(strings.ToLower(line), func(ci int) {
+					for _, pos := range toPatternPos[ci] {
+						hit(pos)
+					}
+				})
 			}
 		}
 

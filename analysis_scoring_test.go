@@ -53,6 +53,58 @@ func TestSinglePass_PrefilterKeepsRelevantLines(t *testing.T) {
 	}
 }
 
+// TestDominantCategory_IsDeterministicOnTies guards reproducibility.
+//
+// dominantCategory picked the best-weighted category by ranging over a map.
+// Go randomizes map iteration, so two categories with the SAME weight produced
+// a different TopCategory from run to run — changing the triage headline, the
+// highlighted graph node, and producing phantom deltas in -compare A:B.
+// Ties must now resolve deterministically (lexicographically smallest).
+func TestDominantCategory_IsDeterministicOnTies(t *testing.T) {
+	r := &ReportData{
+		ConfigFindings: []ConfigFinding{
+			{Severity: SevError, Category: "zeta", Message: "z"},
+			{Severity: SevError, Category: "alpha", Message: "a"},
+		},
+	}
+
+	firstCat, firstHits := dominantCategory(r, nil)
+	for i := 0; i < 200; i++ {
+		cat, hits := dominantCategory(r, nil)
+		if cat != firstCat || hits != firstHits {
+			t.Fatalf("dominantCategory is not deterministic: got %q/%d, want %q/%d (run %d)",
+				cat, hits, firstCat, firstHits, i)
+		}
+	}
+	if firstCat != "alpha" {
+		t.Errorf("tie must resolve to the lexicographically smaller category, got %q", firstCat)
+	}
+}
+
+// TestCategoryFor_IsDeterministic pins the same property for the log-category
+// classifier, and asserts the most specific (longest) prefix wins: several
+// keys share a prefix, so the winner has to be a stable choice.
+func TestCategoryFor_IsDeterministic(t *testing.T) {
+	desc := "Kerberos Locator Error: the Kerberos plugin could not reach SSSD."
+	first := categoryFor(desc)
+	for i := 0; i < 200; i++ {
+		if got := categoryFor(desc); got != first {
+			t.Fatalf("categoryFor is not deterministic: got %q, want %q (run %d)", got, first, i)
+		}
+	}
+	if first != "krb5" {
+		t.Errorf("categoryFor(%q) = %q, want krb5", desc, first)
+	}
+
+	// Every registered key must classify to its own declared category.
+	for key, want := range logPatternCategory {
+		probe := key + " some trailing detail"
+		if got := categoryFor(probe); got != want {
+			t.Errorf("categoryFor(%q) = %q, want %q", probe, got, want)
+		}
+	}
+}
+
 func TestComputeExecutiveSummary_ScoringAndHeadline(t *testing.T) {
 	r := &ReportData{
 		ConfigFindings: []ConfigFinding{

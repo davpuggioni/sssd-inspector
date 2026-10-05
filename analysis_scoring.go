@@ -110,9 +110,15 @@ func dominantCategory(r *ReportData, weightedLog map[string]int) (string, int) {
 		weight[cat] += w
 		hits[cat] += w
 	}
+	// Deterministic tie-break: map iteration order is randomized in Go, so
+	// two categories with the same weight used to produce a different
+	// TopCategory (and therefore a different headline and graph highlight)
+	// from one run to the next — which also made -compare report phantom
+	// deltas. Equal weights now resolve to the lexicographically smaller
+	// category, so the whole report is reproducible.
 	best, bestW := "", -1
 	for cat, w := range weight {
-		if w > bestW {
+		if w > bestW || (w == bestW && cat < best) {
 			best, bestW = cat, w
 		}
 	}

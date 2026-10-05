@@ -703,6 +703,11 @@ func CompareConfigs(dirA, dirB string, progressFunc func(string, int)) Compariso
 // CompareConfigsAnonymized runs the differential analysis pipeline with
 // explicit anonymization control.
 func CompareConfigsAnonymized(dirA, dirB string, anonymize bool, progressFunc func(string, int)) ComparisonReport {
+	// progressFunc is optional here, exactly as in analyzeData/analyzeLogsOnly:
+	// a GUI caller passing nil used to panic on the first progress report.
+	if progressFunc == nil {
+		progressFunc = func(string, int) {}
+	}
 	progressFunc(constants.MsgInitializing, constants.ProgressStart)
 
 	progressFunc("Analyzing first supportconfig…", 10)

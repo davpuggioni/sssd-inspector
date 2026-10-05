@@ -28,8 +28,9 @@ type acNode struct {
 
 // ACMatcher is a compiled Aho-Corasick automaton over a set of literal patterns.
 type ACMatcher struct {
-	root     *acNode
-	patterns []string // lowercased, deduplicated patterns
+	root      *acNode
+	patterns  []string       // lowercased, deduplicated patterns (canonical order)
+	canonical map[string]int // lowercased literal -> canonical index
 }
 
 // newACMatcher builds the automaton (trie + BFS failure links + merged outputs).
@@ -37,10 +38,13 @@ type ACMatcher struct {
 // Empty patterns are ignored.
 func newACMatcher(patterns []string) *ACMatcher {
 	root := &acNode{children: make(map[byte]*acNode)}
-	m := &ACMatcher{root: root}
+	m := &ACMatcher{
+		root:      root,
+		canonical: make(map[string]int, len(patterns)),
+	}
 
 	// Deduplicate: canonical index per unique lowercased literal.
-	canonical := make(map[string]int)
+	canonical := m.canonical
 	for _, p := range patterns {
 		lp := strings.ToLower(p)
 		if lp == "" {
@@ -124,6 +128,20 @@ func (m *ACMatcher) Match(text string, fn func(patternIndex int)) {
 
 // Len returns the number of unique patterns registered in the automaton.
 func (m *ACMatcher) Len() int { return len(m.patterns) }
+
+// CanonicalIndex returns the canonical index of a registered literal.
+//
+// Match reports CANONICAL indices: identical literals (or literals differing
+// only by case) share one single index, so the index returned to the caller is
+// NOT necessarily the position the literal occupied in the slice passed to
+// newACMatcher. Callers that keep a parallel metadata table MUST map through
+// this method instead of indexing that table with the canonical index:
+// otherwise every literal registered after the first duplicate is attributed
+// to the wrong metadata (wrong description, wrong handler, wrong evidence).
+func (m *ACMatcher) CanonicalIndex(literal string) (int, bool) {
+	idx, ok := m.canonical[strings.ToLower(literal)]
+	return idx, ok
+}
 
 // lowerASCII folds an ASCII byte to lowercase, leaving other bytes untouched.
 func lowerASCII(b byte) byte {

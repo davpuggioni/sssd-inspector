@@ -9,6 +9,97 @@ import (
 	"testing"
 )
 
+// TestSinglePass_DuplicatePatternFiresEveryRegisteredRole is the regression
+// test for the Aho-Corasick index misalignment.
+//
+// "service key not available" is registered TWICE by the production pattern
+// set: once in buildErrorPatterns (mcError) and once in quickPatterns
+// (mcCryptoBug). The automaton deduplicates literals and reports canonical
+// indices, so a metadata table indexed by POSITION got every literal after
+// the first duplicate attributed to the wrong handler: the report carried the
+// wrong human-readable description and the crypto-bug flag never fired.
+//
+// Both roles must now run for a single matching line.
+func TestSinglePass_DuplicatePatternFiresEveryRegisteredRole(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"messages": "Dec 10 12:00:00 server sssd: service key not available\n",
+	})
+	defer os.RemoveAll(dir)
+
+	res := performSinglePassScanOnFiles(dir, []string{"messages"}, "AppArmor", nil)
+
+	if !res.CryptoBugFound {
+		t.Error("a literal registered as mcCryptoBug must set CryptoBugFound even when also registered as mcError")
+	}
+	found := false
+	for _, e := range res.SSSDLogErrors {
+		if strings.Contains(e.Description, "Service key not available") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected the mcError description to be collected, got %+v", res.SSSDLogErrors)
+	}
+	if !containsString(res.Warnings, "[AD CRYPTO BUG]") {
+		t.Errorf("expected the crypto-bug warning, got %+v", res.Warnings)
+	}
+}
+
+// TestSinglePass_DescriptionsMatchTheirOwnPattern guards the same defect from
+// the other side: for every literal the production pattern set registers, the
+// description reported for a line containing it must be the one declared for
+// THAT pattern. A shifted metadata table silently pairs a pattern with
+// another pattern's explanation, which is worse than no match at all.
+func TestSinglePass_DescriptionsMatchTheirOwnPattern(t *testing.T) {
+	patterns := buildErrorPatterns("AppArmor")
+	if len(patterns) < 100 {
+		t.Fatalf("expected the full pattern DB, got %d entries", len(patterns))
+	}
+
+	dir := setupMockDir(t, map[string]string{
+		"messages": "",
+	})
+	defer os.RemoveAll(dir)
+
+	// Pick a spread of distinct patterns and check each one in isolation.
+	checked := 0
+	for pattern, wantDesc := range patterns {
+		if strings.ContainsAny(pattern, ".*") {
+			continue // regex-routed patterns are covered elsewhere
+		}
+		if checked >= 40 {
+			break
+		}
+		checked++
+		checkedDesc := wantDesc
+		checkedPattern := pattern
+
+		one := setupMockDir(t, map[string]string{
+			"messages": "Dec 10 12:00:00 server sssd: " + checkedPattern + "\n",
+		})
+		res := performSinglePassScanOnFiles(one, []string{"messages"}, "AppArmor", nil)
+		os.RemoveAll(one)
+
+		if len(res.SSSDLogErrors) == 0 {
+			t.Errorf("pattern %q did not produce any log error", checkedPattern)
+			continue
+		}
+		found := false
+		for _, e := range res.SSSDLogErrors {
+			if e.Description == checkedDesc {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("pattern %q produced the wrong description; want %q, got %+v",
+				checkedPattern, checkedDesc, res.SSSDLogErrors)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no literal patterns were exercised")
+	}
+}
+
 // --- Phase 2: Kerberos [libdefaults] encryption checks ---
 
 func TestAnalyzeKerberosConfig_WeakCrypto(t *testing.T) {
@@ -304,6 +395,72 @@ func TestApplyAnalysisRules_RegexAllModeTriggered(t *testing.T) {
 	if len(report.ConfigFindings) != 1 {
 		t.Fatalf("all-match rule did not fire: %+v", report.ConfigFindings)
 	}
+}
+
+// TestApplyAnalysisRules_LiteralDuplicatePatterns is the regression test for
+// the rules-engine half of the Aho-Corasick index bug.
+//
+// The hit table is sized by len(rule.Patterns) and indexed with the index the
+// matcher reports. The automaton DEDUPLICATES literals, so its canonical
+// indices are not pattern positions: with a duplicated literal the table was
+// mis-indexed and match:all could never be satisfied (silently dropping the
+// site rule), while match:any could report a hit no pattern produced.
+func TestApplyAnalysisRules_LiteralDuplicatePatterns(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": "(2026-01-01 10:00:00) sssd: ldap id processing context init failed\n",
+	})
+	defer os.RemoveAll(dir)
+
+	t.Run("all mode is satisfied by a duplicated literal", func(t *testing.T) {
+		rules := []AnalysisRule{{
+			Name:     "dup-all",
+			Severity: "error",
+			Category: "combo",
+			Match:    "all",
+			Files:    []string{"sssd.txt"},
+			Patterns: []string{"ldap id processing", "context", "LDAP ID PROCESSING"}, // 3 patterns, 2 literals
+			Message:  "duplicate literal must still satisfy match:all",
+		}}
+		var report ReportData
+		applyAnalysisRules(dir, &report, rules)
+		if len(report.ConfigFindings) != 1 {
+			t.Errorf("match:all rule with a duplicated literal did not fire: %+v", report.ConfigFindings)
+		}
+	})
+
+	t.Run("any mode does not fire on absent patterns", func(t *testing.T) {
+		rules := []AnalysisRule{{
+			Name:     "dup-any",
+			Severity: "error",
+			Category: "combo",
+			Match:    "any",
+			Files:    []string{"sssd.txt"},
+			Patterns: []string{"ldap id processing", "ldap id processing", "absent token xyz"},
+			Message:  "must fire (first pattern is present)",
+		}}
+		var report ReportData
+		applyAnalysisRules(dir, &report, rules)
+		if len(report.ConfigFindings) != 1 {
+			t.Errorf("match:any rule with a duplicated literal mis-fired: %+v", report.ConfigFindings)
+		}
+	})
+
+	t.Run("any mode stays silent when nothing matches", func(t *testing.T) {
+		rules := []AnalysisRule{{
+			Name:     "dup-none",
+			Severity: "error",
+			Category: "combo",
+			Match:    "any",
+			Files:    []string{"sssd.txt"},
+			Patterns: []string{"absent one", "absent two", "ABSENT TWO"},
+			Message:  "must not fire",
+		}}
+		var report ReportData
+		applyAnalysisRules(dir, &report, rules)
+		if len(report.ConfigFindings) != 0 {
+			t.Errorf("rule fired although no pattern matched: %+v", report.ConfigFindings)
+		}
+	})
 }
 
 func TestRuleSeverity_Mapping(t *testing.T) {

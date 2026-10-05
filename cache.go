@@ -69,6 +69,7 @@ type FileCache struct {
 	buffers  map[string][]string // filePath -> lines
 	maxFiles int                 // maximum number of files to cache
 	curFiles int                 // current count of cached files
+	order    []string            // insertion order of cacheKey, oldest first
 }
 
 // NewFileCache creates a new FileCache with the specified maximum number of cached files
@@ -109,16 +110,19 @@ func (fc *FileCache) GetLines(dirPath, fileName string) []string {
 		return lines
 	}
 
-	// Evict oldest if at capacity
-	if fc.curFiles >= fc.maxFiles {
-		for key := range fc.buffers {
-			delete(fc.buffers, key)
-			fc.curFiles--
-			break // Evict just one entry
-		}
+	// Evict the OLDEST entry if at capacity. Ranging over the map here
+	// (as this code used to) evicted an arbitrary entry, because Go
+	// randomizes map iteration: with maxFiles=20 a hot file could be
+	// dropped and re-read, making the scan cost non-deterministic.
+	if fc.curFiles >= fc.maxFiles && len(fc.order) > 0 {
+		oldest := fc.order[0]
+		fc.order = fc.order[1:]
+		delete(fc.buffers, oldest)
+		fc.curFiles--
 	}
 
 	fc.buffers[cacheKey] = lines
+	fc.order = append(fc.order, cacheKey)
 	fc.curFiles++
 	return lines
 }
@@ -162,6 +166,7 @@ func (fc *FileCache) Clear() {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	fc.buffers = make(map[string][]string)
+	fc.order = nil
 	fc.curFiles = 0
 }
 

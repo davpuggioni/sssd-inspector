@@ -124,3 +124,38 @@ func TestACCacheReturnsSameInstance(t *testing.T) {
 		t.Error("ACCache.Get must return the same compiled automaton for identical pattern sets")
 	}
 }
+
+// TestACCanonicalIndexMapsDuplicates pins the contract callers rely on:
+// Match reports CANONICAL indices, so CanonicalIndex is the only safe way to
+// map a registered literal back to its metadata. It must resolve duplicates
+// and case variants to the SAME index, and report unknown literals as absent.
+func TestACCanonicalIndexMapsDuplicates(t *testing.T) {
+	m := newACMatcher([]string{"alpha error", "beta error", "alpha error", "gamma error"})
+	if m.Len() != 3 {
+		t.Fatalf("expected 3 unique patterns, got %d", m.Len())
+	}
+
+	first, ok := m.CanonicalIndex("alpha error")
+	if !ok {
+		t.Fatal("CanonicalIndex must resolve a registered literal")
+	}
+	dup, ok := m.CanonicalIndex("alpha error")
+	if !ok || dup != first {
+		t.Errorf("duplicate literal must map to the same canonical index: got %d, want %d", dup, first)
+	}
+	upper, ok := m.CanonicalIndex("ALPHA ERROR")
+	if !ok || upper != first {
+		t.Errorf("case variant must map to the same canonical index: got %d, want %d", upper, first)
+	}
+	if _, ok := m.CanonicalIndex("never registered"); ok {
+		t.Error("CanonicalIndex must report an unregistered literal as absent")
+	}
+
+	// The regression this protects: indexing a parallel metadata table with
+	// the canonical index mis-attributes everything after the first duplicate.
+	var got []string
+	m.Match("gamma error happened", func(idx int) { got = append(got, m.patterns[idx]) })
+	if len(got) != 1 || got[0] != "gamma error" {
+		t.Errorf("Match must report the matched literal, got %v", got)
+	}
+}
