@@ -1,0 +1,1 @@
+(2026-03-03 09:12:01): [krb5_child[2345]] [main] (0x0040): host/testhost01.example.test@EXAMPLE.COM: KDC error message: Cannot find KDC for realm "EXAMPLE.COM"

@@ -1,0 +1,8 @@
+#==[ Command ]==
+# /etc/krb5.conf
+[libdefaults]
+    default_realm = EXAMPLE.COM
+
+[domain_realm]
+    .example.test = EXAMPLE.COM
+#==[ Command ]==

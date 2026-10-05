@@ -1,0 +1,14 @@
+id: gpo-invalid-value
+title: "ad_gpo_access_control con valore non valido"
+notes: >-
+  Difetto iniettato: ad_gpo_access_control = bogus
+  Valori ammessi: disabled, permissive, enforcing.
+findings:
+  - rule_id: log:invalid-gpo-value
+    severity: error
+    min_count: 1
+known_redundancies:
+  - rule_id: catalog:invalid-value
+    reason: >-
+      La stessa opzione e' gia' segnalata da log:invalid-gpo-value: due regole diverse riportano la stessa riga, una a warning e una a error
+      Debito noto, da risolvere.

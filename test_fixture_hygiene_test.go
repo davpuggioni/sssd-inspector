@@ -58,6 +58,12 @@ func hygieneTarget(path string) bool {
 		return true
 	case strings.HasPrefix(lower, filepath.Join(".github", "workflows")+"/"):
 		return strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml")
+	// The golden-scenario corpus under testdata/ is written by hand from
+	// real support engineers' memory of past cases, so it is exactly where a
+	// real domain, hostname or private address would leak in. It is covered
+	// here for the same reason the rest of the repository is.
+	case strings.HasPrefix(lower, filepath.Join("testdata", "scenarios")+"/"):
+		return true
 	}
 	return false
 }

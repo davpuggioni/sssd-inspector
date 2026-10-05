@@ -1,0 +1,8 @@
+id: starttls-on-ad
+title: "ldap_id_use_start_tls = true su un provider ad"
+notes: >-
+  Difetto iniettato: il provider ad usa SASL/GSSAPI su una connessione propria e ignora StartTLS.
+findings:
+  - rule_id: log:starttls-on-ad
+    severity: error
+    min_count: 1

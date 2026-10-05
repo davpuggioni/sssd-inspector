@@ -1,0 +1,9 @@
+id: krb5-no-default-realm
+title: "Provider AD senza default_realm in krb5.conf"
+notes: >-
+  Difetto iniettato: rimosso [libdefaults] default_realm
+  L'host non puo' ottenere ticket, quindi il join non e' completo.
+findings:
+  - rule_id: correlate:krb5-no-realm
+    severity: critical
+    min_count: 1

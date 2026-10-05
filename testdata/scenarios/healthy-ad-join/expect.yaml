@@ -1,0 +1,3 @@
+id: healthy-ad-join
+title: 'Host correttamente joinato ad AD: il tool non deve nulla'
+notes: Baseline. Nessun difetto iniettato - serve a misurare il rumore di fondo (falsi positivi) del tool su una configurazione sana.

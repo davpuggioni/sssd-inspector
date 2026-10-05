@@ -1,0 +1,9 @@
+id: duplicate-key
+title: "Parametro duplicato in sssd.conf"
+notes: >-
+  Difetto iniettato: ad_site compare due volte
+  SSSD si comporta in modo dipendente dall'ordine.
+findings:
+  - rule_id: syntax:duplicate-key
+    severity: error
+    min_count: 1

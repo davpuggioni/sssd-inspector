@@ -1,0 +1,5 @@
+#==[ Command ]==
+# /etc/krb5.conf
+[libdefaults]
+    dns_lookup_realm = false
+#==[ Command ]==

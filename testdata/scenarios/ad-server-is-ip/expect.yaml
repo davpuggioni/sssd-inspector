@@ -1,0 +1,9 @@
+id: ad-server-is-ip
+title: "ad_server configurato con un IP invece di un hostname"
+notes: >-
+  Difetto iniettato: ad_server = 192.0.2.10
+  Kerberos/GSSAPI richiede un nome, non un indirizzo, quindi SPN e join non funzionano.
+findings:
+  - rule_id: log:ad-server-unresolvable
+    severity: error
+    min_count: 1

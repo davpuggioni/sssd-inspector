@@ -1,0 +1,4 @@
+(2026-03-03 09:12:01): [sssd[be[example.test]]] [resolv_srv] (0x0020): Service resolving timeout reached
+(2026-03-03 09:12:06): [sssd[be[example.test]]] [resolve_srv] (0x0020): Failed to resolve host 'dc01.example.test'
+(2026-03-03 09:12:11): [sssd[be[example.test]]] [sdap_connect] (0x0040): Unable to establish connection
+(2026-03-03 09:12:16): [sssd[be[example.test]]] [be_dnssrv_timeout] (0x0100): Going offline!

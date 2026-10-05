@@ -1,0 +1,9 @@
+id: krb5-realm-mismatch
+title: "krb5.conf default_realm diverso dal dominio AD: il join fallisce"
+notes: >-
+  Difetto iniettato: default_realm = EXAMPLE.COM mentre il dominio AD e' example.test
+  Kerberos chiede ticket a un realm inesistente, cosi' l'autenticazione non parte.
+findings:
+  - rule_id: correlate:krb5-realm-mismatch
+    severity: critical
+    min_count: 1

@@ -1,0 +1,12 @@
+#==[ Command ]==
+# /etc/krb5.conf
+[libdefaults]
+    default_realm = EXAMPLE.TEST
+
+[domain_realm]
+    .example.test = EXAMPLE.TEST
+#==[ Command ]==
+# /etc/resolv.conf
+nameserver 192.0.2.53
+search wrong-domain.example
+#==[ Command ]==

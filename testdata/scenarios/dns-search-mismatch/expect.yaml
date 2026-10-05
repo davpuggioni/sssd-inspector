@@ -1,0 +1,9 @@
+id: dns-search-mismatch
+title: "resolv.conf search domain non correlato al dominio AD"
+notes: >-
+  Difetto iniettato: search wrong-domain.example
+  Le ricerche SRV di AD falliscono o risolvono nel dominio sbagliato.
+findings:
+  - rule_id: correlate:dns-search-mismatch
+    severity: error
+    min_count: 1
