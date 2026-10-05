@@ -62,7 +62,130 @@ func TestSinglePass_SuppressesUnrelatedDaemonNoise(t *testing.T) {
 	}
 }
 
-// TestSinglePass_DuplicatePatternFiresEveryRegisteredRole is the regression
+// TestDerivePrefilterTokens_CannotHideAnyPattern is the invariant behind the
+// pre-filter: a line that contains a pattern must always survive the filter,
+// or the pattern silently never fires.
+//
+// The pre-filter used to be a hand-maintained list of 18 keywords, checked
+// BEFORE the pattern engine. Any line lacking one of those words was dropped,
+// so a matching pattern would never fire — silently. The tokens are now
+// derived from the patterns, so this cannot regress.
+func TestDerivePrefilterTokens_CannotHideAnyPattern(t *testing.T) {
+	patterns := buildErrorPatterns("AppArmor")
+	if len(patterns) < 100 {
+		t.Fatalf("expected the full pattern DB, got %d entries", len(patterns))
+	}
+
+	all := make([]string, 0, len(patterns))
+	for p := range patterns {
+		all = append(all, p)
+	}
+	tokens := derivePrefilterTokens(all)
+	ac := newACMatcher(tokens)
+
+	checked := 0
+	for _, p := range all {
+		// A line that contains the pattern verbatim must pass the filter.
+		line := strings.ToLower(p)
+		passed := false
+		ac.Match(line, func(int) { passed = true })
+		if !passed {
+			t.Errorf("pre-filter would drop a line containing pattern %q (no derived token matched)", p)
+		}
+		checked++
+	}
+	if checked < 100 {
+		t.Fatalf("only %d patterns exercised", checked)
+	}
+
+	// The invariant must also hold for the quick patterns and the regex-routed
+	// ones, which are part of the same scan and were equally exposed.
+	extra := []string{
+		// quick patterns
+		"User account has expired", "Clients credentials have been revoked",
+		"terminated by own WATCHDOG", "service key not available",
+		"TGT failed verification", "KDC has no support for encryption type",
+		"KVNO Principal", "Default principal:",
+		"Key table file '/etc/krb5.keytab' not found",
+		"No suitable principal found in keytab",
+		// regex-routed: the fixed word of each must be the token, because the
+		// full pattern is not a literal substring of any line.
+		"Attribute manager not allowed for user",
+		"Illegal ID 4711 for search",
+		"Not enough space in the sysdb mmap cache",
+		"Member jdoe was not found in cache",
+	}
+	acExtra := newACMatcher(derivePrefilterTokens(extra))
+	for _, line := range extra {
+		passed := false
+		acExtra.Match(strings.ToLower(line), func(int) { passed = true })
+		if !passed {
+			t.Errorf("pre-filter would drop a line containing %q", line)
+		}
+	}
+}
+
+// TestDerivePrefilterTokens_KeepsFilteringNoise pins the optimization: the
+// derivation must not degenerate into "match everything", or the filter loses
+// its purpose. Unrelated syslog lines must still be discarded.
+func TestDerivePrefilterTokens_KeepsFilteringNoise(t *testing.T) {
+	patterns := buildErrorPatterns("AppArmor")
+	all := make([]string, 0, len(patterns))
+	for p := range patterns {
+		all = append(all, p)
+	}
+	ac := newACMatcher(derivePrefilterTokens(all))
+
+	// Lines that share no vocabulary with any SSSD pattern. Two exclusions are
+	// deliberate: a line containing "pam" (cron invoking pam_unix) is always
+	// scanned, because SSSD owns a PAM stack; and a line containing a token
+	// such as "resolve" (e.g. a D-Bus "org.freedesktop.resolve1" message) is
+	// scanned too, because "resolve" comes from a real pattern. Both are
+	// correct: the filter's job is to drop lines with no SSSD vocabulary at
+	// all, not to be a perfect classifier.
+	unrelated := []string{
+		"kernel: [12345.678] usb 1-1: new high-speed USB device number 4",
+		"systemd[1]: Started Update of the fully loaded system.",
+		"CRON[1234]: (root) CMD ([ -x /usr/sbin/anacron ] && /usr/sbin/anacron)",
+		"sshd[2222]: Accepted publickey for deploy from 10.0.0.5 port 5000 ssh2",
+		"kernel: random: crng init done",
+		"systemd-logind[712]: New session 3 of user alice.",
+	}
+	for _, line := range unrelated {
+		passed := false
+		ac.Match(strings.ToLower(line), func(int) { passed = true })
+		if passed {
+			t.Errorf("pre-filter no longer discards unrelated line: %q", line)
+		}
+	}
+}
+
+// TestDerivePrefilterTokens_PassesRealisticRawLogFiles: the mode that actually
+// scans files WITHOUT the "[sssd[...]]" module prefix (raw -logdir mode) is
+// the case the old keyword list handled worst.
+func TestDerivePrefilterTokens_PassesRealisticRawLogFiles(t *testing.T) {
+	patterns := buildErrorPatterns("AppArmor")
+	all := make([]string, 0, len(patterns))
+	for p := range patterns {
+		all = append(all, p)
+	}
+	ac := newACMatcher(derivePrefilterTokens(all))
+
+	// Real raw log lines from /var/log/sssd child processes: no "sssd" tag.
+	lines := []string{
+		"2026-04-01 10:00:00 [krb5_child] host/host@EXAMPLE.COM: krb5_get_init_creds_password failed",
+		"2026-04-01 10:00:01 [pam] [1234] pam_acct_mgmt: user access denied",
+		"2026-04-01 10:00:02 [ldap_child] ldapsasl_bind failed: invalid credentials",
+	}
+	for _, line := range lines {
+		passed := false
+		ac.Match(strings.ToLower(line), func(int) { passed = true })
+		if !passed {
+			t.Errorf("pre-filter would drop a realistic raw log line: %q", line)
+		}
+	}
+}
+
 // test for the Aho-Corasick index misalignment.
 //
 // "service key not available" is registered TWICE by the production pattern

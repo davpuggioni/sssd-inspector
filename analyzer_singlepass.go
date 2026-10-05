@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"sssd-inspector/constants"
 )
@@ -57,14 +58,115 @@ type SinglePassResult struct {
 	Warnings []string
 }
 
-// prefilterKeywords are the case-insensitive literals used to quickly
-// discard lines that cannot be SSSD-related. They are matched through a
-// dedicated Aho-Corasick automaton so the pre-filter itself is O(n) per
-// line instead of N sequential strings.Contains scans.
-var prefilterKeywords = []string{
+// prefilterAlwaysKeep are module/daemon tokens that are always allowed through
+// the pre-filter. They are a pure OPTIMIZATION aid, not a correctness list: the
+// rest of the pre-filter is derived from the pattern set (see
+// derivePrefilterTokens), so a new pattern can never be silently invisible.
+// These entries mainly speed up the common "this file is SSSD at all" case.
+var prefilterAlwaysKeep = []string{
 	"sssd", "krb5", "ldap", "keytab", "winbind", "ad ", "gpo", "pam",
 	"nss", "hbac", "ipa", "kdc", "tgt ", "tls", "gssapi", "library",
 	"dlopen", "shared",
+}
+
+// prefilterGenericWords are common log/English words that make a poor
+// pre-filter token: a pattern whose longest word is one of these (e.g. the
+// "device" in "[28][No space left on device]", the "failed" in dozens of
+// patterns) would let unrelated syslog noise through. They are only used to
+// pick a BETTER word from the same pattern — never to drop a pattern, because
+// a generic word is still a literal substring of its pattern.
+var prefilterGenericWords = map[string]struct{}{
+	"failed": {}, "failure": {}, "error": {}, "errors": {}, "invalid": {},
+	"valid": {}, "cannot": {}, "unable": {}, "user": {}, "users": {},
+	"device": {}, "session": {}, "accepted": {}, "password": {}, "denied": {},
+	"message": {}, "service": {}, "server": {}, "client": {}, "trying": {},
+	"the": {}, "and": {}, "for": {}, "not": {}, "with": {}, "from": {},
+	"this": {}, "that": {}, "was": {}, "are": {}, "has": {}, "have": {},
+	"will": {}, "its": {}, "into": {}, "out": {}, "all": {}, "can": {},
+	"may": {}, "one": {}, "use": {}, "using": {}, "when": {}, "get": {},
+	"got": {}, "set": {}, "add": {}, "try": {}, "new": {}, "old": {},
+	"sssd": {}, "line": {}, "file": {}, "command": {}, "read": {},
+	"write": {}, "open": {}, "close": {}, "start": {}, "stop": {},
+}
+
+// derivePrefilterTokens builds the pre-filter token set from the patterns
+// themselves, so the pre-filter can never discard a line that contains a
+// pattern.
+//
+// The previous hand-maintained keyword list was a correctness hazard: a log
+// line without one of its 18 words was dropped BEFORE the pattern engine ran,
+// so a matching pattern would never fire. That is silent, and it is invisible
+// in a test whose fixture line happens to contain "sssd" (which real SSSD
+// lines almost always do, which is why the gap survived).
+//
+// For each pattern we pick its longest word that is not in
+// prefilterGenericWords. Whatever we pick is a literal substring of the
+// pattern, so any line containing the pattern necessarily contains the word:
+// correctness holds regardless of the choice. Preferring a distinctive word
+// only preserves selectivity, which is what keeps the filter cheap.
+func derivePrefilterTokens(patterns []string) []string {
+	seen := make(map[string]struct{}, len(patterns))
+	out := make([]string, 0, len(patterns))
+	add := func(tok string) {
+		// Lowercase only: do NOT trim. Some prefilterAlwaysKeep entries end
+		// in a space ("ad ") precisely to avoid matching inside a word, and
+		// trimming turned that into "ad", which matches "systemd".
+		tok = strings.ToLower(tok)
+		if tok == "" {
+			return
+		}
+		if _, ok := seen[tok]; ok {
+			return
+		}
+		seen[tok] = struct{}{}
+		out = append(out, tok)
+	}
+
+	for _, tok := range prefilterAlwaysKeep {
+		add(tok)
+	}
+
+	for _, p := range patterns {
+		best := ""     // longest distinctive word, >= 4 chars: selective
+		fallback := "" // longest word of any kind: still a real substring
+		for _, word := range strings.FieldsFunc(p, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		}) {
+			lw := strings.ToLower(word)
+			if len(lw) > len(fallback) {
+				fallback = lw
+			}
+			if len(lw) < 4 {
+				continue
+			}
+			if _, generic := prefilterGenericWords[lw]; generic {
+				continue
+			}
+			if len(word) > len(best) {
+				best = word
+			}
+		}
+		if best != "" {
+			add(best)
+			continue
+		}
+		// No distinctive long word. Best remaining option is the WHOLE
+		// pattern, which is far more selective than one generic word (the
+		// "service" of "PAM service" would otherwise scan every line
+		// mentioning a service). That is only valid for a literal pattern:
+		// for a regex the whole string is not a literal substring of any
+		// line, so we keep the longest word instead. Both options are
+		// literal substrings, so correctness — never hide a matching line —
+		// is preserved either way; only selectivity changes.
+		if !isRegexPattern(p) {
+			add(p)
+		} else if fallback != "" {
+			add(fallback)
+		} else {
+			add(p)
+		}
+	}
+	return out
 }
 
 // regexMetaTokens identify patterns written with regular-expression syntax
@@ -219,9 +321,17 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		})
 	}
 
-	// Pre-filter automaton: matches ALL SSSD-related keywords in one O(n)
-	// pass per line, replacing ~18 sequential strings.Contains scans.
-	prefilterAC := globalACCache.Get(prefilterKeywords)
+	// Pre-filter automaton: matches the derived token set in one O(n) pass per
+	// line, replacing N sequential strings.Contains scans. The tokens are
+	// derived from the patterns above, so no pattern can be pre-filtered away.
+	allPrefilterPatterns := make([]string, 0, len(literalPatterns)+len(regexPatterns))
+	for _, cp := range literalPatterns {
+		allPrefilterPatterns = append(allPrefilterPatterns, cp.pattern)
+	}
+	for _, rp := range regexPatterns {
+		allPrefilterPatterns = append(allPrefilterPatterns, rp.pattern)
+	}
+	prefilterAC := globalACCache.Get(derivePrefilterTokens(allPrefilterPatterns))
 	prefilterHits := make([]bool, prefilterAC.Len())
 
 	// Time regex for timeline extraction (also cached)
@@ -491,7 +601,12 @@ func analyzeKerberosConfig(dirPath string, report *ReportData) {
 // scan of sssd.conf (O(articles × patterns) file passes). Now all config
 // patterns are compiled into one Aho-Corasick automaton and the file is
 // read once, making the config-matching cost O(config size).
-func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles []TIDArticle, evidence map[string][]string) {
+//
+// configAvailable tells the matcher whether an sssd.conf exists to check
+// against. It is false in raw -logdir mode, where the file is genuinely
+// absent: there an unsatisfied config pattern is unknown, not false, and must
+// not veto a match that the log evidence already established.
+func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles []TIDArticle, evidence map[string][]string, configAvailable bool) {
 	activeSecModule := report.MACType
 
 	// Select the applicable articles (same gating as the legacy matcher).
@@ -567,10 +682,22 @@ func matchKBArticlesWithEvidence(dirPath string, report *ReportData, kbArticles 
 		}
 	}
 
-	// Assemble results: an article matches if its log patterns produced
-	// evidence (or it has none) AND at least one of its config patterns
-	// matched (or it has none) — preserving the legacy OR semantics.
+	// Assemble results.
+	//
+	// With sssd.conf available an article matches when its log patterns
+	// produced evidence AND its config patterns matched (a pattern class the
+	// article does not use is neutral). When the config is NOT available
+	// (raw -logdir mode) an unsatisfied config pattern must not veto a
+	// log-based match — the data is unknowable there, not negative. Such an
+	// article still needs real log evidence, so an article that carries only
+	// config patterns is not reported in that mode.
 	for _, c := range candidates {
+		if !configAvailable {
+			if len(c.article.LogPatterns) > 0 && len(c.article.Evidence) > 0 {
+				report.MatchedTIDs = append(report.MatchedTIDs, *c.article)
+			}
+			continue
+		}
 		logMatched := len(c.article.LogPatterns) == 0 || len(c.article.Evidence) > 0
 		configMatched := !c.hasConfig || c.configHits > 0
 		if logMatched && configMatched {

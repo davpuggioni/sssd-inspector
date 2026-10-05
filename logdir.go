@@ -335,6 +335,22 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	if singlePassResult.KeytabFound {
 		report.KeytabFound = true
 	}
+	// Deliberately NOT reported here when no keytab evidence is found.
+	// collectLogFiles accepts a single file or a rotated subset, so a user may
+	// well have passed only pam_child.log; in that case the absence of keytab
+	// evidence proves nothing and emitting "No Kerberos Keytab ... AD join might
+	// be broken" would be a false positive about a check that never ran.
+	// Pinned by TestAnalyzeLogsOnly_NoSupportconfigFalsePositives.
+
+	// ---- Knowledge-base articles (log-pattern evidence only) ----
+	// The single-pass scanner already collected the log evidence; raw-log mode
+	// has no sssd.conf, so only the LOG half of the match can apply. This used
+	// to be skipped entirely, which left report.MatchedTIDs empty in -logdir
+	// and made analyzeKBSuggestions below re-suggest articles that had in fact
+	// already been matched. MACType stays "Unknown" in this mode, so the
+	// AppArmor/SELinux article filter cannot fire — stated rather than
+	// guessed, since a wrong guess would silently hide a relevant article.
+	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence, false)
 
 	// Temporal bursts and fuzzy KB suggestions work on the timeline alone.
 	if progressFunc != nil {
@@ -342,6 +358,16 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	}
 	report.TemporalClusters = analyzeTemporalClusters(report.Timeline)
 	report.KBSuggestions = analyzeKBSuggestions(report.Timeline, kbArticles, report.MatchedTIDs)
+
+	// ---- Data-driven YAML rules ----
+	// A rule that targets sssd.txt / messages is meaningful on raw logs, which
+	// this mode has; skipping the engine here silently dropped site rules the
+	// user believed were running.
+	customRules, ruleDiags := loadAnalysisRules()
+	report.AddDiagnostics(ruleDiags)
+	if len(customRules) > 0 {
+		applyAnalysisRules(dirPath, &report, customRules)
+	}
 
 	// Root-cause sequence correlation is timeline-driven as well (DNS/SRV
 	// failover, Kerberos realm+clock skew, watchdog, backend offline) and must

@@ -175,7 +175,7 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		progressFunc("Matching Knowledge Base Articles...", 80)
 	}
 	// Match KB using single-pass evidence and config-only patterns
-	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence)
+	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence, true)
 
 	// ---- Phase 6b: Advanced correlation (temporal bursts + fuzzy KB) ----
 	if progressFunc != nil {

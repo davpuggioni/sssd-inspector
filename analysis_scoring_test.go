@@ -171,7 +171,7 @@ func TestMatchKBArticlesWithEvidence_ConfigPattern(t *testing.T) {
 	}
 
 	report := &ReportData{MACType: "None"}
-	matchKBArticlesWithEvidence(dir, report, kb, map[string][]string{})
+	matchKBArticlesWithEvidence(dir, report, kb, map[string][]string{}, true)
 
 	if len(report.MatchedTIDs) != 1 || report.MatchedTIDs[0].TIDID != "TID-TEST-1" {
 		t.Errorf("expected only TID-TEST-1 to match, got %+v", report.MatchedTIDs)
@@ -194,7 +194,7 @@ func TestMatchKBArticlesWithEvidence_AppArmorSuppression(t *testing.T) {
 		},
 	}
 	report := &ReportData{MACType: "AppArmor"}
-	matchKBArticlesWithEvidence(dir, report, kb, map[string][]string{})
+	matchKBArticlesWithEvidence(dir, report, kb, map[string][]string{}, true)
 
 	if len(report.MatchedTIDs) != 0 {
 		t.Errorf("SELinux article must be suppressed on AppArmor systems")
