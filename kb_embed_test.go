@@ -36,7 +36,7 @@ func TestKBArticles_EmbeddedCorpusNotEmpty(t *testing.T) {
 
 func TestKBArticles_LoadKBArticlesWorksWithoutDir(t *testing.T) {
 	// Must return embedded articles even when called with a nonexistent directory
-	articles := loadKBArticles("/nonexistent/directory")
+	articles, _ := loadKBArticlesDiag("/nonexistent/directory")
 	if len(articles) == 0 {
 		t.Fatalf("loadKBArticles returned no articles")
 	}
@@ -70,7 +70,7 @@ func TestKBArticles_ExternalOverrideAndMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := loadKBArticles()
+	merged, _ := loadKBArticlesDiag()
 	foundCustom := false
 	for _, a := range merged {
 		if a.TIDID == "TID-9999999" {

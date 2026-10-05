@@ -97,35 +97,3 @@ func TestScanFileWithContext_CancelStopsScan(t *testing.T) {
 		t.Errorf("scan did not stop promptly after cancel: %d lines seen", seen)
 	}
 }
-
-func TestAnyFileContainsWithContext(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "m.txt"), []byte("alpha\nbeta needle\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if !anyFileContainsWithContext(context.Background(), dir, []string{"m.txt"}, "needle") {
-		t.Errorf("expected match")
-	}
-	if anyFileContainsWithContext(context.Background(), dir, []string{"m.txt"}, "absent") {
-		t.Errorf("expected no match")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if anyFileContainsWithContext(ctx, dir, []string{"m.txt"}, "needle") {
-		t.Errorf("cancelled context must yield false")
-	}
-}
-
-func TestScanFilesWithContext_CancelSkipsWork(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "m.txt"), []byte("line\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	called := false
-	scanFilesWithContext(ctx, dir, []string{"m.txt"}, func(string) { called = true })
-	if called {
-		t.Errorf("cancelled scan must not invoke the callback")
-	}
-}

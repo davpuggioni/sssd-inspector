@@ -268,14 +268,6 @@ func firstOption(sec *SssdSection, key string) (string, int, bool) {
 	return strings.TrimSpace(vals[0].Value), vals[0].Line, true
 }
 
-// addConfigFinding records a structured finding and mirrors it into the legacy
-// Problems/Warnings string slices so existing text/HTML/CLI paths pick it up.
-// It is the compatibility shim over addConfigFindingEx: findings built this
-// way carry the heuristic confidence layer and no rule/doc attribution.
-func addConfigFinding(report *ReportData, sev Severity, category, message, sourcePath, sourceKey string, sourceLine int, evidence string) {
-	addConfigFindingEx(report, sev, category, message, sourcePath, sourceKey, sourceLine, evidence, "", ConfidenceHeuristic, "")
-}
-
 // addConfigFindingEx is the attributed finding constructor every validator
 // should use: ruleID names the check, confidence names the ground-truth layer
 // that decided, and docRef points at the backing documentation. Severity is

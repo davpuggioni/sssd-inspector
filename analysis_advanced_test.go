@@ -9,6 +9,59 @@ import (
 	"testing"
 )
 
+// TestSinglePass_SuppressesUnrelatedDaemonNoise pins the suppression list on
+// the PRODUCTION scan path.
+//
+// isExcluded/exclusionPatterns were introduced to replace a hard-coded
+// "winbindd" test, but they were only ever consulted by the legacy
+// scanAndCollectErrors. The single-pass engine kept its own hard-coded test,
+// so "nscd" was never suppressed in production even though the list declared
+// it. Both engines now share one mechanism, and this test fails if a listed
+// pattern stops filtering again.
+func TestSinglePass_SuppressesUnrelatedDaemonNoise(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+	}{
+		{
+			name: "winbindd noise",
+			line: "Dec 10 12:00:00 myhost winbindd[1234]: service key not available",
+		},
+		{
+			name: "nscd noise",
+			line: "Dec 10 12:00:00 myhost nscd[1234]: sssd lookup failed, Preauthentication failed",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupMockDir(t, map[string]string{"messages": tc.line + "\n"})
+			defer os.RemoveAll(dir)
+
+			res := performSinglePassScanOnFiles(dir, []string{"messages"}, "AppArmor", nil)
+			if len(res.SSSDLogErrors) != 0 {
+				t.Errorf("unrelated daemon line leaked into the findings: %+v", res.SSSDLogErrors)
+			}
+			if len(res.Timeline) != 0 {
+				t.Errorf("unrelated daemon line leaked into the timeline: %+v", res.Timeline)
+			}
+			if res.CryptoBugFound {
+				t.Errorf("unrelated daemon line set the crypto-bug flag")
+			}
+		})
+	}
+
+	// Guard: a genuine SSSD line must still be scanned.
+	dir := setupMockDir(t, map[string]string{
+		"messages": "Dec 10 12:00:00 myhost sssd_be[1234]: Preauthentication failed\n",
+	})
+	defer os.RemoveAll(dir)
+	res := performSinglePassScanOnFiles(dir, []string{"messages"}, "AppArmor", nil)
+	if len(res.SSSDLogErrors) == 0 {
+		t.Errorf("suppression list over-matched: a real SSSD line was dropped")
+	}
+}
+
 // TestSinglePass_DuplicatePatternFiresEveryRegisteredRole is the regression
 // test for the Aho-Corasick index misalignment.
 //

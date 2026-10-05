@@ -766,18 +766,3 @@ func CompareConfigsAnonymized(dirA, dirB string, anonymize bool, progressFunc fu
 		ScoreDelta: reportB.Summary.HealthScore - reportA.Summary.HealthScore,
 	}
 }
-
-// findingKeys extracts a canonical "category|message" key from every ConfigFinding.
-func findingKeys(r *ReportData) []string {
-	seen := make(map[string]struct{})
-	var keys []string
-	for _, f := range r.ConfigFindings {
-		key := f.Category + "|" + f.Message
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		keys = append(keys, key)
-	}
-	return keys
-}

@@ -293,13 +293,6 @@ func loadKBArticlesDiag(args ...string) ([]TIDArticle, []Diagnostic) {
 	return result, diags
 }
 
-// loadKBArticles is the diagnostics-free convenience wrapper over
-// loadKBArticlesDiag for callers that only need the corpus.
-func loadKBArticles(args ...string) []TIDArticle {
-	articles, _ := loadKBArticlesDiag(args...)
-	return articles
-}
-
 // matchKBArticles loads KB articles (embedded + external overrides) and correlates
 // them with supportconfig data via streaming.
 func matchKBArticles(dirPath string, report *ReportData) {

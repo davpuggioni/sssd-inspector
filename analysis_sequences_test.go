@@ -57,7 +57,7 @@ func TestWeightedLogBiasDominant(t *testing.T) {
 	var report ReportData
 	// A few benign config warnings in a non-dominant category.
 	for i := 0; i < 6; i++ {
-		addConfigFinding(&report, SevWarning, "enumerate", "[HINT] enumerate = true, tune it", "sssd.conf", "x", 0, "")
+		addConfigFindingEx(&report, SevWarning, "enumerate", "[HINT] enumerate = true, tune it", "sssd.conf", "x", 0, "", "test:enumerate-hint", ConfidenceHeuristic, "")
 	}
 	// A cluster of resolution errors should dominate.
 	for i := 0; i < 8; i++ {

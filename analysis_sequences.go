@@ -22,28 +22,9 @@ import (
 	"time"
 )
 
-// sequenceClusterGapSeconds is the maximum gap between consecutive sequence
-// links for them to be considered causally chained. SSSD failover retries fire
-// in seconds-to-a-few-minutes (retry_timeout in fail_over.c).
-const sequenceClusterGapSeconds = 600
-
 // minTimelineEvents is the floor; below it a timeline is too sparse to infer
 // causation and we abstain (single-line correlations would be false positives).
 const minTimelineEvents = 3
-
-// rootCauseHeadline maps a synthesized root-cause category to a triage headline.
-var rootCauseHeadline = map[string]string{
-	"dns":     "DNS/SRV service discovery failure - the DC could not be located or reached via DNS.",
-	"net":     "Network/backend connectivity failure - SSSD could not reach an AD/LDAP/Kerberos endpoint.",
-	"offline": "Backend went OFFLINE - SSSD exhausted retries and is falling back to cached credentials.",
-	"keytab":  "Machine credentials unavailable - the host keytab or principal is missing/mismatched.",
-	"krb5":    "Kerberos exchange failure - clock skew, preauth, or a missing machine account.",
-	"tls":     "TLS/SSL negotiation failure - certificate chain, CA, or cipher incompatibility.",
-	"crypto":  "Encryption-type mismatch - AD forcing RC4 that the local crypto policy rejects.",
-	"gpo":     "Group-Policy access/control failure - the machine account cannot read GPOs.",
-	"idmap":   "Identity mapping failure - SID-to-UID/GID translation is out of range or colliding.",
-	"access":  "Access-control policy denial - account disabled/expired or HBAC/simple rules.",
-}
 
 // timelineEpoch parses a timeline event timestamp (normalized) into Unix seconds.
 func timelineEpoch(ev TimelineEvent) (int64, bool) {
@@ -88,19 +69,6 @@ type seqLink struct {
 	rawLog   string
 	epoch    int64
 	hasEpoch bool
-}
-
-// chainable reports whether two links are causally adjacent: distinct indices,
-// and (if both have epochs) within the bounded gap.
-func chainable(a, b seqLink) bool {
-	if b.idx <= a.idx {
-		return false
-	}
-	if a.hasEpoch && b.hasEpoch && b.epoch != 0 {
-		d := b.epoch - a.epoch
-		return d >= 0 && d <= sequenceClusterGapSeconds
-	}
-	return b.idx == a.idx+1
 }
 
 // correlateSequences inspects the sorted timeline and, for characteristic

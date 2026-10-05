@@ -427,7 +427,6 @@ var nonOptionRefID = map[string]bool{
 }
 
 var reRefSect = regexp.MustCompile(`<refsect([12])\b[^>]*\bid=['"]([^'"]+)['"]`)
-var reVarlistStart = regexp.MustCompile(`<varlistentry`)
 
 // sectionMarker is a resolved position in a man page at which the documented
 // sssd.conf section changes ("" meaning "not an option section").

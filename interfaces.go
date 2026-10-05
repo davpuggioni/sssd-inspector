@@ -105,8 +105,11 @@ func (d *defaultKBArticleMatcherImpl) MatchKBArticles(dirPath string, report *Re
 	matchKBArticles(dirPath, report)
 }
 
-// defaultAnalysisEngine provides default analysis implementation
-var defaultAnalysisEngine AnalysisEngine = &defaultAnalysisEngineImpl{}
+// NewDefaultAnalysisEngine builds the default AnalysisEngine from the
+// package-level default collaborators. (A package-level defaultAnalysisEngine
+// var used to exist here; it was never read — NewDefaultAnalysisEngine is the
+// only construction path, so the var was removed rather than left as an
+// unreferenced alias.)
 
 type defaultAnalysisEngineImpl struct {
 	scanner   FileScanner

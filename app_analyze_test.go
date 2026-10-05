@@ -74,24 +74,3 @@ func TestAppAnalyze_MissingPath(t *testing.T) {
 		t.Errorf("expected an error for a missing path, got nil")
 	}
 }
-
-func TestExtractIfArchive_Passthrough(t *testing.T) {
-	dir := analyzeFixture(t)
-	got, err := extractIfArchive(dir)
-	if err != nil || got != dir {
-		t.Errorf("directory must pass through unchanged: %q, %v", got, err)
-	}
-	if _, err := extractIfArchive(filepath.Join(t.TempDir(), "nope")); err == nil {
-		t.Errorf("missing path must be an error")
-	}
-	archive := filepath.Join(t.TempDir(), "extract.tar.xz")
-	writeTXZ(t, archive, supportconfigEntries())
-	extracted, err := extractIfArchive(archive)
-	if err != nil {
-		t.Fatalf("archive extraction failed: %v", err)
-	}
-	defer os.RemoveAll(extracted)
-	if _, err := os.Stat(filepath.Join(extracted, "sssd.txt")); err != nil {
-		t.Errorf("expected sssd.txt in extracted dir: %v", err)
-	}
-}

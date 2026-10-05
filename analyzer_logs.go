@@ -2,70 +2,17 @@
 package main
 
 import (
-	"regexp"
 	"sort"
 	"strings"
 	"time"
-
-	"sssd-inspector/constants"
 )
 
-// logFileNames lists the files to scan for SSSD log messages (supportconfig
-// layout). The list itself lives in constants.SupportconfigLogFiles so every
-// analyzer scans the same files.
-var logFileNames = constants.SupportconfigLogFiles()
-
-// analyzeSSSDConfigAndLogs orchestrates the full analysis of SSSD configuration and logs.
-// It loads sssd.conf, scans log files for known error patterns, builds a timeline,
-// and checks for common configuration misconfigurations.
-func analyzeSSSDConfigAndLogs(dirPath string, report *ReportData) {
-	sssdConfContent := readFileSafe(dirPath, "sssd.conf")
-	if sssdConfContent == "" {
-		sssdConfContent = extractSection(dirPath, "sssd.txt", "# /etc/sssd/sssd.conf")
-	}
-
-	// Quick checks for known issues that map to report.Problems/Warnings directly
-	if anyFileContains(dirPath, logFileNames, "User account has expired") || anyFileContains(dirPath, logFileNames, "Clients credentials have been revoked") {
-		report.Problems = append(report.Problems, "[AUTHENTICATION] Logs indicate an Active Directory user account is expired, locked, or credentials have been revoked.")
-	}
-	if anyFileContains(dirPath, logFileNames, "terminated by own WATCHDOG") {
-		report.Warnings = append(report.Warnings, "[TUNING] Since a WATCHDOG termination was found, consider setting 'ignore_group_members = true' in sssd.conf to speed up ssh/sudo initial lookups.")
-	}
-	if anyFileContains(dirPath, logFileNames, "service key not available") || anyFileContains(dirPath, logFileNames, "TGT failed verification") || anyFileContains(dirPath, logFileNames, "KDC has no support for encryption type") {
-		report.Warnings = append(report.Warnings, "[AD CRYPTO BUG] Crypto mismatch or 'service key not available' detected. Microsoft AD forces deprecated RC4 encryption if the 'operatingSystemVersion' attribute in AD starts with a number less than 6 (e.g., '5.14.21'). If your Linux crypto-policy disables RC4, authentication will fail. Fix: Prepend the AD attribute with 'Linux ' (e.g., 'Linux 5.14'), OR re-enable RC4 on this host using 'update-crypto-policies --set DEFAULT:AD-SUPPORT' and reboot.")
-	}
-
-	errorPatterns := buildErrorPatterns(report.MACType)
-	detectedLogErrors, timelineEvents := scanAndCollectErrors(dirPath, errorPatterns)
-
-	report.Timeline = timelineEvents
-	report.SSSDLogErrors = buildSortedLogErrors(detectedLogErrors)
-
-	if sssdConfContent != "" {
-		report.SssdConfigFound = true
-		report.SSSDConfigSnippet = sssdConfContent
-		// Phase A engine (same as analyzeData], instead of the removed legacy
-		// substring-based analyzeSSSDConfig: typed parser + whole-config duplicate
-		// detection + AD-specific option validation.
-
-		cfg := parseSssdConfig(sssdConfContent)
-		validateDuplicateKeys(cfg, report)
-		validateDomainStructure(cfg, report)
-		validateADConfig(cfg, report)
-		validateConfigStructure(cfg, report)
-		validateIDMapRanges(cfg, report)
-		validateConfigAgainstCatalog(cfg, report)
-		validateSectionHeaders(cfg, report)
-		validateConfigSemantics(cfg, report)
-	} else {
-		report.Problems = append(report.Problems, "sssd.conf or SSSD configuration block not found in the supportconfig.")
-	}
-
-	if report.SssdService != "Running" {
-		report.Problems = append(report.Problems, "sssd.service is not actively running.")
-	}
-}
-
+// The legacy multi-pass scanner (analyzeSSSDConfigAndLogs and its helpers
+// scanAndCollectErrors / buildSortedLogErrors) and its private copy of the log
+// file list (logFileNames) have been removed: analyzeData calls
+// performSinglePassScan, which reads constants.SupportconfigLogFiles() and is
+// the only scanner that runs in production. The old var was a second place to
+// forget when that list changes.
 // buildErrorPatterns returns the comprehensive SSSD error pattern dictionary,
 // filtering out SELinux-specific noise unless the system uses SELinux.
 func buildErrorPatterns(macType string) map[string]string {
@@ -446,9 +393,12 @@ var logPatternCategory = map[string]string{
 
 // exclusionPatterns are case-insensitive substrings. When a log line contains
 // ANY of these, it is skipped by the scanner entirely to avoid false positives
-// from unrelated daemons that happen to share a word. This replaces the old
-// hard-coded "winbindd" check in scanAndCollectErrors, making the suppression
-// list explicit and extensible (driven by the SSSD responder/module boundary).
+// from unrelated daemons that happen to share a word. This list is the single
+// suppression mechanism: the single-pass engine consults it directly, so a
+// new entry suppresses noise everywhere (it previously guarded only the
+// removed legacy scanner, which meant "nscd" was never suppressed in
+// production). Keep it explicit and extensible — driven by the SSSD
+// responder/module boundary.
 var exclusionPatterns = []string{
 	"winbindd", // winbind logs share 'sssd'/samba terminology but are unrelated
 	"nscd",     // nscd daemon noise (SSSD is the replacement; nscd logs are noise here)
@@ -533,16 +483,6 @@ func categoryFor(description string) string {
 
 // isExcluded returns true when the line should be ignored by the scanner
 // (unrelated daemons / known noise that share SSSD keyword vocabulary).
-func isExcluded(line string) bool {
-	l := strings.ToLower(line)
-	for _, ex := range exclusionPatterns {
-		if strings.Contains(l, ex) {
-			return true
-		}
-	}
-	return false
-}
-
 // normalizeTimestamp converts a timestamp string from any supported format
 // into a canonical YYYY-MM-DD HH:MM:SS representation for reliable sorting.
 // Returns an empty string if the timestamp cannot be parsed.
@@ -600,87 +540,14 @@ func normalizeTimestamp(ts string) string {
 	return ""
 }
 
-// scanAndCollectErrors scans the log files for known SSSD error patterns,
-// deduplicates matches (max 3 examples per pattern), and builds a BOUNDED
-// timeline of events (repeats of the same diagnostic event collapse into
-// one row with an Occurrences count instead of one row per match).
-func scanAndCollectErrors(dirPath string, errorPatterns map[string]string) (map[string][]string, []TimelineEvent) {
-	detectedLogErrors := make(map[string][]string)
-	tlAgg := newTimelineAggregator()
-
-	// Build the fast O(1) lookup and the compiled regex for scanning
-	var errorKeys []string
-	fastLookup := make(map[string]string)
-	for pattern, desc := range errorPatterns {
-		errorKeys = append(errorKeys, regexp.QuoteMeta(pattern))
-		fastLookup[strings.ToLower(pattern)] = desc
-	}
-	// Use global regex cache to avoid recompiling this large pattern on every analysis
-	errorRegex := globalRegexCache.Get("(?i)(" + strings.Join(errorKeys, "|") + ")")
-
-	// Regex to match standard SSSD log timestamps, standard syslog timestamps, and ISO 8601 timestamps
-	timeRegex := globalRegexCache.Get(`(?:\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)|([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?))`)
-
-	scanFiles(dirPath, logFileNames, func(line string) {
-		lineTrimmed := strings.TrimSpace(line)
-
-		// Context guards: drop lines from unrelated daemons that merely share
-		// SSSD keyword vocabulary (replaces the old hard-coded "winbindd" check).
-		if isExcluded(lineTrimmed) {
-			return
+// isExcluded reports whether a log line comes from an unrelated daemon that
+// merely shares SSSD vocabulary.
+func isExcluded(line string) bool {
+	l := strings.ToLower(line)
+	for _, ex := range exclusionPatterns {
+		if strings.Contains(l, ex) {
+			return true
 		}
-
-		matches := errorRegex.FindAllString(lineTrimmed, -1)
-		for _, match := range matches {
-			// O(1) lookup instead of O(N) nested loop
-			description, ok := fastLookup[strings.ToLower(match)]
-			if !ok {
-				continue
-			}
-
-			examples := detectedLogErrors[description]
-			if len(examples) < 3 {
-				isDupe := false
-				for _, ex := range examples {
-					if ex == lineTrimmed {
-						isDupe = true
-						break
-					}
-				}
-				if !isDupe {
-					detectedLogErrors[description] = append(detectedLogErrors[description], lineTrimmed)
-
-					tsMatch := timeRegex.FindStringSubmatch(lineTrimmed)
-					ts := "Unknown Time"
-					if len(tsMatch) > 1 && tsMatch[1] != "" {
-						ts = tsMatch[1] // SSSD native format
-					} else if len(tsMatch) > 2 && tsMatch[2] != "" {
-						ts = tsMatch[2] // Syslog format
-					} else if len(tsMatch) > 3 && tsMatch[3] != "" {
-						ts = tsMatch[3] // ISO 8601 format
-					}
-
-					tlAgg.add(ts, description, lineTrimmed)
-				}
-			}
-		}
-	})
-
-	// Sort the timeline chronologically using normalized timestamps
-	timelineEvents := tlAgg.events
-	sortTimelineChronological(timelineEvents)
-
-	return detectedLogErrors, timelineEvents
-}
-
-// buildSortedLogErrors converts the detected log errors map into a sorted slice of SSSDLogError.
-func buildSortedLogErrors(detectedLogErrors map[string][]string) []SSSDLogError {
-	var errors []SSSDLogError
-	for desc, lines := range detectedLogErrors {
-		errors = append(errors, SSSDLogError{Description: desc, Examples: lines})
 	}
-	sort.Slice(errors, func(i, j int) bool {
-		return errors[i].Description < errors[j].Description
-	})
-	return errors
+	return false
 }

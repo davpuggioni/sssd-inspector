@@ -272,8 +272,12 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 			return
 		}
 
-		// Ignore winbindd lines to prevent false positives
-		if strings.Contains(lowered, "winbindd") {
+		// Drop lines from unrelated daemons that share SSSD vocabulary.
+		// exclusionPatterns is the explicit, extensible suppression list; it
+		// previously guarded only the legacy scanAndCollectErrors, so the
+		// single-pass engine kept a hard-coded "winbindd" test and never
+		// suppressed nscd noise. One mechanism for both now.
+		if isExcluded(lowered) {
 			return
 		}
 

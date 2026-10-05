@@ -10,21 +10,30 @@ import (
 )
 
 // Test: Verify the RC4 Downgrade bug is reported in Tuning
+//
+// Runs through the single-pass scanner, the engine analyzeData actually uses.
+// (The test used to call analyzeSSSDConfigAndLogs, the legacy scanner that
+// nothing reaches since the single-pass rewrite.)
 func TestAnalyzeKerberos_RC4DowngradeBug(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"messages": "Dec 10 12:00:00 server sssd: service key not available\n",
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	result := performSinglePassScan(dir, "AppArmor", nil)
 
-	if !containsString(report.Warnings, "[AD CRYPTO BUG]") {
+	if !containsString(result.Warnings, "[AD CRYPTO BUG]") {
 		t.Errorf("Failed to detect RC4 downgrade bug in streamed logs")
+	}
+	if !result.CryptoBugFound {
+		t.Errorf("CryptoBugFound must be set by the single-pass scanner")
 	}
 }
 
 // Test: Verify deprecated 'enumerate = true' is caught
+//
+// Exercises the typed validator that analyzeData runs (parseSssdConfig +
+// validateADConfig) rather than the legacy scanner wrapper.
 func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"sssd.conf": "[domain/ad]\nid_provider = ad\nenumerate = true\n",
@@ -32,7 +41,8 @@ func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	cfg := parseSssdConfig(readFileSafe(dir, "sssd.conf"))
+	validateADConfig(cfg, &report)
 
 	if !containsString(report.Warnings, "[DEPRECATION] 'enumerate = true' is set") {
 		t.Errorf("Failed to detect deprecated enumerate=true setting")
@@ -40,19 +50,31 @@ func TestAnalyzeConfig_EnumerateTrue(t *testing.T) {
 }
 
 // Test: Verify SELinux Log Warnings are suppressed on AppArmor
+//
+// The MAC type is decided by analyzeMACStatus and then handed to the
+// single-pass scanner as macType, exactly as analyzeData does.
 func TestAnalyzeSSSDConfigAndLogs_SELinuxSuppression(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"security-apparmor.txt": "apparmor module is loaded.\n",
-		"sssd.txt":              "SELINUX_getpeercon failed\n",
+		// Real SSSD lines carry the "[sssd[...]]" module prefix, which is
+		// what the pre-filter keys on. Without it the line never reaches the
+		// pattern engine at all, and this test would pass vacuously.
+		"sssd.txt": "(2026-01-01 10:00:00) [sssd[selinux_child[123]]] SELINUX_getpeercon failed\n",
 	})
 	defer os.RemoveAll(dir)
 
 	var report ReportData
 	analyzeMACStatus(dir, &report)
-	analyzeSSSDConfigAndLogs(dir, &report)
+	result := performSinglePassScan(dir, report.MACType, nil)
+
+	// Precondition: the same line IS matched when SELinux is the MAC module,
+	// so the suppression assertion below is meaningful rather than vacuous.
+	if len(performSinglePassScan(dir, "SELinux", nil).SSSDLogErrors) == 0 {
+		t.Fatalf("fixture is not scanned at all: the suppression check would prove nothing")
+	}
 
 	foundError := false
-	for _, err := range report.SSSDLogErrors {
+	for _, err := range result.SSSDLogErrors {
 		if strings.Contains(err.Description, "SELinux Warning") {
 			foundError = true
 			break
@@ -68,16 +90,16 @@ func TestAnalyzeSSSDConfigAndLogs_SELinuxSuppression(t *testing.T) {
 func TestAnalyzeSSSDConfigAndLogs_SELinuxActive(t *testing.T) {
 	dir := setupMockDir(t, map[string]string{
 		"security-selinux.txt": "SELinux status:                 enabled\n",
-		"sssd.txt":             "SELINUX_getpeercon failed\n",
+		"sssd.txt":             "(2026-01-01 10:00:00) [sssd[selinux_child[123]]] SELINUX_getpeercon failed\n",
 	})
 	defer os.RemoveAll(dir)
 
 	var report ReportData
 	analyzeMACStatus(dir, &report)
-	analyzeSSSDConfigAndLogs(dir, &report)
+	result := performSinglePassScan(dir, report.MACType, nil)
 
 	foundError := false
-	for _, err := range report.SSSDLogErrors {
+	for _, err := range result.SSSDLogErrors {
 		if strings.Contains(err.Description, "SELinux Warning") {
 			foundError = true
 			break
@@ -213,11 +235,10 @@ func TestAnalyzeSSSDConfigAndLogs_TimelineExtraction(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	var report ReportData
-	analyzeSSSDConfigAndLogs(dir, &report)
+	timeline := performSinglePassScan(dir, "AppArmor", nil).Timeline
 
-	if len(report.Timeline) != 4 {
-		t.Fatalf("Expected 4 timeline events, got %d", len(report.Timeline))
+	if len(timeline) != 4 {
+		t.Fatalf("Expected 4 timeline events, got %d", len(timeline))
 	}
 
 	// Verify sorting applied correctly (lexicographical check)
@@ -226,16 +247,15 @@ func TestAnalyzeSSSDConfigAndLogs_TimelineExtraction(t *testing.T) {
 	// 2. "2026-04-01 11:00:00"
 	// 3. "2026-04-01 12:00:00"
 	// 4. "Dec 10 12:05:00"
-	if report.Timeline[0].Timestamp != "2026-04-01 10:00:00" {
-		t.Errorf("Timeline sorting failed, expected '2026-04-01 10:00:00' first, got '%s'", report.Timeline[0].Timestamp)
+	want := []string{
+		"2026-04-01 10:00:00",
+		"2026-04-01 11:00:00",
+		"2026-04-01 12:00:00",
+		"Dec 10 12:05:00",
 	}
-	if report.Timeline[1].Timestamp != "2026-04-01 11:00:00" {
-		t.Errorf("Timeline sorting failed, expected '2026-04-01 11:00:00' second, got '%s'", report.Timeline[1].Timestamp)
-	}
-	if report.Timeline[2].Timestamp != "2026-04-01 12:00:00" {
-		t.Errorf("Timeline sorting failed, expected '2026-04-01 12:00:00' third, got '%s'", report.Timeline[2].Timestamp)
-	}
-	if report.Timeline[3].Timestamp != "Dec 10 12:05:00" {
-		t.Errorf("Timeline sorting failed, expected 'Dec 10 12:05:00' fourth, got '%s'", report.Timeline[3].Timestamp)
+	for i, w := range want {
+		if timeline[i].Timestamp != w {
+			t.Errorf("Timeline row %d: expected %q, got %q", i, w, timeline[i].Timestamp)
+		}
 	}
 }
