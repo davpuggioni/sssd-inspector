@@ -1,0 +1,7 @@
+id: semantic-dead-bind
+title: Credenziali bind LDAP morte dopo il cambio provider
+notes: 'Difetto iniettato: ldap_default_bind_dn residuo da un vecchio id_provider=ldap, con id_provider = simple. Auth eredita simple, che non esegue mai bind LDAP: la credenziale e'' configurazione morta.'
+findings:
+    - rule_id: semantic:dead-bind-credentials
+      severity: warning
+      min_count: 1

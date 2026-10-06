@@ -1,0 +1,7 @@
+id: structural-no-sssd
+title: Sezione [sssd] mancante
+notes: 'Difetto iniettato: manca la sezione [sssd] (niente services/domains). Struttura invalida.'
+findings:
+    - rule_id: structure:missing-sssd-section
+      severity: warning
+      min_count: 1

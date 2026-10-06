@@ -1,0 +1,4 @@
+Hostname: testhost01.example.test
+
+Kernel: 6.4.0-default
+OS: SLES 15 SP6

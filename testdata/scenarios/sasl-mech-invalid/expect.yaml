@@ -1,0 +1,7 @@
+id: sasl-mech-invalid
+title: SASL mech non-GSSAPI su AD
+notes: 'Difetto iniettato: ldap_sasl_mech = DIGEST-MD5 con provider AD (richiede GSSAPI).'
+findings:
+    - rule_id: log:unsupported-sasl-mech
+      severity: error
+      min_count: 1

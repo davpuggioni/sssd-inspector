@@ -1,0 +1,16 @@
+#==[ Command ]==
+# /etc/krb5.conf
+[libdefaults]
+    default_realm = EXAMPLE.TEST
+    dns_lookup_realm = false
+
+[domain_realm]
+    .example.test = EXAMPLE.TEST
+    example.test = EXAMPLE.TEST
+
+#==[ Command ]==
+# /etc/hosts
+127.0.0.1       localhost
+::1             localhost
+192.0.2.10      testhost01.example.test testhost01
+#==[ Command ]==

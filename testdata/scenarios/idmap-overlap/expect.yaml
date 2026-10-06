@@ -1,9 +1,7 @@
 id: idmap-overlap
-title: "Range ldap_idmap sovrapposte tra due domini AD"
-notes: >-
-  Difetto iniettato: a.example.test usa 200000-300000 e b.example.test 250000-350000
-  UID/GID possono collidere fra i due domini.
+title: Range ldap_idmap sovrapposte tra due domini AD
+notes: 'Difetto iniettato: a.example.test usa 200000-300000 e b.example.test 250000-350000 UID/GID possono collidere fra i due domini.'
 findings:
-  - rule_id: idmap:overlap
-    severity: error
-    min_count: 1
+    - rule_id: idmap:overlap
+      severity: error
+      min_count: 1

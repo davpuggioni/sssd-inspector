@@ -1,0 +1,10 @@
+id: security-downgrade
+title: krb5_validate=false + StartTLS su AD
+notes: 'Difetto iniettato: krb5_validate = false (rischio sicurezza) + ldap_id_use_start_tls su provider AD.'
+findings:
+    - rule_id: log:krb5-validate-disabled
+      severity: error
+      min_count: 1
+    - rule_id: log:starttls-on-ad
+      severity: error
+      min_count: 1

@@ -1,0 +1,7 @@
+id: idmap-invalid-range
+title: Range ID mapping invertito
+notes: 'Difetto iniettato: ldap_idmap_range_min (200000) > ldap_idmap_range_max (100000).'
+findings:
+    - rule_id: idmap:invalid-range
+      severity: error
+      min_count: 1

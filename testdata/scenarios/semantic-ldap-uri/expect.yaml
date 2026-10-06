@@ -1,0 +1,7 @@
+id: semantic-ldap-uri
+title: ldap_uri con id_provider = simple
+notes: 'Difetto iniettato: ldap_uri con id_provider = simple. Il provider simple non parla LDAP: l''URI non sara'' mai usato.'
+findings:
+    - rule_id: semantic:ldap-uri-without-ldap-provider
+      severity: warning
+      min_count: 1

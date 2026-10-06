@@ -1,0 +1,3 @@
+● sssd.service - System Security Services Daemon
+     Loaded: loaded (/usr/lib/systemd/system/sssd.service; enabled; vendor preset: disabled)
+     Active: active (running) since Mon 2026-03-02 08:15:44 CET; 1 day 02:30 ago

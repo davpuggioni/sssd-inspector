@@ -1,0 +1,7 @@
+id: option-wrong-section
+title: ldap_uri dichiarato nella sezione [sssd]
+notes: 'Difetto iniettato: ldap_uri in [sssd]. L''opzione appartiene al dominio: SSSD la ignora e il catalogo segnala la sezione sbagliata.'
+findings:
+    - rule_id: catalog:option-in-wrong-section
+      severity: warning
+      min_count: 1

@@ -1,0 +1,7 @@
+id: simple-allow-ignored
+title: simple_allow_users senza access_provider=simple
+notes: 'Difetto iniettato: simple_allow_users con provider ad: parametri ignorati, serve ad_access_filter.'
+findings:
+    - rule_id: access:simple-allow-without-filter
+      severity: error
+      min_count: 1

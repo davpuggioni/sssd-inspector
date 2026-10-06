@@ -1,9 +1,7 @@
 id: case-sensitive-on-ad
-title: "case_sensitive = true su un dominio AD"
-notes: >-
-  Difetto iniettato: case_sensitive = true
-  Su AD i nomi sono case-insensitive, quindi le ricerche falliscono in modo inconsistente.
+title: case_sensitive = true su un dominio AD
+notes: 'Difetto iniettato: case_sensitive = true Su AD i nomi sono case-insensitive, quindi le ricerche falliscono in modo inconsistente.'
 findings:
-  - rule_id: log:case-sensitive-on-ad
-    severity: warning
-    min_count: 1
+    - rule_id: log:case-sensitive-on-ad
+      severity: warning
+      min_count: 1

@@ -1,9 +1,7 @@
 id: missing-nss-responder
-title: "services = pam senza il responder nss"
-notes: >-
-  Difetto iniettato: rimosso nss da services
-  Le ricerche utenti/gruppi via NSS falliscono anche a dominio sano.
+title: services = pam senza il responder nss
+notes: 'Difetto iniettato: rimosso nss da services Le ricerche utenti/gruppi via NSS falliscono anche a dominio sano.'
 findings:
-  - rule_id: structure:services
-    severity: error
-    min_count: 1
+    - rule_id: structure:services
+      severity: error
+      min_count: 1

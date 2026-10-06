@@ -1,0 +1,7 @@
+id: manual-id-mapping
+title: ldap_id_mapping = false su AD
+notes: 'Difetto iniettato: ldap_id_mapping = false. Senza attributi UNIX RFC2307 in AD i login falliscono silenziosamente.'
+findings:
+    - rule_id: log:manual-id-mapping
+      severity: warning
+      min_count: 1

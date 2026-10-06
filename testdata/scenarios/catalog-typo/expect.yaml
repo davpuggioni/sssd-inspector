@@ -1,0 +1,10 @@
+id: catalog-typo
+title: Typo di opzione + valore enum invalido
+notes: 'Difetto iniettato: ldap_url (typo per ldap_uri) + ldap_schema = rfc2309 (valore non documentato).'
+findings:
+    - rule_id: catalog:invalid-value
+      severity: warning
+      min_count: 1
+    - rule_id: catalog:unknown-option
+      severity: warning
+      min_count: 1

@@ -1,12 +1,10 @@
 id: dns-failover-chain
-title: "Cascata DNS/SRV -> connessione -> offline"
-notes: >-
-  Difetto iniettato: i log mostrano la catena timeout SRV -> resolve fallito -> connessione fallita -> Going offline
-  Il motore di sequenza deve consolidarla in UNA root cause piu' il finding offline.
+title: Cascata DNS/SRV -> connessione -> offline
+notes: 'Difetto iniettato: i log mostrano la catena timeout SRV -> resolve fallito -> connessione fallita -> Going offline Il motore di sequenza deve consolidarla in UNA root cause piu'' il finding offline.'
 findings:
-  - rule_id: correlate:dns-srv-failure
-    severity: error
-    min_count: 1
-  - rule_id: correlate:offline-after-online
-    severity: error
-    min_count: 1
+    - rule_id: correlate:dns-srv-failure
+      severity: error
+      min_count: 1
+    - rule_id: correlate:offline-after-online
+      severity: error
+      min_count: 1

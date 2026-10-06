@@ -1,0 +1,7 @@
+id: semantic-dead-ldap
+title: Opzione LDAP ignorata con id_provider = simple
+notes: 'Difetto iniettato: ldap_schema con id_provider = simple. Il provider simple non fa mai ricerche LDAP: l''opzione e'' ignorata.'
+findings:
+    - rule_id: semantic:dead-ldap-options
+      severity: warning
+      min_count: 1

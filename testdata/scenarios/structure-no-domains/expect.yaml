@@ -1,0 +1,7 @@
+id: structure-no-domains
+title: Nessuna sezione [domain/...] configurata
+notes: 'Difetto iniettato: [sssd] senza alcun [domain/NAME]. SSSD esce subito: ''No domains configured''.'
+findings:
+    - rule_id: structure:no-domains
+      severity: error
+      min_count: 1

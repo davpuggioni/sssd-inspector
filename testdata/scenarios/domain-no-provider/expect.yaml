@@ -1,0 +1,7 @@
+id: domain-no-provider
+title: Dominio senza id_provider
+notes: 'Difetto iniettato: sezione [domain/example.test] senza id_provider. Obbligatorio: SSSD non avvia il dominio.'
+findings:
+    - rule_id: domain:missing-id-provider
+      severity: error
+      min_count: 1

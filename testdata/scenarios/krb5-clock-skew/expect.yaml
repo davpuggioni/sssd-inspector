@@ -1,0 +1,7 @@
+id: krb5-clock-skew
+title: Clock skew + preauth failure nei log
+notes: 'Difetto iniettato: log con Clock skew too great + Preauthentication failed -> root cause Kerberos.'
+findings:
+    - rule_id: correlate:krb5-clock-skew
+      severity: error
+      min_count: 1

@@ -1,0 +1,7 @@
+id: hostname-not-fqdn
+title: Hostname fuori dal dominio AD
+notes: 'Difetto iniettato: Hostname web01.other.test con ad_domain = example.test. Join/account AD legati al dominio DNS.'
+findings:
+    - rule_id: correlate:hostname-not-fqdn
+      severity: error
+      min_count: 1

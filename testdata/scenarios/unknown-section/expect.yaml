@@ -1,0 +1,7 @@
+id: unknown-section
+title: Sezione sconosciuta [foobar]
+notes: 'Difetto iniettato: intestazione [foobar] che SSSD non documenta. L''intera sezione viene ignorata.'
+findings:
+    - rule_id: catalog:unknown-section
+      severity: warning
+      min_count: 1

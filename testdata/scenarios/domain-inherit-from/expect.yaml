@@ -1,0 +1,7 @@
+id: domain-inherit-from
+title: inherit_from dentro un dominio
+notes: 'Difetto iniettato: inherit_from in [domain/example.test]. SSSD lo ammette solo sotto [sssd] per clonare un template: dentro il dominio viene rifiutato.'
+findings:
+    - rule_id: domain:inherit-from
+      severity: error
+      min_count: 1

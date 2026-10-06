@@ -1,0 +1,4 @@
+Hostname: web01.other.test
+
+Kernel: 6.4.0-default
+OS: SLES 15 SP6

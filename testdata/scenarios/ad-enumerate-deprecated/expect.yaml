@@ -1,0 +1,7 @@
+id: ad-enumerate-deprecated
+title: enumerate = true deprecato per AD
+notes: 'Difetto iniettato: enumerate = true. Il full enumerate e'' deprecato per AD/IPA per i costi di performance sui domain controller.'
+findings:
+    - rule_id: ad:enumerate-deprecated
+      severity: warning
+      min_count: 1

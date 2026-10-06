@@ -1,0 +1,7 @@
+id: domain-invalid-provider
+title: 'id_provider = krb5: valore non valido'
+notes: 'Difetto iniettato: id_provider = krb5. krb5 NON e'' un id_provider (e'' auth_provider): SSSD non avvia il dominio.'
+findings:
+    - rule_id: domain:invalid-id-provider
+      severity: error
+      min_count: 1
