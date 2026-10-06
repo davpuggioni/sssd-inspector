@@ -62,8 +62,6 @@ The license note is also printed at the bottom of every generated report.
 - **File Cache** — Per-run cache of file contents: each file is read only once per analysis
 - **Scanner Pool** — Reusable buffer allocations via `sync.Pool` to reduce GC pressure
 - **Context-Aware Scanning** — Timeout-based cancellation prevents hangs on corrupted or NFS-mounted files
-- **Parallel-Analysis Helpers** — Optional worker-pool based phase helper functions (`analyzePhase1Parallel`/`analyzePhase2Parallel`) exist for large archives; the default CLI path runs phases sequentially
-- **Multi-Core File Processing** — Parallel file scanning and batch processing (`utils_parallel.go`) for large supportconfig archives
 
 ### Output Formats
 - **Text Report** — Formatted terminal output with problem severity indicators
@@ -503,7 +501,6 @@ sssd-inspector/
 │
 ├── analyzer_core.go         # Main analysis orchestrator (analyzeData)
 ├── analyzer_singlepass.go   # Single-pass log scanner (Aho-Corasick engine)
-├── analyzer_parallel.go     # Parallel analysis phases
 ├── analyzer_system.go       # OS, hardware, services analysis
 ├── analyzer_auth.go         # DNS, Kerberos, PAM, NSS analysis
 ├── analyzer_logs.go         # SSSD log pattern definitions (220+ patterns)
@@ -511,7 +508,6 @@ sssd-inspector/
 ├── analyzer_correlate.go    # Cross-source correlation/reconciliation engine (Phase B)
 │
 ├── utils.go                 # File scanning, section extraction
-├── utils_parallel.go        # Parallel file/batch processing
 ├── cache.go                 # RegexCache, FileCache, Scanner Pool
 ├── ahocorasick.go           # Aho-Corasick multi-pattern matcher (O(n) literal scanning)
 ├── interfaces.go            # Core interfaces for DI
@@ -550,7 +546,7 @@ The core innovation of SSSD Inspector is its single-pass log scanning engine. In
 1. **Builds an Aho-Corasick automaton** — 230+ error patterns + quick checks + KB article patterns are almost entirely literal strings, so they run through an Aho-Corasick trie: **O(n) matching per line in a single pass regardless of how many patterns are registered**, avoiding the classic trap of throwing hundreds of patterns into one giant regex alternation and watching performance fall off a cliff
 2. **Pre-filters lines** — Fast keyword check (`sssd`, `krb5`, `ldap`, `pam`, etc.) skips ~90% of unrelated syslog lines
 3. **Single pass** — Each surviving line is walked once through the automaton, extracting errors, keytab info, watchdog alerts, crypto bugs, evidence, and timestamps simultaneously
-4. **Ordered phases** — Analysis runs through discrete sequential phases (config, logs, Kerberos, cross-source correlation) so dependent checks always see fully-populated report fields; parallel helper functions exist but are not invoked on this path
+4. **Ordered phases** — Analysis runs through discrete sequential phases (config, logs, Kerberos, cross-source correlation) so dependent checks always see fully-populated report fields
 
 ### Caching System
 
@@ -571,11 +567,12 @@ go test -count=1 ./...
 # Run with verbose output
 go test -count=1 -v ./...
 
-# Run benchmarks
-go test -bench=. -benchmem -count=1 ./...
-
 # Run specific test
 go test -count=1 -run TestAnonymizeReport_DeepPII -v
+
+# Regenerate the golden scenarios after an intentional behaviour change
+# (always review the diff before committing)
+go test -count=1 -run TestGoldenScenarios -update-golden
 
 # Coverage report
 go test -count=1 -coverprofile=cover.out ./... && go tool cover -func=cover.out | tail -1
@@ -585,10 +582,17 @@ The test suite includes:
 - **Unit tests** — Individual analyzer functions with mock supportconfig files
 - **Integration tests** — End-to-end analysis pipeline with asset embedding verification
 - **Configuration tests** — YAML config loading, validation, and defaults
-- **Parallel processing tests** — Worker pool correctness, batch processing, edge cases
-- **Benchmark tests** — Performance comparison between sequential and parallel scanning
 - **Error handling tests** — Custom error types, wrapping, and context propagation
 - **Logger tests** — Structured logging levels, fields, and filtering
+- **Golden-scenario tests** (`golden_scenarios_test.go`, `testdata/scenarios/`) —
+  31 hand-authored scenarios built from hosts that were really diagnosed, each
+  injecting one known defect with the ground truth pinned in `expect.yaml`. They
+  make the false-positive rate measurable: false positives and misses fail the
+  run, `known_gaps` and redundancies are recorded as debt instead. The corpus
+  currently pins 32 of the 42 rule IDs; run with `-v` for the corpus-wide
+  precision/recall table. See `testdata/scenarios/README.md` for how to author
+  one (`-update-golden` regenerates the expected findings — review the diff,
+  never accept it blindly)
 - **UI component tests** — Button, ProgressBar, StatusMessage, FileInput lifecycle
 - **CLI contract tests** (`cli_flags_test.go`) — Flag registry, usage output and a
   bidirectional lock between the registered flags and the Options table above
@@ -677,7 +681,9 @@ Contributions are welcome! Here's how you can help:
 
 1. **Add new error patterns** — Extend `buildErrorPatterns()` in `analyzer_logs.go` with SSSD error messages from real-world troubleshooting
 2. **Create KB articles** — Add JSON files to `kb_articles/` with log patterns and configuration checks
-3. **Improve tests** — Add test cases for new scenarios and edge cases
+3. **Improve tests** — Extend the golden-scenario corpus in `testdata/scenarios/`
+   (one host you actually diagnosed, one injected defect — see its README) or add
+   unit tests for new scenarios and edge cases
 4. **Report issues** — Open GitHub issues with supportconfig samples (anonymized) showing missing detections
 
 ### Adding a New Error Pattern

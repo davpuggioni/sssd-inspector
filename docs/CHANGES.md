@@ -1,5 +1,36 @@
 # Implementation Summary
 
+## 2026-10-06 — The README described a tree that no longer exists; the golden corpus reaches 32/42
+
+* **The README documented the parallel analysis paths after they were deleted.**
+  The *Performance Optimizations* section promised `analyzePhase1Parallel` /
+  `analyzePhase2Parallel` and `utils_parallel.go`, the architecture tree listed
+  `analyzer_parallel.go` and `utils_parallel.go`, and no `.go` file in the
+  repository mentions any of them — they went with the unreachable-analysis
+  cleanup. The test-suite list advertised "Parallel processing tests" and
+  "Benchmark tests" for suites that no longer exist, and the Testing section
+  offered a `-bench` command that matches zero benchmarks in the tree. All of
+  it is gone; the bullets that remain (regex cache, file cache, scanner pool,
+  context cancellation) were re-checked against the code. The docs-freshness
+  test guards the frontend documents but never looked at this file, which is
+  how the drift survived.
+* **The README now documents the golden-scenario corpus it never mentioned:**
+  `testdata/scenarios/`, the `TestGoldenScenarios` run, the `-update-golden`
+  regeneration flow with its "review the diff, never accept it blindly" rule,
+  and the current coverage — 31 hand-authored scenarios pinning 32 of the 42
+  rule IDs, the remaining log-content-driven ones left for a follow-up. The
+  Contributing section points new tests at the corpus instead of the generic
+  "add test cases for edge cases".
+* **The stale `kerberos_method` rule is dropped** (`rules/example.yaml` was the
+  only place it was still advertised): no code emits it since `provider_method`
+  took over, and the remaining duplicate-reporting window is closed by
+  `catalogEnumSkip`, so an option flagged once by the catalog check is no longer
+  re-flagged by the enum check in the same run.
+* **The golden corpus grew from 12 to 31 scenarios** — semantic, structure,
+  domain, catalog, idmap, correlate, security, sasl/log and access rules are
+  now pinned end-to-end by expectation manifests, making the false-positive
+  rate a number the suite prints rather than a feeling.
+
 ## 2026-09-30 — Version 0.2.4: /etc/hosts verdicts, sssd.conf section headers, graph colours
 
 * **`/etc/hosts` states are now four, not two.** A supportconfig that never
