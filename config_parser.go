@@ -355,17 +355,6 @@ func validateADSections(sec *SssdSection, report *ReportData) {
 		addConfigFindingEx(report, SevError, "ldap_sasl_mech", msg, "sssd.conf", prefix+"ldap_sasl_mech", line, "ldap_sasl_mech = "+v, "log:unsupported-sasl-mech", ConfidenceLog, "sssd-ldap(5)")
 	}
 
-	// kerberos_method must be keytab or secrets.
-	if v, line, ok := firstOption(sec, "kerberos_method"); ok && v != "" {
-		lv := strings.ToLower(v)
-		if lv != "keytab" && lv != "secrets" {
-			msg := fmt.Sprintf("CONFIGURATION ERROR: 'kerberos_method = %s' is invalid. Allowed values are 'keytab' or 'secrets'.", v)
-			addConfigFindingEx(report, SevError, "kerberos_method", msg, "sssd.conf", prefix+"kerberos_method", line, "kerberos_method = "+v, "log:kerberos-method-secret", ConfidenceLog, "sssd-ad(5)")
-		} else if lv == "secrets" {
-			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] 'kerberos_method = secrets' is set. SSSD will obtain the machine credentials from the secrets store; ensure the keytab principal is still valid and updateable by adcli.")
-		}
-	}
-
 	// ldap_id_mapping = false requires RFC2307 attrs.
 	if v, line, ok := firstOption(sec, "ldap_id_mapping"); ok && strings.EqualFold(v, "false") {
 		msg := "[WARNING] 'ldap_id_mapping = False' is set. AD logins will fail silently unless UNIX attributes (uidNumber, gidNumber) are manually populated in Active Directory (RFC2307)."

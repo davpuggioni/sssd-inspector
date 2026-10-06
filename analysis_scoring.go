@@ -31,7 +31,6 @@ var categoryHeadlines = map[string]string{
 	"ad_server":       "AD Domain Controller configuration issue: GSSAPI/Kerberos requires hostnames, not IPs.",
 	"access":          "Access-control configuration is inconsistent: simple_allow_* rules are being ignored.",
 	"ldap_sasl_mech":  "LDAP SASL mechanism is incompatible with the AD provider (GSSAPI required).",
-	"kerberos_method": "kerberos_method is invalid or unusual: verify keytab-based machine credentials.",
 	"ldap_id_mapping": "ID mapping disabled without RFC2307 attributes: logins will fail silently.",
 	"case_sensitive":  "case_sensitive = True on an AD domain causes spurious user-not-found errors.",
 	"krb5_validate":   "Kerberos ticket validation is disabled: security risk (KDC spoofing).",

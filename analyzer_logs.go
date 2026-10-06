@@ -456,7 +456,7 @@ func categoryFor(description string) string {
 		return "dns"
 	case strings.Contains(l, "kerberos") || strings.Contains(l, "preauth") || strings.Contains(l, "clock") || strings.Contains(l, "ticket") || strings.Contains(l, "tgt"):
 		return "krb5"
-	case strings.Contains(l, "tls") || strings.Contains(l, "tls") || strings.Contains(l, "sasl"):
+	case strings.Contains(l, "tls") || strings.Contains(l, "sasl"):
 		return "tls"
 	case strings.Contains(l, "offline") || strings.Contains(l, "backend offline"):
 		return "offline"

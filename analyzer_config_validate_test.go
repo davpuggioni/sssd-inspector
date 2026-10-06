@@ -2,7 +2,7 @@
 //
 // Direct tests for the AD validator branches (config_parser.go
 // validateADSections, ~55% coverage): IP-valued ad_domain/ad_server,
-// krb5_realm mismatch, ldap_sasl_mech, kerberos_method and
+// krb5_realm mismatch, ldap_sasl_mech and
 // use_fully_qualified_names.
 package main
 
@@ -80,13 +80,23 @@ func TestValidateADSections_Krb5RealmMismatchCritical(t *testing.T) {
 	}
 }
 
-func TestValidateADSections_SaslMechAndMethod(t *testing.T) {
-	r := validateOneSection(t, "id_provider = ad\nldap_sasl_mech = EXTERNAL\nkerberos_method = password\n")
+func TestValidateADSections_SaslMech(t *testing.T) {
+	r := validateOneSection(t, "id_provider = ad\nldap_sasl_mech = EXTERNAL\n")
 	if !containsStringCategory(r, "ldap_sasl_mech") {
 		t.Errorf("expected a 'ldap_sasl_mech' finding, got %v", findingCategories(r))
 	}
-	if !containsStringCategory(r, "kerberos_method") {
-		t.Errorf("expected a 'kerberos_method' finding, got %v", findingCategories(r))
+}
+
+// TestValidateADSections_KerberosMethodNotCurated is the regression test for
+// the removed kerberos_method check: the option does not exist in SSSD
+// 2.14.0 (verified against the sssd-2.14.0 tree — absent from man pages,
+// providers and translations), so the curated validator must stay silent and
+// leave the finding to catalog:unknown-option, whose message correctly says
+// that SSSD ignores the setting.
+func TestValidateADSections_KerberosMethodNotCurated(t *testing.T) {
+	r := validateOneSection(t, "id_provider = ad\nkerberos_method = secrets\n")
+	if containsStringCategory(r, "kerberos_method") {
+		t.Errorf("kerberos_method must not produce a curated finding, got %v", findingCategories(r))
 	}
 }
 

@@ -106,6 +106,13 @@ func validateConfigAgainstCatalog(cfg *ParsedConfig, report *ReportData) {
 					sec.Name+"."+key, line, evidence, "catalog:option-in-wrong-section", opt.Confidence, docRefForSource(opt.Source))
 				continue
 			}
+			// A dedicated curated rule owns the value validation for this
+			// key with richer context and the correct severity: the generic
+			// catalog check stays silent instead of reporting the same line
+			// a second time. See catalogEnumSkip.
+			if curated := catalogEnumCuratedBy(key); curated != "" {
+				continue
+			}
 			for _, kv := range vals {
 				if v := invalidValueReason(opt, kv.Value); v != "" {
 					msg := fmt.Sprintf("CONFIGURATION WARNING: '%s = %s' in section [%s] is not valid for the '%s' option (%s). SSSD ignores the setting or falls back to the default '%s'. %s",
@@ -318,6 +325,29 @@ func docRefForSource(source string) string {
 	return s
 }
 
+// catalogEnumSkip lists option keys whose value enumeration is already
+// checked by a dedicated curated rule with richer context. The generic
+// catalog check must stay silent on them: emitting both would report the
+// same line twice at two different severities (a false-precision FP).
+//
+// Keys are matched case-insensitively against the sssd.conf key name.
+// Keep the reference comment in sync when adding entries.
+var catalogEnumSkip = map[string]string{
+	// config_parser.go validateADAdvancedOptions: reports SevError with the
+	// allowed values named and the fallback behaviour explained.
+	"ad_gpo_access_control": "log:invalid-gpo-value",
+	// config_parser.go validateDomainStructure: domain:invalid-id-provider
+	// reports the same line as SevError listing every accepted provider —
+	// richer than the generic enum message.
+	"id_provider": "domain:invalid-id-provider",
+}
+
+// catalogEnumCuratedBy returns the curated RuleID that owns the value
+// validation for key, or "" when the generic catalog check applies.
+func catalogEnumCuratedBy(key string) string {
+	return catalogEnumSkip[strings.ToLower(strings.TrimSpace(key))]
+}
+
 // invalidValueReason returns a non-empty human-readable explanation when the
 // raw value does not satisfy the option's documented type or enumeration.
 func invalidValueReason(opt OptionMeta, raw string) string {
@@ -335,11 +365,11 @@ func invalidValueReason(opt OptionMeta, raw string) string {
 	switch opt.Type {
 	case "bool":
 		if !isBoolToken(val) {
-			return fmt.Sprintf("a boolean is expected (true/false)")
+			return "a boolean is expected (true/false)"
 		}
 	case "int":
 		if !isIntToken(val) {
-			return fmt.Sprintf("an integer is expected")
+			return "an integer is expected"
 		}
 	}
 

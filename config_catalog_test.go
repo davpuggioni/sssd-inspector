@@ -80,6 +80,23 @@ func TestCatalog_UnknownOptionSuggestsTypo(t *testing.T) {
 	}
 }
 
+// TestCatalog_KerberosMethodUnknownOption covers a legacy option that does not
+// exist in SSSD 2.14.0 (verified against the sssd-2.14.0 sources: absent from
+// man pages, providers and translations). The catalog must own the finding —
+// no curated check may claim allowed values for an option SSSD ignores.
+func TestCatalog_KerberosMethodUnknownOption(t *testing.T) {
+	r := catalogFindings(t, "[domain/example.com]\nid_provider = ad\nkerberos_method = secrets\n")
+	found := false
+	for _, f := range r.ConfigFindings {
+		if f.RuleID == "catalog:unknown-option" && strings.Contains(f.Message, "kerberos_method") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected catalog:unknown-option for kerberos_method, got %+v", r.ConfigFindings)
+	}
+}
+
 // TestCatalog_KnownOptionsProduceNoFindings guards against false positives on
 // a healthy, realistic configuration.
 func TestCatalog_KnownOptionsProduceNoFindings(t *testing.T) {
@@ -118,6 +135,30 @@ func TestCatalog_EnumValueRejected(t *testing.T) {
 	r2 := catalogFindings(t, "[domain/example.com]\nid_provider = ad\nldap_schema = rfc2307bis\n")
 	if len(r2.ConfigFindings) != 0 {
 		t.Errorf("valid ldap_schema value produced findings: %+v", r2.ConfigFindings)
+	}
+}
+
+// TestCatalog_CuratedEnumOwnerStaysSilent checks the catalogEnumSkip contract:
+// an option whose enumeration is owned by a dedicated curated rule must not
+// be reported a second time by the generic catalog check. The GPO case fired
+// both log:invalid-gpo-value (SevError) and catalog:invalid-value
+// (SevWarning) on the same line; the generic finding is suppressed.
+func TestCatalog_CuratedEnumOwnerStaysSilent(t *testing.T) {
+	r := catalogFindings(t, "[domain/example.com]\nid_provider = ad\nad_gpo_access_control = bogus\n")
+	if hasCategory(r, "config_value") {
+		t.Errorf("curated-owned ad_gpo_access_control was double-reported: %+v", r.ConfigFindings)
+	}
+	// The curated rule itself must still fire: silence from the catalog must
+	// never mean silence overall.
+	full := validateOneSection(t, "id_provider = ad\nad_gpo_access_control = bogus\n")
+	found := false
+	for _, f := range full.ConfigFindings {
+		if f.RuleID == "log:invalid-gpo-value" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("curated log:invalid-gpo-value did not fire: %+v", full.ConfigFindings)
 	}
 }
 
