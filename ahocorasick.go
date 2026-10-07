@@ -103,9 +103,61 @@ func newACMatcher(patterns []string) *ACMatcher {
 	return m
 }
 
-// Match walks text once and invokes fn with the canonical pattern index for
-// every pattern occurrence found (including overlapping matches). fn may be
-// called multiple times per pattern if it occurs more than once.
+// MatchBoundSelective behaves like Match but applies a word-boundary check
+// only to the patterns selected by needBound (canonical index -> true means
+// "this pattern requires boundaries"). It exists so a single automaton can
+// host both long diagnostic literals (substring semantics, e.g. "[28][No
+// space left on device]") and short ones ("kdc", "ad ") that would otherwise
+// match inside unrelated words ("backupkdc", "systemd").
+//
+// The boundary rule is the same as MatchWordBound: the byte before the match
+// start and the byte after the match end must both be absent or non-word
+// bytes (word byte = ASCII letter, digit or '_'). needBound==nil means no
+// pattern requires boundaries (identical to Match); the check costs two
+// byte loads per selected hit, so scan throughput is unchanged.
+func (m *ACMatcher) MatchBoundSelective(text string, needBound func(patternIndex int) bool, fn func(patternIndex int)) {
+	if needBound == nil {
+		m.Match(text, fn)
+		return
+	}
+	node := m.root
+	for i := 0; i < len(text); i++ {
+		c := lowerASCII(text[i])
+		for node != m.root && node.children[c] == nil {
+			node = node.fail
+		}
+		if next, ok := node.children[c]; ok {
+			node = next
+		} else {
+			node = m.root
+		}
+		for _, idx := range node.out {
+			if !needBound(idx) {
+				fn(idx)
+				continue
+			}
+			patLen := len(m.patterns[idx])
+			start := i - patLen + 1
+			if start > 0 && isWordByte(text[start-1]) {
+				continue
+			}
+			end := i + 1
+			if end < len(text) && isWordByte(text[end]) {
+				continue
+			}
+			fn(idx)
+		}
+	}
+}
+
+// needsWordBoundary reports whether a literal pattern is short enough that a
+// substring match would be unreliable: trimmed length <= 4 (e.g. "kdc",
+// "ad ", "tgt "). Such patterns must only fire at word boundaries; longer
+// literals keep substring semantics so existing diagnostics are unaffected.
+func needsWordBoundary(pattern string) bool {
+	t := strings.TrimSpace(strings.ToLower(pattern))
+	return t != "" && len(t) <= 4
+}
 func (m *ACMatcher) Match(text string, fn func(patternIndex int)) {
 	node := m.root
 	for i := 0; i < len(text); i++ {

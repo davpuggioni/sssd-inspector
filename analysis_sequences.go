@@ -25,6 +25,43 @@ import (
 // minTimelineEvents is the floor; below it a timeline is too sparse to infer
 // causation and we abstain (single-line correlations would be false positives).
 const minTimelineEvents = 3
+// seqChainWindow is the maximum span (in seconds) between the FIRST cause
+// link and the LAST effect link for a chain to count as one incident. Links
+// hours apart are independent faults, not a cause->effect cascade. One hour
+// covers slow failover cascades (DNS retries, offline timeouts) without
+// merging unrelated incidents.
+const seqChainWindow = 3600
+
+// seqOrderedWithinWindow reports whether a cause link at position causePos
+// (timeline index) precedes an effect link at position effectPos AND both
+// fall within seqChainWindow seconds of each other. Positions come from the
+// already-sorted timeline, so causePos < effectPos means the cause was
+// observed first. When either link lacks a parseable timestamp the check
+// falls back to position order only (conservative: synthetic unit-test
+// timelines and year-less syslog lines must still correlate rather than go
+// silent).
+func seqOrderedWithinWindow(links []seqLink, causePos, effectPos int) bool {
+	if causePos >= effectPos {
+		return false
+	}
+	var cause, effect *seqLink
+	for i := range links {
+		if links[i].idx == causePos {
+			cause = &links[i]
+		}
+		if links[i].idx == effectPos {
+			effect = &links[i]
+		}
+	}
+	if cause == nil || effect == nil {
+		return false
+	}
+	if !cause.hasEpoch || !effect.hasEpoch {
+		return true
+	}
+	d := effect.epoch - cause.epoch
+	return d >= 0 && d <= seqChainWindow
+}
 
 // rootCauseHeadline maps a synthesized root-cause category to the short triage
 // statement shown at the top of the report. The correlate* emitters below
@@ -139,33 +176,34 @@ func correlateSequences(timeline []TimelineEvent, report *ReportData) {
 // emitDNSChain detects the DNS/SRV-to-connect-to-offline cascade.
 // Source: src/providers/fail_over.c (SRV timeout), sdap_async_connection.c.
 func emitDNSChain(links []seqLink, report *ReportData, emitted map[string]bool) bool {
-	var srvTimeout, resolveFail, connectFail, offline bool
+	srvPos, resolvePos, connectPos, offlinePos := -1, -1, -1, -1
 	evidence := ""
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
-		if strings.Contains(ml, "service resolving timeout") || strings.Contains(ml, "unable to resolve srv") {
-			srvTimeout = true
+		if srvPos < 0 && (strings.Contains(ml, "service resolving timeout") || strings.Contains(ml, "unable to resolve srv")) {
+			srvPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
-		if strings.Contains(ml, "failed to resolve host") || strings.Contains(ml, "could not get server host name") {
-			resolveFail = true
+		if resolvePos < 0 && (strings.Contains(ml, "failed to resolve host") || strings.Contains(ml, "could not get server host name")) {
+			resolvePos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
-		if strings.Contains(ml, "unable to establish connection") || strings.Contains(ml, "ldap connection error") {
-			connectFail = true
+		if connectPos < 0 && (strings.Contains(ml, "unable to establish connection") || strings.Contains(ml, "ldap connection error")) {
+			connectPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
-		if strings.Contains(ml, "going offline") {
-			offline = true
+		if offlinePos < 0 && strings.Contains(ml, "going offline") {
+			offlinePos = l.idx
 		}
 	}
 
+	srvTimeout, resolveFail, connectFail, offline := srvPos >= 0, resolvePos >= 0, connectPos >= 0, offlinePos >= 0
 	score := 0
 	if srvTimeout {
 		score++
@@ -179,17 +217,50 @@ func emitDNSChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 	if offline {
 		score++
 	}
-	if score >= 2 && (srvTimeout || resolveFail) && !emitted["dns"] {
-		addConfigFindingEx(report, SevError, "dns",
-			"[CORRELATED ROOT CAUSE] DNS/SRV service discovery failure (sequence: "+
-				descFlags(srvTimeout, resolveFail, connectFail, offline)+
-				"). The client could not locate or reach a Domain Controller via DNS; "+
-				fmt.Sprintf("this single root explains %d separate-looking errors.", score),
-			"timeline", "sequence:dns", 0, evidence, "correlate:dns-srv-failure", ConfidenceLog, "")
-		emitted["dns"] = true
-		return true
+	if score < 2 || (!srvTimeout && !resolveFail) || emitted["dns"] {
+		return false
 	}
-	return false
+	// The cascade must unfold in cause->effect order within one incident
+	// window: first link = earliest DNS signal, last link = latest signal
+	// of the chain. An "offline" hours before any DNS error is a stale
+	// incident, not this cascade.
+	first, last := -1, -1
+	for _, p := range []int{srvPos, resolvePos, connectPos, offlinePos} {
+		if p < 0 {
+			continue
+		}
+		if first < 0 || p < first {
+			first = p
+		}
+		if last < 0 || p > last {
+			last = p
+		}
+	}
+	// DNS cause must come before the downstream effect: a connect failure
+	// observed BEFORE any DNS error is an independent network fault, not
+	// the start of this cascade.
+	causePos := srvPos
+	if causePos < 0 {
+		causePos = resolvePos
+	}
+	downstream := connectPos
+	if downstream < 0 {
+		downstream = offlinePos
+	}
+	if downstream < 0 {
+		downstream = resolvePos
+	}
+	if !seqOrderedWithinWindow(links, first, last) || (causePos >= 0 && downstream >= 0 && causePos > downstream) {
+		return false
+	}
+	addConfigFindingEx(report, SevError, "dns",
+		"[CORRELATED ROOT CAUSE] DNS/SRV service discovery failure (sequence: "+
+			descFlags(srvTimeout, resolveFail, connectFail, offline)+
+			"). The client could not locate or reach a Domain Controller via DNS; "+
+			fmt.Sprintf("this single root explains %d separate-looking errors.", score),
+		"timeline", "sequence:dns", 0, evidence, "correlate:dns-srv-failure", ConfidenceLog, "")
+	emitted["dns"] = true
+	return true
 }
 
 // descFlags renders which steps of the DNS chain fired.
@@ -259,39 +330,39 @@ func emitKrb5Chain(links []seqLink, report *ReportData, emitted map[string]bool)
 	return false
 }
 
-// emitOverloadChain correlates watchdog terminations + packet overload + huge
-// group enumeration into one "overload" root cause.
+// emitOverloadChain correlates watchdog terminations + packet overload into
+// one "overload" root cause (oversized packets / shell limits -> watchdog
+// kill). "huge group" enumeration belongs to the R8 enum-watchdog chain,
+// not this one.
 func emitOverloadChain(links []seqLink, report *ReportData, emitted map[string]bool) bool {
-	var watchdog, overload bool
+	overloadPos, watchdogPos := -1, -1
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
-		if strings.Contains(ml, "watchdog") {
-			watchdog = true
+		if overloadPos < 0 && (strings.Contains(ml, "overlarge") || strings.Contains(ml, "maximum number of shells")) {
+			overloadPos = l.idx
 		}
-		if strings.Contains(ml, "overlarge") || strings.Contains(ml, "maximum number of shells") {
-			overload = true
+		if watchdogPos < 0 && strings.Contains(ml, "watchdog") {
+			watchdogPos = l.idx
 		}
 	}
-	if watchdog && overload && !emitted["overload"] {
-		ev := ""
-		for _, l := range links {
-			if strings.Contains(strings.ToLower(l.message), "watchdog") {
-				ev = l.rawLog
-				break
-			}
-		}
-		// Category "overload", not "ad_server": "ad_server" elsewhere means
-		// "ad_server points at an IP" (config_parser.go) and is also a graph
-		// entity kind, so reusing it here grouped a backend performance
-		// problem under DC configuration in the root-cause breakdown and gave
-		// it the wrong headline.
-		addConfigFindingEx(report, SevWarning, "overload",
-			"[CORRELATED ROOT CAUSE] Backend overload/restart storm: watchdog terminations co-occur with oversized packets/shell limits. Consider 'ignore_group_members = true' and reviewing AD group sizes.",
-			"timeline", "sequence:overload", 0, ev, "correlate:backend-overload", ConfidenceLog, "")
-		emitted["overload"] = true
-		return true
+	if overloadPos < 0 || watchdogPos < 0 {
+		return false
 	}
-	return false
+	if !seqOrderedWithinWindow(links, overloadPos, watchdogPos) || emitted["overload"] {
+		return false
+	}
+	ev := ""
+	for _, l := range links {
+		if strings.Contains(strings.ToLower(l.message), "watchdog") {
+			ev = l.rawLog
+			break
+		}
+	}
+	addConfigFindingEx(report, SevWarning, "overload",
+		"[CORRELATED ROOT CAUSE] Backend overload/restart storm: watchdog terminations co-occur with oversized packets/shell limits. Consider 'ignore_group_members = true' and reviewing AD group sizes.",
+		"timeline", "sequence:overload", 0, ev, "correlate:backend-overload", ConfidenceLog, "")
+	emitted["overload"] = true
+	return true
 }
 
 // emitOfflineChain collapses the offline->cached-credentials-exhaustion pattern.
@@ -328,15 +399,16 @@ func emitOfflineChain(links []seqLink, report *ReportData, emitted map[string]bo
 // problems.
 // Source: src/providers/ldap/sdap_async_connection.c (start_tls), sasl_bind.
 func emitTLSChain(links []seqLink, report *ReportData, emitted map[string]bool) {
-	var tlsFail, saslFail, credFail bool
+	var tlsPos, saslPos int
+	credFail := false
 	evidence := ""
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
-		if strings.Contains(ml, "starttls") || strings.Contains(ml, "start tls") ||
+		if tlsPos < 0 && (strings.Contains(ml, "starttls") || strings.Contains(ml, "start tls") ||
 			strings.Contains(ml, "start_tls") || strings.Contains(ml, "tls handshake") ||
 			strings.Contains(ml, "could not start tls") || strings.Contains(ml, "tls/ssl") ||
-			strings.Contains(ml, "certificate") || strings.Contains(ml, "tls negotiation") {
-			tlsFail = true
+			strings.Contains(ml, "certificate") || strings.Contains(ml, "tls negotiation")) {
+			tlsPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
@@ -346,7 +418,7 @@ func emitTLSChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 		if (strings.Contains(ml, "sasl") || strings.Contains(ml, "gssapi")) &&
 			(strings.Contains(ml, "fail") || strings.Contains(ml, "error") ||
 				strings.Contains(ml, "could not")) {
-			saslFail = true
+			saslPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
@@ -355,16 +427,25 @@ func emitTLSChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 			credFail = true
 		}
 	}
-	if tlsFail && saslFail && !emitted["tls"] {
-		msg := "[CORRELATED ROOT CAUSE] TLS negotiation failed first, then the SASL/GSSAPI bind failed because no TLS layer was established. "
-		if credFail {
-			msg += "Credentials were also rejected, so fixing the certificate chain (ldap_tls_cacert / ldap_tls_cacertdir) must come before blaming the bind DN. "
-		}
-		msg += "Verify the CA chain, clock, and ldap_id_use_start_tls against the server certificate validity."
-		addConfigFindingEx(report, SevError, "tls", msg,
-			"timeline", "sequence:tls", 0, evidence, "correlate:tls-before-sasl", ConfidenceLog, "sssd-ldap(5)")
-		emitted["tls"] = true
+	// Negative evidence + ordering: the SASL/GSSAPI bind failure is the
+	// symptom; the TLS layer must come first. A bind failure observed BEFORE
+	// any TLS failure is an independent authentication problem, not
+	// tls->sasl. Within the incident window too: a far-apart sasl error is a
+	// separate incident, not a cascade.
+	if emitted["tls"] {
+		return
 	}
+	if !seqOrderedWithinWindow(links, tlsPos, saslPos) {
+		return
+	}
+	msg := "[CORRELATED ROOT CAUSE] TLS negotiation failed first, then the SASL/GSSAPI bind failed because no TLS layer was established. "
+	if credFail {
+		msg += "Credentials were also rejected, so fixing the certificate chain (ldap_tls_cacert / ldap_tls_cacertdir) must come before blaming the bind DN. "
+	}
+	msg += "Verify the CA chain, clock, and ldap_id_use_start_tls against the server certificate validity."
+	addConfigFindingEx(report, SevError, "tls", msg,
+		"timeline", "sequence:tls", 0, evidence, "correlate:tls-before-sasl", ConfidenceLog, "sssd-ldap(5)")
+	emitted["tls"] = true
 }
 
 // emitIDMapChain correlates SID-to-UID mapping failures with the downstream
@@ -373,30 +454,49 @@ func emitTLSChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 // ranges collide, so every consumer of that uid fails.
 // Source: src/providers/ldap/sdap_idmap.c, src/lib/idmap/sss_idmap.c.
 func emitIDMapChain(links []seqLink, report *ReportData, emitted map[string]bool) {
-	var idmapFail, outOfRange, downstream bool
+	idmapPos, outOfRangePos, downstreamPos := -1, -1, -1
 	evidence := ""
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
 		if (strings.Contains(ml, "sid") && (strings.Contains(ml, "could not") || strings.Contains(ml, "fail"))) ||
 			(strings.Contains(ml, "idmap") && strings.Contains(ml, "fail")) {
-			idmapFail = true
+			idmapPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
 		if strings.Contains(ml, "out of range") || strings.Contains(ml, "range_max") ||
 			strings.Contains(ml, "invalid sid") || strings.Contains(ml, "cannot map sid") {
-			outOfRange = true
+			outOfRangePos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
 		if strings.Contains(ml, "no such user") || strings.Contains(ml, "user not found") ||
 			strings.Contains(ml, "permission denied") || strings.Contains(ml, "invalid uid") {
-			downstream = true
+			downstreamPos = l.idx
+			if evidence == "" {
+				evidence = l.rawLog
+			}
 		}
 	}
-	if (idmapFail || outOfRange) && downstream && !emitted["idmap"] {
+	// Negative evidence + ordering: the SID-to-UID mapping failure is the
+	// cause; "user not found"/permission-denied is the downstream symptom. A
+	// downstream error observed BEFORE any mapping failure is an independent
+	// problem, not the consequence of this idmap failure. The two must also
+	// fit inside the incident window, otherwise they are unrelated. The cause
+	// anchor is the explicit mapping failure (sid.../idmap...:fail) first; when
+	// only the out-of-range signal is present, that signal anchors the chain
+	// instead, otherwise out-of-range cases like "ID mapping out of range"
+	// would never be matched.
+	causePos := idmapPos
+	if causePos < 0 {
+		causePos = outOfRangePos
+	}
+	if !seqOrderedWithinWindow(links, causePos, downstreamPos) {
+		return
+	}
+	if (idmapPos >= 0 || outOfRangePos >= 0) && downstreamPos >= 0 && !emitted["idmap"] {
 		addConfigFindingEx(report, SevError, "idmap",
 			"[CORRELATED ROOT CAUSE] SID-to-UID/GID mapping failed, and the downstream 'user not found'/permission-denied errors are its consequence, not independent faults. "+
 				"Check ldap_id_mapping, ldap_idmap_range_min/max for out-of-range or overlapping ranges, and that RFC2307 attributes exist when ldap_id_mapping = false.",
@@ -410,27 +510,36 @@ func emitIDMapChain(links []seqLink, report *ReportData, emitted map[string]bool
 // the machine account could not read the GPO, so access is denied.
 // Source: src/providers/ad/ad_gpo.c, src/sss_client/pam_sss.c.
 func emitGPOChain(links []seqLink, report *ReportData, emitted map[string]bool) {
-	var gpoFail, pamDeny bool
+	gpoPos, pamPos := -1, -1
 	evidence := ""
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
-		if strings.Contains(ml, "gpo") &&
+		if gpoPos < 0 && strings.Contains(ml, "gpo") &&
 			(strings.Contains(ml, "fail") || strings.Contains(ml, "could not") ||
 				strings.Contains(ml, "error") || strings.Contains(ml, "permission")) {
-			gpoFail = true
+			gpoPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
-		if strings.Contains(ml, "pam_authinfo_unavail") || strings.Contains(ml, "authentication failure") ||
-			strings.Contains(ml, "user not permitted") || strings.Contains(ml, "not allowed to logon") {
-			pamDeny = true
+		if pamPos < 0 && (strings.Contains(ml, "pam_authinfo_unavail") || strings.Contains(ml, "authentication failure") ||
+			strings.Contains(ml, "user not permitted") || strings.Contains(ml, "not allowed to logon")) {
+			pamPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
 	}
-	if gpoFail && pamDeny && !emitted["gpo"] {
+	// Negative evidence + ordering: the PAM login denial follows a failed GPO
+	// evaluation; the machine account cannot have been denied access BECAUSE it
+	// could not read the GPO (the denial happens after). If the PAM denial is
+	// observed BEFORE any GPO failure it is an independent credential problem.
+	// Both also need to fit inside the incident window, otherwise they are
+	// unrelated events.
+	if !seqOrderedWithinWindow(links, gpoPos, pamPos) {
+		return
+	}
+	if !emitted["gpo"] {
 		addConfigFindingEx(report, SevError, "gpo",
 			"[CORRELATED ROOT CAUSE] GPO evaluation failed first; the PAM login denial that follows is the access-control consequence, not a separate credential problem. "+
 				"Verify ad_gpo_access_control (permissive vs enforcing), that the machine account can read the GPO (RSOP), and SYSVOL reachability.",
@@ -445,26 +554,38 @@ func emitGPOChain(links []seqLink, report *ReportData, emitted map[string]bool) 
 // ignore_group_members not set), two apparent problems.
 // Source: src/responder/nss/nsssrv.c, src/util/watchdog.c.
 func emitEnumWatchdogChain(links []seqLink, report *ReportData, emitted map[string]bool) {
-	var hugeEnum, watchdog bool
+	causePos, effectPos := -1, -1
 	evidence := ""
 	for _, l := range links {
 		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
-		if strings.Contains(ml, "overlarge") || strings.Contains(ml, "maximum number of shells") ||
+		// The huge-group enumeration is the CAUSE of the watchdog kill.
+		if causePos < 0 && (strings.Contains(ml, "overlarge") || strings.Contains(ml, "maximum number of shells") ||
 			strings.Contains(ml, "group is too large") || strings.Contains(ml, "too many members") ||
-			strings.Contains(ml, "huge group") {
-			hugeEnum = true
+			strings.Contains(ml, "huge group")) {
+			causePos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
-		if strings.Contains(ml, "watchdog") || strings.Contains(ml, "terminated by own") {
-			watchdog = true
+		// The watchdog termination is the EFFECT.
+		if effectPos < 0 && (strings.Contains(ml, "watchdog") || strings.Contains(ml, "terminated by own")) {
+			effectPos = l.idx
 			if evidence == "" {
 				evidence = l.rawLog
 			}
 		}
 	}
-	if hugeEnum && watchdog && !emitted["overload"] {
+	if causePos < 0 || effectPos < 0 {
+		return
+	}
+	// A single log line that carries BOTH signals is one simultaneous fault
+	// (the cause and the effect observed in the same second), not a
+	// cause->effect cascade. Ordering only applies when they are separate
+	// timeline entries.
+	if causePos != effectPos && !seqOrderedWithinWindow(links, causePos, effectPos) {
+		return
+	}
+	if !emitted["overload"] {
 		addConfigFindingEx(report, SevWarning, "overload",
 			"[CORRELATED ROOT CAUSE] A huge group enumeration blocked the responder long enough for the watchdog to kill it: the kill is a symptom, the group size is the cause. "+
 				"Consider ignore_group_members = true and review AD group membership sizes.",

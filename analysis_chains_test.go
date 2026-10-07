@@ -11,8 +11,8 @@ import (
 
 func TestEmitOverloadChain_Fires(t *testing.T) {
 	links := []seqLink{
-		{idx: 0, message: "Child terminated by own WATCHDOG", rawLog: "sssd_be terminated by own WATCHDOG"},
-		{idx: 1, message: "LDAP packet overlarge", rawLog: "ldap packet overlarge, max 100"},
+		{idx: 0, message: "LDAP packet overlarge", rawLog: "ldap packet overlarge, max 100"},
+		{idx: 1, message: "Child terminated by own WATCHDOG", rawLog: "sssd_be terminated by own WATCHDOG"},
 	}
 	var report ReportData
 	emitted := map[string]bool{}

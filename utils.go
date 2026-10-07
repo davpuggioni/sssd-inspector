@@ -79,10 +79,18 @@ func (fp *FileProcessor) fileContains(filePath, search string) bool {
 // ScanFiles streams files line-by-line and executes a callback, discarding the bytes immediately
 // This method processes multiple files and applies the provided function to each line.
 func (fp *FileProcessor) ScanFiles(dirPath string, files []string, lineFunc func(line string)) error {
+	return fp.ScanFilesWithName(dirPath, files, func(_ string, line string) { lineFunc(line) })
+}
+
+// ScanFilesWithName is ScanFiles but also reports the file each line came
+// from, so overlapping consumers (diagnostic scanner + data-driven rules)
+// can share one read of the large log files instead of scanning them twice.
+func (fp *FileProcessor) ScanFilesWithName(dirPath string, files []string, lineFunc func(file, line string)) error {
 	for _, name := range files {
-		if err := fp.scanFile(filepath.Join(dirPath, name), lineFunc); err != nil {
+		n := name
+		if err := fp.scanFile(filepath.Join(dirPath, n), func(line string) { lineFunc(n, line) }); err != nil {
 			// Log error but continue processing other files
-			fmt.Printf("Warning: failed to scan file %s: %v\n", name, err)
+			fmt.Printf("Warning: failed to scan file %s: %v\n", n, err)
 		}
 	}
 	return nil
@@ -248,6 +256,15 @@ func anyFileContains(dirPath string, files []string, search string) bool {
 // Legacy function maintained for backward compatibility
 func scanFiles(dirPath string, files []string, lineFunc func(line string)) {
 	defaultFileProcessor.ScanFiles(dirPath, files, lineFunc)
+}
+
+// scanFilesWithName streams files line-by-line like scanFiles but also
+// reports which file each line came from. It exists so two consumers that
+// read overlapping file sets (the diagnostic single-pass scanner and the
+// data-driven YAML rules) can share ONE read of the large log files instead
+// of scanning them twice. Consumers that do not need the name ignore it.
+func scanFilesWithName(dirPath string, files []string, lineFunc func(file, line string)) {
+	defaultFileProcessor.ScanFilesWithName(dirPath, files, lineFunc)
 }
 
 // extractSection streams a file and extracts a specific command block

@@ -183,6 +183,138 @@ func TestEmitEnumWatchdogChain_RequiresBothSignals(t *testing.T) {
 	}
 }
 
+// --- Ordering + window + negative evidence (Phase 6d.3) --------------------
+
+// seqLinkAt builds a timeline link with an explicit epoch for window tests.
+func seqLinkAt(idx int, ts, msg, raw string) seqLink {
+	epoch := int64(0)
+	hasEpoch := false
+	if ts != "" {
+		ev := TimelineEvent{Timestamp: ts}
+		if e, ok := timelineEpoch(ev); ok {
+			epoch, hasEpoch = e, true
+		}
+	}
+	return seqLink{idx: idx, message: msg, rawLog: raw, epoch: epoch, hasEpoch: hasEpoch}
+}
+
+func TestSeqOrderedWithinWindow_RespectsOrder(t *testing.T) {
+	links := []seqLink{
+		seqLinkAt(0, "2024-05-01 10:00:00", "tls fail", "start_tls failed"),
+		seqLinkAt(1, "2024-05-01 10:00:05", "sasl fail", "sasl bind failed"),
+	}
+	if !seqOrderedWithinWindow(links, 0, 1) {
+		t.Errorf("cause before effect within window must pass")
+	}
+	if seqOrderedWithinWindow(links, 1, 0) {
+		t.Errorf("effect before cause must fail")
+	}
+}
+
+func TestSeqOrderedWithinWindow_RejectsFarApart(t *testing.T) {
+	links := []seqLink{
+		seqLinkAt(0, "2024-05-01 10:00:00", "tls fail", "start_tls failed"),
+		seqLinkAt(1, "2024-05-01 15:00:00", "sasl fail", "sasl bind failed"),
+	}
+	if seqOrderedWithinWindow(links, 0, 1) {
+		t.Errorf("links 5h apart must not form one incident (window is 1h)")
+	}
+}
+
+func TestSeqOrderedWithinWindow_FallsBackToPosition(t *testing.T) {
+	// No parseable timestamps: position order decides (synthetic timelines
+	// and year-less syslog lines must still correlate).
+	links := []seqLink{
+		{idx: 0, message: "tls fail"},
+		{idx: 1, message: "sasl fail"},
+	}
+	if !seqOrderedWithinWindow(links, 0, 1) {
+		t.Errorf("position fallback: cause before effect must pass")
+	}
+	if seqOrderedWithinWindow(links, 1, 0) {
+		t.Errorf("position fallback: effect before cause must fail")
+	}
+}
+
+func TestEmitTLSChain_RejectsReverseOrder(t *testing.T) {
+	// SASL failure BEFORE any TLS failure: independent faults, not tls→sasl.
+	links := []seqLink{
+		{idx: 0, message: "bind", rawLog: "ldap_sasl_interactive_bind_s failed"},
+		{idx: 1, message: "tls", rawLog: "ldap_start_tls failed"},
+	}
+	var report ReportData
+	emitTLSChain(links, &report, map[string]bool{})
+	forbidFinding(t, &report, "tls")
+}
+
+func TestEmitTLSChain_RejectsFarApartIncidents(t *testing.T) {
+	links := []seqLink{
+		seqLinkAt(0, "2024-05-01 10:00:00", "tls", "ldap_start_tls failed"),
+		seqLinkAt(1, "2024-05-01 14:00:00", "sasl", "ldap_sasl_interactive_bind_s failed"),
+	}
+	var report ReportData
+	emitTLSChain(links, &report, map[string]bool{})
+	forbidFinding(t, &report, "tls")
+}
+
+func TestEmitGPOChain_RejectsReverseOrder(t *testing.T) {
+	links := []seqLink{
+		{idx: 0, message: "pam", rawLog: "authentication failure"},
+		{idx: 1, message: "gpo", rawLog: "failed to read GPO"},
+	}
+	var report ReportData
+	emitGPOChain(links, &report, map[string]bool{})
+	forbidFinding(t, &report, "gpo")
+}
+
+func TestEmitIDMapChain_RejectsReverseOrder(t *testing.T) {
+	links := []seqLink{
+		{idx: 0, message: "lookup", rawLog: "no such user for uid 1"},
+		{idx: 1, message: "idmap", rawLog: "cannot map sid: out of range"},
+	}
+	var report ReportData
+	emitIDMapChain(links, &report, map[string]bool{})
+	forbidFinding(t, &report, "idmap")
+}
+
+func TestEmitKrb5Chain_PreauthWithoutSkewStaysSilent(t *testing.T) {
+	// Negative evidence: preauth failure alone (no skew signal) is a
+	// credential/keytab problem, not a clock-skew root cause.
+	links := []seqLink{
+		{idx: 0, message: "krb5", rawLog: "Preauthentication failed for user@AD.EXAMPLE.COM"},
+		{idx: 1, message: "krb5", rawLog: "Preauthentication failed again"},
+		{idx: 2, message: "other", rawLog: "something else"},
+	}
+	var report ReportData
+	if emitKrb5Chain(links, &report, map[string]bool{}) {
+		t.Errorf("preauth without skew must not emit a skew root cause, got %v", findingCategories(&report))
+	}
+}
+
+func TestEmitDNSChain_RejectsReverseOrder(t *testing.T) {
+	// Connect failure BEFORE any DNS signal: independent network fault.
+	links := []seqLink{
+		{idx: 0, message: "net", rawLog: "Unable to establish connection [10.0.0.1]"},
+		{idx: 1, message: "dns", rawLog: "Service resolving timeout reached"},
+		{idx: 2, message: "dns", rawLog: "Failed to resolve host dc.example.test"},
+	}
+	var report ReportData
+	if emitDNSChain(links, &report, map[string]bool{}) {
+		t.Errorf("connect-before-dns must not emit a DNS cascade, got %v", findingCategories(&report))
+	}
+}
+
+func TestEmitOverloadChain_RejectsReverseOrder(t *testing.T) {
+	links := []seqLink{
+		{idx: 0, message: "watchdog", rawLog: "terminated by own WATCHDOG"},
+		{idx: 1, message: "nss", rawLog: "Refusing to read overlarge packet"},
+	}
+	var report ReportData
+	if emitOverloadChain(links, &report, map[string]bool{}) {
+		t.Errorf("watchdog-before-overload must not emit a storm root cause")
+	}
+}
+
 // --- Integration: correlateSequences dispatches R5-R8 ----------------------
 
 // TestCorrelateSequences_DispatchesNewChains builds a synthetic timeline long

@@ -22,7 +22,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -541,11 +540,37 @@ func applyAnalysisRules(dirPath string, report *ReportData, rules []AnalysisRule
 	}
 }
 
-// scanRuleGroup streams the group's files once, evaluating every matcher of
-// the group against each line with a single automaton pass (literals) plus
-// the group's regex rules.
-func scanRuleGroup(dirPath string, files []string, group []*ruleMatcher, lineNo *int64) {
-	// One automaton over every literal pattern of the group.
+// rulePostingEntry fans one canonical AC match out to every (rule, position)
+// that registered the literal. Precomputed once per rule group so the
+// per-line callback is a map lookup, not a scan.
+type rulePostingEntry struct {
+	m   *ruleMatcher
+	pos int
+}
+
+// ruleEvalState is the reusable per-line evaluation state for a set of
+// data-driven rules. It holds the compiled literal automaton (+ posting
+// list), the regex rules, and the transient per-line bookkeeping that
+// scanRuleGroup used to keep locally. Extracting it here lets TWO callers
+// share the logic: the standalone applyAnalysisRules scan AND the unified
+// diagnostic single-pass scan (which feeds the same lines the diagnostic
+// engine already reads, so the large log files are read once, not twice).
+// Semantics are identical in both paths: match:all requires every pattern
+// on the SAME line, evidence is the first satisfying line, a satisfied rule
+// stops being evaluated.
+type ruleEvalState struct {
+	group   []*ruleMatcher
+	ac      *ACMatcher
+	posting map[int][]rulePostingEntry
+	dirty   []*ruleMatcher
+	lineNo  int64
+}
+
+// newRuleEvalState compiles the literal automaton and posting list for the
+// given rule group. A nil automaton means the group has no literal patterns
+// (regex-only group).
+func newRuleEvalState(group []*ruleMatcher) *ruleEvalState {
+	st := &ruleEvalState{group: group}
 	var literal []*ruleMatcher
 	var allPatterns []string
 	for _, m := range group {
@@ -554,91 +579,115 @@ func scanRuleGroup(dirPath string, files []string, group []*ruleMatcher, lineNo 
 			allPatterns = append(allPatterns, m.rule.Patterns...)
 		}
 	}
-	// postingEntry fans one canonical match out to every (rule, position)
-	// that registered it — the contract CanonicalIndex documents, but
-	// precomputed once for the whole group.
-	type postingEntry struct {
-		m   *ruleMatcher
-		pos int
-	}
-	var ac *ACMatcher
-	var posting map[int][]postingEntry
 	if len(allPatterns) > 0 {
-		ac = globalACCache.Get(allPatterns)
-		posting = make(map[int][]postingEntry, len(allPatterns))
+		st.ac = globalACCache.Get(allPatterns)
+		st.posting = make(map[int][]rulePostingEntry, len(allPatterns))
 		for _, m := range literal {
 			for pos, p := range m.rule.Patterns {
-				ci, ok := ac.CanonicalIndex(p)
+				ci, ok := st.ac.CanonicalIndex(p)
 				if !ok {
 					continue // empty pattern: never matches (as before)
 				}
-				posting[ci] = append(posting[ci], postingEntry{m: m, pos: pos})
+				st.posting[ci] = append(st.posting[ci], rulePostingEntry{m: m, pos: pos})
+			}
+		}
+	}
+	return st
+}
+
+// ruleFileSet returns true when the rule wants lines from the given file:
+// either the rule targets that file explicitly, or it uses the default file
+// set and the file belongs to it.
+func ruleFileSet(m *ruleMatcher, file string) bool {
+	for _, f := range m.files {
+		if f == file {
+			return true
+		}
+	}
+	return false
+}
+
+// feedLine evaluates one line (from the given file) against every matcher of
+// the group. ln is the running line counter shared across files, preserved
+// so match:all keeps its same-line semantics and evidence order is stable.
+func (st *ruleEvalState) feedLine(file, line string, ln int64) {
+	st.lineNo = ln
+	lowered := strings.ToLower(line)
+	if st.ac != nil {
+		st.ac.Match(lowered, func(ci int) {
+			for _, e := range st.posting[ci] {
+				if !ruleFileSet(e.m, file) {
+					continue
+				}
+				st.mark(e.m, e.pos, ln)
+			}
+		})
+	}
+	for _, m := range st.group {
+		if m.regexes == nil || m.satisfied {
+			continue
+		}
+		if !ruleFileSet(m, file) {
+			continue
+		}
+		for i, re := range m.regexes {
+			if re.MatchString(line) {
+				st.mark(m, i, ln)
 			}
 		}
 	}
 
-	dirty := make([]*ruleMatcher, 0, len(group))
-	mark := func(m *ruleMatcher, pos int, ln int64) {
+	// End-of-line: a rule fires when this line completed it (any: at
+	// least one pattern; all: every pattern on this same line).
+	for _, m := range st.dirty {
+		m.inDirty = false
 		if m.satisfied {
-			return
+			continue
 		}
-		if m.lineNo != ln {
-			m.lineNo = ln
-			m.hitCount = 0
-			for i := range m.hits {
-				m.hits[i] = false
-			}
+		ok := m.hitCount > 0
+		if m.matchAll {
+			ok = m.hitCount == len(m.rule.Patterns)
 		}
-		if !m.hits[pos] {
-			m.hits[pos] = true
-			m.hitCount++
-		}
-		if !m.inDirty {
-			m.inDirty = true
-			dirty = append(dirty, m)
+		if ok {
+			m.satisfied = true
+			m.evidence = strings.TrimSpace(line)
 		}
 	}
+	st.dirty = st.dirty[:0]
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
-	defer cancel()
-	scanFilesWithContext(ctx, dirPath, files, func(line string) {
+// mark records a (rule, pattern-position) hit on line ln, resetting the
+// per-line hit vector when a new line starts.
+func (st *ruleEvalState) mark(m *ruleMatcher, pos int, ln int64) {
+	if m.satisfied {
+		return
+	}
+	if m.lineNo != ln {
+		m.lineNo = ln
+		m.hitCount = 0
+		for i := range m.hits {
+			m.hits[i] = false
+		}
+	}
+	if !m.hits[pos] {
+		m.hits[pos] = true
+		m.hitCount++
+	}
+	if !m.inDirty {
+		m.inDirty = true
+		st.dirty = append(st.dirty, m)
+	}
+}
+
+// scanRuleGroup streams the group's files once, evaluating every matcher of
+// the group against each line with a single automaton pass (literals) plus
+// the group's regex rules. Per-line work is delegated to ruleEvalState so
+// the unified diagnostic scan reuses the exact same semantics with the file
+// name known per line.
+func scanRuleGroup(dirPath string, files []string, group []*ruleMatcher, lineNo *int64) {
+	st := newRuleEvalState(group)
+	scanFilesWithName(dirPath, files, func(file, line string) {
 		*lineNo++
-		ln := *lineNo
-
-		if ac != nil {
-			ac.Match(strings.ToLower(line), func(ci int) {
-				for _, e := range posting[ci] {
-					mark(e.m, e.pos, ln)
-				}
-			})
-		}
-		for _, m := range group {
-			if m.regexes == nil || m.satisfied {
-				continue
-			}
-			for i, re := range m.regexes {
-				if re.MatchString(line) {
-					mark(m, i, ln)
-				}
-			}
-		}
-
-		// End-of-line: a rule fires when this line completed it (any: at
-		// least one pattern; all: every pattern on this same line).
-		for _, m := range dirty {
-			m.inDirty = false
-			if m.satisfied {
-				continue
-			}
-			ok := m.hitCount > 0
-			if m.matchAll {
-				ok = m.hitCount == len(m.rule.Patterns)
-			}
-			if ok {
-				m.satisfied = true
-				m.evidence = strings.TrimSpace(line)
-			}
-		}
-		dirty = dirty[:0]
+		st.feedLine(file, line, *lineNo)
 	})
 }

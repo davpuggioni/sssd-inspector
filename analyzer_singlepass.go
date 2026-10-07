@@ -307,6 +307,22 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 			infosByCanonical[ci] = append(infosByCanonical[ci], cp.info)
 		}
 	}
+	// Short literals (trimmed length <= 4, e.g. "kdc", "ad ", "tgt ") only
+	// fire at word boundaries: without this "ad " matches inside "systemd"
+	// and "kdc" inside "backupkdc". Longer diagnostic literals keep
+	// substring semantics. The check costs two byte loads per
+	// short-pattern hit on the same single O(n) pass.
+	boundByCanonical := make([]bool, acMatcher.Len())
+	for _, cp := range literalPatterns {
+		if needsWordBoundary(cp.pattern) {
+			if ci, ok := acMatcher.CanonicalIndex(cp.pattern); ok {
+				boundByCanonical[ci] = true
+			}
+		}
+	}
+	needBound := func(idx int) bool {
+		return idx >= 0 && idx < len(boundByCanonical) && boundByCanonical[idx]
+	}
 
 	// Pre-compile the regex-routed patterns (cached, case-insensitive like AC).
 	type compiledRegex struct {
@@ -460,7 +476,8 @@ func performSinglePassScanOnFiles(dirPath string, logFiles []string, macType str
 		// automaton's folded patterns. Every registered role of a matched
 		// literal runs, so a literal registered twice (error + quick flag)
 		// sets both the description and the boolean flag.
-		acMatcher.Match(lowered, func(idx int) {
+		// Bound-selective: short literals fire only at word boundaries.
+		acMatcher.MatchBoundSelective(lowered, needBound, func(idx int) {
 			for _, info := range infosByCanonical[idx] {
 				handlePattern(info)
 			}
