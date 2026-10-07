@@ -14,7 +14,9 @@
 package main
 
 import (
-	"hash/fnv"
+	"crypto/sha256"
+	"encoding/hex"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -126,6 +128,58 @@ func (m *ACMatcher) Match(text string, fn func(patternIndex int)) {
 	}
 }
 
+// isWordByte reports whether b can appear inside a word. The boundary
+// definition is deliberately conservative: letters, digits and '_' keep a
+// token together, everything else ('.', '-', ' ', '[', ... and any
+// non-ASCII byte) separates words. This mirrors how the SSSD log patterns
+// were authored ("tgt failed" must not match "intgt_failed").
+func isWordByte(b byte) bool {
+	return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_'
+}
+
+// MatchWordBound behaves like Match but additionally applies a word-boundary
+// check on the matched occurrence: the byte immediately before and after the
+// match must NOT be a word byte (or must be absent).
+//
+// This is the stage-2 verifier proposed for short, collision-prone literals
+// ("ad ", "tgt ", "kdc", "srv"): a plain substring match would report
+// "login failed_retry" as a KDC hit. The check costs two byte loads per
+// CANDIDATE match — it never runs on lines that produce no AC hit, so the
+// single-pass scanning cost is unchanged.
+//
+// fn receives the canonical index exactly as Match does; a filtered-out
+// candidate is silently dropped.
+func (m *ACMatcher) MatchWordBound(text string, fn func(patternIndex int)) {
+	node := m.root
+	for i := 0; i < len(text); i++ {
+		c := lowerASCII(text[i])
+		for {
+			if next, ok := node.children[c]; ok {
+				node = next
+				break
+			}
+			if node == m.root {
+				break
+			}
+			node = node.fail
+		}
+		if len(node.out) == 0 {
+			continue
+		}
+		for _, idx := range node.out {
+			start := i - len(m.patterns[idx]) + 1
+			if start > 0 && isWordByte(text[start-1]) {
+				continue
+			}
+			end := i + 1
+			if end < len(text) && isWordByte(text[end]) {
+				continue
+			}
+			fn(idx)
+		}
+	}
+}
+
 // Len returns the number of unique patterns registered in the automaton.
 func (m *ACMatcher) Len() int { return len(m.patterns) }
 
@@ -156,25 +210,44 @@ func lowerASCII(b byte) byte {
 // process, so each automaton is compiled exactly once.
 type ACCache struct {
 	mu    sync.Mutex
-	items map[uint64]*ACMatcher
+	items map[string]*ACMatcher
 }
 
-// acFingerprint computes a 64-bit FNV-1a hash over the joined pattern set.
-// Using a fixed-size fingerprint instead of the concatenated pattern string
-// keeps the cache key at constant size regardless of how many patterns are
-// registered (previously the key duplicated the whole pattern set in memory).
-func acFingerprint(patterns []string) uint64 {
-	h := fnv.New64a()
+// acFingerprint computes a stable cache key for a pattern set.
+//
+// The key is the hex SHA-256 of the length-prefixed, lowercased, SORTED
+// pattern set. Two properties matter for a forensic tool:
+//
+//   - Order independence: the same set registered in a different order must
+//     hit the same cache entry instead of recompiling a duplicate automaton
+//     (the previous FNV-1a key was sensitive to ordering).
+//   - No silent aliasing: a 64-bit unseeded hash could collide, and a
+//     collision would hand back an automaton built from a DIFFERENT pattern
+//     set — wrong verdicts attributed to the right rules. SHA-256 removes the
+//     risk; pattern sets are tiny, so the extra hashing cost is negligible.
+func acFingerprint(patterns []string) string {
+	folded := make([]string, 0, len(patterns))
 	for _, p := range patterns {
-		h.Write([]byte(p))
-		h.Write([]byte{0})
+		folded = append(folded, strings.ToLower(p))
 	}
-	return h.Sum64()
+	sort.Strings(folded)
+
+	h := sha256.New()
+	var lenBuf [8]byte
+	for _, p := range folded {
+		n := len(p)
+		for i := 0; i < 8; i++ {
+			lenBuf[i] = byte(n >> (8 * i))
+		}
+		h.Write(lenBuf[:])
+		h.Write([]byte(p))
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // NewACCache creates a new ACCache.
 func NewACCache() *ACCache {
-	return &ACCache{items: make(map[uint64]*ACMatcher)}
+	return &ACCache{items: make(map[string]*ACMatcher)}
 }
 
 // Get returns a compiled automaton for the given pattern set, building it on
@@ -196,7 +269,7 @@ func (c *ACCache) Get(patterns []string) *ACMatcher {
 func (c *ACCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items = make(map[uint64]*ACMatcher)
+	c.items = make(map[string]*ACMatcher)
 }
 
 // globalACCache is the application-wide Aho-Corasick cache.

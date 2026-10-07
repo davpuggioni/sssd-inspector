@@ -1,0 +1,7 @@
+id: ad-domain-is-ip
+title: 'ad_domain impostato a un indirizzo IP invece che al nome DNS del dominio AD'
+notes: 'Difetto iniettato: ad_domain = 192.0.2.10 (IP di documentazione RFC5737) al posto del DNS domain.'
+findings:
+  - rule_id: log:ad-domain-unresolvable
+    severity: error
+    min_count: 1

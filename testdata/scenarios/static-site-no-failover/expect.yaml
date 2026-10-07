@@ -1,0 +1,7 @@
+id: static-site-no-failover
+title: 'ad_site fisso con failover tra siti disabilitato'
+notes: 'Difetto iniettato: ad_site = HQ insieme ad ad_enable_dns_sites = false (nessun failover DC su outage sito).'
+findings:
+  - rule_id: log:static-site-no-failover
+    severity: warning
+    min_count: 1

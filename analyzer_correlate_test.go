@@ -23,6 +23,12 @@ func TestCanonicalADDomain_Precedence(t *testing.T) {
 		{"short hostname yields nothing", ReportData{Hostname: "shorthost"}, ""},
 		{"trailing dot hostname yields nothing", ReportData{Hostname: "host."}, ""},
 		{"empty report yields nothing", ReportData{}, ""},
+		// An IP-valued ad_domain is not a domain: the correlation engine must
+		// not derive "recommended realm = 192.0.2.10" from it (golden scenario
+		// ad-domain-is-ip). Fall back to the search domain instead...
+		{"IP ad_domain skipped, search domain wins", ReportData{AdDomain: "192.0.2.10", SearchDomain: "corp.example.com"}, "corp.example.com"},
+		// ...or abstain entirely when no lower-trust source is available.
+		{"IP ad_domain alone yields nothing", ReportData{AdDomain: "192.0.2.10"}, ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,7 @@
+id: backend-overload-watchdog
+title: 'Chain overload classica: packet overlarge + watchdog kill'
+notes: 'Difetto iniettato: Refusing to read overlarge packet + terminated by own WATCHDOG -> restart storm del backend.'
+findings:
+  - rule_id: correlate:backend-overload
+    severity: warning
+    min_count: 1

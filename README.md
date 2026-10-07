@@ -585,11 +585,11 @@ The test suite includes:
 - **Error handling tests** — Custom error types, wrapping, and context propagation
 - **Logger tests** — Structured logging levels, fields, and filtering
 - **Golden-scenario tests** (`golden_scenarios_test.go`, `testdata/scenarios/`) —
-  31 hand-authored scenarios built from hosts that were really diagnosed, each
+  40 hand-authored scenarios built from hosts that were really diagnosed, each
   injecting one known defect with the ground truth pinned in `expect.yaml`. They
   make the false-positive rate measurable: false positives and misses fail the
   run, `known_gaps` and redundancies are recorded as debt instead. The corpus
-  currently pins 32 of the 42 rule IDs; run with `-v` for the corpus-wide
+  currently pins 41 rule IDs; run with `-v` for the corpus-wide
   precision/recall table. See `testdata/scenarios/README.md` for how to author
   one (`-update-golden` regenerates the expected findings — review the diff,
   never accept it blindly)

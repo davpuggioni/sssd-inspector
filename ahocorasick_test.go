@@ -159,3 +159,126 @@ func TestACCanonicalIndexMapsDuplicates(t *testing.T) {
 		t.Errorf("Match must report the matched literal, got %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Cache-key regressions (forensic correctness)
+// ---------------------------------------------------------------------------
+
+// The old FNV-1a fingerprint was sensitive to slice ORDER: the same pattern
+// set passed in two different orders produced two different keys, compiling
+// duplicate automatons. Worse, a 64-bit collision would hand back an automaton
+// built from a DIFFERENT pattern set, silently attributing matches to the
+// wrong rule metadata. The key must be order- and case-independent, and
+// distinct sets must never alias.
+func TestACFingerprintOrderAndCaseIndependent(t *testing.T) {
+	base := []string{"b error", "a error", "c error"}
+	sameOrder := acFingerprint(base)
+	reversed := acFingerprint([]string{"c error", "a error", "b error"})
+	if sameOrder != reversed {
+		t.Errorf("fingerprint must not depend on slice order: %s != %s", sameOrder, reversed)
+	}
+	cased := acFingerprint([]string{"B ERROR", "A error", "C Error"})
+	if cased != sameOrder {
+		t.Errorf("fingerprint must fold case: %s != %s", cased, sameOrder)
+	}
+}
+
+func TestACFingerprintDistinguishesDifferentSets(t *testing.T) {
+	a := acFingerprint([]string{"ldap error"})
+	b := acFingerprint([]string{"ldap errors"})
+	if a == b {
+		t.Errorf("different pattern sets must never share a cache key (would return the wrong automaton)")
+	}
+	// A short pattern that is a prefix of a longer one must not collide either.
+	c := acFingerprint([]string{"krb5"})
+	d := acFingerprint([]string{"krb5", "krb5_keytab"})
+	if c == d {
+		t.Errorf("prefix pattern sets must not collide")
+	}
+}
+
+func TestACCacheOrderIndependentSameInstance(t *testing.T) {
+	c := NewACCache()
+	a := c.Get([]string{"one", "two", "three"})
+	b := c.Get([]string{"three", "one", "two"})
+	if a != b {
+		t.Error("the same pattern set in a different order must reuse one compiled automaton")
+	}
+	d := c.Get([]string{"ONE", "TWO", "THREE"})
+	if d != a {
+		t.Error("case variants of the same pattern set must reuse one compiled automaton")
+	}
+	other := c.Get([]string{"one", "two", "four"})
+	if other == a {
+		t.Error("a different pattern set must compile its own automaton, never alias a cached one")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Word-boundary verifier (stage-2 false-positive filter)
+// ---------------------------------------------------------------------------
+
+// collectWordBound is collectPatterns through MatchWordBound.
+func collectWordBound(t *testing.T, patterns []string, text string) []string {
+	t.Helper()
+	m := newACMatcher(patterns)
+	seen := make(map[int]bool)
+	var hits []string
+	m.MatchWordBound(text, func(idx int) {
+		if !seen[idx] {
+			seen[idx] = true
+			hits = append(hits, m.patterns[idx])
+		}
+	})
+	sort.Strings(hits)
+	return hits
+}
+
+func TestACMatchWordBoundFiltersInsideWordHits(t *testing.T) {
+	patterns := []string{"kdc", "ad ", "tgt failed"}
+	// All three are substring-present but NOT at a word boundary.
+	f := collectWordBound(t, patterns, "login failed_retry kdcluster badadjust tgt failed_verification")
+	if len(f) != 0 {
+		t.Errorf("word-boundary mode must reject inside-word matches, got %v", f)
+	}
+	// Same text must still be reported by plain Match (substring semantics
+	// are unchanged for existing callers).
+	plain := collectPatterns(t, patterns, "login failed_retry kdcluster badadjust tgt failed_verification")
+	if len(plain) == 0 {
+		t.Errorf("plain Match must keep substring semantics, got no hits")
+	}
+}
+
+func TestACMatchWordBoundAcceptsRealBoundaries(t *testing.T) {
+	patterns := []string{"kdc", "tgt failed"}
+	got := collectWordBound(t, patterns, "KDC unreachable: tgt failed verification using key")
+	want := []string{"kdc", "tgt failed"}
+	if !equalStrings(got, want) {
+		t.Errorf("word-boundary mode must accept true word-boundary matches: got %v, want %v", got, want)
+	}
+}
+
+func TestACMatchWordBoundBoundaryIsPunctuationAware(t *testing.T) {
+	// '.', '[', ':' and '-' separate words; '_' and alphanumerics do not.
+	patterns := []string{"kdc"}
+	for _, text := range []string{"x.kdc", "[kdc]", "kdc:", "kdc-2"} {
+		if got := collectWordBound(t, patterns, text); len(got) != 1 {
+			t.Errorf("punctuation around %q must count as a boundary, got %v", text, got)
+		}
+	}
+	for _, text := range []string{"xkdc", "kdc2", "kdc_helper", "kdcx"} {
+		if got := collectWordBound(t, patterns, text); len(got) != 0 {
+			t.Errorf("%q must NOT count as a boundary, got %v", text, got)
+		}
+	}
+}
+
+func TestACMatchWordBoundAtTextEdges(t *testing.T) {
+	patterns := []string{"kdc"}
+	if got := collectWordBound(t, patterns, "kdc at start"); len(got) != 1 {
+		t.Errorf("start-of-text boundary must match, got %v", got)
+	}
+	if got := collectWordBound(t, patterns, "at end kdc"); len(got) != 1 {
+		t.Errorf("end-of-text boundary must match, got %v", got)
+	}
+}

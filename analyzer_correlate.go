@@ -10,8 +10,16 @@ import "strings"
 // canonicalADDomain derives the most reliable lowercased AD DNS domain name.
 // Precedence: explicit ad_domain in sssd.conf, else the resolv.conf search
 // domain, else the hostname FQDN suffix.
+//
+// An ad_domain that is an IP address is NOT a domain: trusting it would make
+// every downstream check (krb5 realm, hostname suffix, DNS search) compare
+// against "192.0.2.10" and emit advice like "fix default_realm (recommended:
+// 192.0.2.10)" — actively harmful output. Such a value is skipped so the
+// lower-trust sources can answer, or correlation abstains entirely when none
+// can (the conservative choice: no misleading findings beats wrong ones).
+// The IP itself is reported by log:ad-domain-unresolvable.
 func canonicalADDomain(report *ReportData) string {
-	if report.AdDomain != "" {
+	if report.AdDomain != "" && !isIPAddress(strings.TrimPrefix(report.AdDomain, ".")) {
 		return strings.ToLower(strings.TrimPrefix(report.AdDomain, "."))
 	}
 	if report.SearchDomain != "" {

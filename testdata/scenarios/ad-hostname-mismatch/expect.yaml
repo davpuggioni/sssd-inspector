@@ -1,0 +1,7 @@
+id: ad-hostname-mismatch
+title: 'ad_hostname divergente dal hostname di sistema'
+notes: 'Difetto iniettato: ad_hostname = otherhost01.example.test contro Hostname: testhost01.example.test.'
+findings:
+  - rule_id: log:ad-hostname-mismatch
+    severity: warning
+    min_count: 1

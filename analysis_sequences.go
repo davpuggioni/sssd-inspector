@@ -126,7 +126,14 @@ func correlateSequences(timeline []TimelineEvent, report *ReportData) {
 	emittedAny = emitOverloadChain(links, report, emitted) || emittedAny
 	// R4: offline burst
 	emitOfflineChain(links, report, emitted)
-	_ = emittedAny
+	// R5: TLS/STARTTLS -> SASL bind chain (sdap_async_connection.c)
+	emitTLSChain(links, report, emitted)
+	// R6: SID-to-UID mapping failure chain (idmap.c, sdap_idmap.c)
+	emitIDMapChain(links, report, emitted)
+	// R7: GPO access denial chain (ad_gpo.c, pam_sss.c)
+	emitGPOChain(links, report, emitted)
+	// R8: group enumeration storm -> watchdog kill (sssd_nss.c, watchdog.c)
+	emitEnumWatchdogChain(links, report, emitted)
 }
 
 // emitDNSChain detects the DNS/SRV-to-connect-to-offline cascade.
@@ -313,4 +320,155 @@ func emitOfflineChain(links []seqLink, report *ReportData, emitted map[string]bo
 		"[CORRELATED ROOT CAUSE] Backend went OFFLINE and online authentication subsequently failed. Root cause is upstream connectivity/DNS (see 'dns'/'net' findings); enable cache and increase offline_credentials_expiration only after the upstream is fixed.",
 		"timeline", "sequence:offline", 0, ev, "correlate:offline-after-online", ConfidenceLog, "")
 	emitted["offline"] = true
+}
+
+// subsequent SASL/GSSAPI bind failure into one root cause: the TLS layer
+// never came up, so the bind that rides on it cannot succeed. Reporting the
+// two separately makes a broken CA/cert chain look like two unrelated
+// problems.
+// Source: src/providers/ldap/sdap_async_connection.c (start_tls), sasl_bind.
+func emitTLSChain(links []seqLink, report *ReportData, emitted map[string]bool) {
+	var tlsFail, saslFail, credFail bool
+	evidence := ""
+	for _, l := range links {
+		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
+		if strings.Contains(ml, "starttls") || strings.Contains(ml, "start tls") ||
+			strings.Contains(ml, "start_tls") || strings.Contains(ml, "tls handshake") ||
+			strings.Contains(ml, "could not start tls") || strings.Contains(ml, "tls/ssl") ||
+			strings.Contains(ml, "certificate") || strings.Contains(ml, "tls negotiation") {
+			tlsFail = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		// Real SSSD emits "ldap_sasl_interactive_bind_s failed" (underscores),
+		// so match on "sasl" + a failure word rather than the exact phrase.
+		if (strings.Contains(ml, "sasl") || strings.Contains(ml, "gssapi")) &&
+			(strings.Contains(ml, "fail") || strings.Contains(ml, "error") ||
+				strings.Contains(ml, "could not")) {
+			saslFail = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		if strings.Contains(ml, "invalid credentials") {
+			credFail = true
+		}
+	}
+	if tlsFail && saslFail && !emitted["tls"] {
+		msg := "[CORRELATED ROOT CAUSE] TLS negotiation failed first, then the SASL/GSSAPI bind failed because no TLS layer was established. "
+		if credFail {
+			msg += "Credentials were also rejected, so fixing the certificate chain (ldap_tls_cacert / ldap_tls_cacertdir) must come before blaming the bind DN. "
+		}
+		msg += "Verify the CA chain, clock, and ldap_id_use_start_tls against the server certificate validity."
+		addConfigFindingEx(report, SevError, "tls", msg,
+			"timeline", "sequence:tls", 0, evidence, "correlate:tls-before-sasl", ConfidenceLog, "sssd-ldap(5)")
+		emitted["tls"] = true
+	}
+}
+
+// emitIDMapChain correlates SID-to-UID mapping failures with the downstream
+// symptom (user not found / permission denied on a numeric uid) into one
+// idmap root cause: the entry was mapped out of ldap_idmap_range or the
+// ranges collide, so every consumer of that uid fails.
+// Source: src/providers/ldap/sdap_idmap.c, src/lib/idmap/sss_idmap.c.
+func emitIDMapChain(links []seqLink, report *ReportData, emitted map[string]bool) {
+	var idmapFail, outOfRange, downstream bool
+	evidence := ""
+	for _, l := range links {
+		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
+		if (strings.Contains(ml, "sid") && (strings.Contains(ml, "could not") || strings.Contains(ml, "fail"))) ||
+			(strings.Contains(ml, "idmap") && strings.Contains(ml, "fail")) {
+			idmapFail = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		if strings.Contains(ml, "out of range") || strings.Contains(ml, "range_max") ||
+			strings.Contains(ml, "invalid sid") || strings.Contains(ml, "cannot map sid") {
+			outOfRange = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		if strings.Contains(ml, "no such user") || strings.Contains(ml, "user not found") ||
+			strings.Contains(ml, "permission denied") || strings.Contains(ml, "invalid uid") {
+			downstream = true
+		}
+	}
+	if (idmapFail || outOfRange) && downstream && !emitted["idmap"] {
+		addConfigFindingEx(report, SevError, "idmap",
+			"[CORRELATED ROOT CAUSE] SID-to-UID/GID mapping failed, and the downstream 'user not found'/permission-denied errors are its consequence, not independent faults. "+
+				"Check ldap_id_mapping, ldap_idmap_range_min/max for out-of-range or overlapping ranges, and that RFC2307 attributes exist when ldap_id_mapping = false.",
+			"timeline", "sequence:idmap", 0, evidence, "correlate:idmap-downstream", ConfidenceLog, "sssd-ldap(5)")
+		emitted["idmap"] = true
+	}
+}
+
+// emitGPOChain correlates a Group Policy evaluation failure with the PAM
+// access denial it produces on ad_gpo_access_control=enforcing systems:
+// the machine account could not read the GPO, so access is denied.
+// Source: src/providers/ad/ad_gpo.c, src/sss_client/pam_sss.c.
+func emitGPOChain(links []seqLink, report *ReportData, emitted map[string]bool) {
+	var gpoFail, pamDeny bool
+	evidence := ""
+	for _, l := range links {
+		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
+		if strings.Contains(ml, "gpo") &&
+			(strings.Contains(ml, "fail") || strings.Contains(ml, "could not") ||
+				strings.Contains(ml, "error") || strings.Contains(ml, "permission")) {
+			gpoFail = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		if strings.Contains(ml, "pam_authinfo_unavail") || strings.Contains(ml, "authentication failure") ||
+			strings.Contains(ml, "user not permitted") || strings.Contains(ml, "not allowed to logon") {
+			pamDeny = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+	}
+	if gpoFail && pamDeny && !emitted["gpo"] {
+		addConfigFindingEx(report, SevError, "gpo",
+			"[CORRELATED ROOT CAUSE] GPO evaluation failed first; the PAM login denial that follows is the access-control consequence, not a separate credential problem. "+
+				"Verify ad_gpo_access_control (permissive vs enforcing), that the machine account can read the GPO (RSOP), and SYSVOL reachability.",
+			"timeline", "sequence:gpo", 0, evidence, "correlate:gpo-before-pam", ConfidenceLog, "sssd-ad(5)")
+		emitted["gpo"] = true
+	}
+}
+
+// emitEnumWatchdogChain correlates a large group-membership enumeration with
+// a subsequent watchdog kill: the responder blocked long enough on the
+// enumeration that the watchdog terminated it. One root (huge group /
+// ignore_group_members not set), two apparent problems.
+// Source: src/responder/nss/nsssrv.c, src/util/watchdog.c.
+func emitEnumWatchdogChain(links []seqLink, report *ReportData, emitted map[string]bool) {
+	var hugeEnum, watchdog bool
+	evidence := ""
+	for _, l := range links {
+		ml := strings.ToLower(l.message) + " " + strings.ToLower(l.rawLog)
+		if strings.Contains(ml, "overlarge") || strings.Contains(ml, "maximum number of shells") ||
+			strings.Contains(ml, "group is too large") || strings.Contains(ml, "too many members") ||
+			strings.Contains(ml, "huge group") {
+			hugeEnum = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+		if strings.Contains(ml, "watchdog") || strings.Contains(ml, "terminated by own") {
+			watchdog = true
+			if evidence == "" {
+				evidence = l.rawLog
+			}
+		}
+	}
+	if hugeEnum && watchdog && !emitted["overload"] {
+		addConfigFindingEx(report, SevWarning, "overload",
+			"[CORRELATED ROOT CAUSE] A huge group enumeration blocked the responder long enough for the watchdog to kill it: the kill is a symptom, the group size is the cause. "+
+				"Consider ignore_group_members = true and review AD group membership sizes.",
+			"timeline", "sequence:enum-watchdog", 0, evidence, "correlate:enum-watchdog", ConfidenceLog, "sssd.conf(5)")
+		emitted["overload"] = true
+	}
 }

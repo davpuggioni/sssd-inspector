@@ -1,0 +1,7 @@
+id: tls-sasl-chain
+title: 'Chain TLS -> SASL: il bind fallisce perché TLS non e mai stato negoziato'
+notes: 'Difetto iniettato: ldap_start_tls failed seguito da ldap_sasl_interactive_bind_s failed. Root cause unica: TLS, non le credenziali.'
+findings:
+  - rule_id: correlate:tls-before-sasl
+    severity: error
+    min_count: 1

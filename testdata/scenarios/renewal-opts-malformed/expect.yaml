@@ -1,0 +1,7 @@
+id: renewal-opts-malformed
+title: 'ad_machine_account_password_renewal_opts nel formato sbagliato'
+notes: 'Difetto iniettato: ad_machine_account_password_renewal_opts = garbage invece di <giorni>:<ore>.'
+findings:
+  - rule_id: log:malformed-renewal-opts
+    severity: warning
+    min_count: 1

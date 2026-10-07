@@ -449,106 +449,196 @@ func loadAnalysisRules() ([]AnalysisRule, []Diagnostic) {
 	return rules, diags
 }
 
+// ruleMatcher tracks one rule's evaluation state inside the unified
+// single-pass scan (see applyAnalysisRules).
+type ruleMatcher struct {
+	rule      AnalysisRule
+	sev       Severity
+	files     []string
+	matchAll  bool
+	regexes   []*regexp.Regexp // nil when the rule matches literals
+	hits      []bool           // per-pattern hits on the current line
+	hitCount  int
+	lineNo    int64 // last line these hits belong to
+	satisfied bool
+	evidence  string
+	inDirty   bool // queued for end-of-line evaluation
+}
+
+// defaultRuleFiles is the target set of a rule that declares no "files".
+var defaultRuleFiles = []string{"sssd.conf", "sssd.txt", "messages", "messages.txt"}
+
 // applyAnalysisRules evaluates the data-driven rules against the target
-// supportconfig directory and appends findings to the report. Literal
-// patterns run through the Aho-Corasick engine; regex patterns through RE2.
+// supportconfig directory and appends findings to the report.
+//
+// All rules that share a target-file set are evaluated in ONE scan of those
+// files: their literal patterns feed a single Aho-Corasick automaton whose
+// canonical index fans out through a posting list to (rule, pattern position)
+// pairs, and the group's regex rules run in the same per-line callback. This
+// replaces the former one-scan-per-rule loop — O(rules × lines) file reads —
+// with O(distinct file sets × lines), which is a single read for the common
+// case where every rule uses the default file set.
+//
+// Semantics are unchanged: match:all still requires every pattern on the SAME
+// line, evidence is still the first satisfying line, a satisfied rule stops
+// being evaluated, and findings are emitted in input-rule order.
 func applyAnalysisRules(dirPath string, report *ReportData, rules []AnalysisRule) {
+	if len(rules) == 0 {
+		return
+	}
+
+	// 1. Build one matcher per rule (severity, file set, compiled regexes).
+	matchers := make([]*ruleMatcher, 0, len(rules))
 	for _, rule := range rules {
 		sev, _ := ruleSeverity(rule.Severity)
 		files := rule.Files
 		if len(files) == 0 {
-			files = []string{"sssd.conf", "sssd.txt", "messages", "messages.txt"}
+			files = defaultRuleFiles
 		}
-
-		regexMode := strings.EqualFold(strings.TrimSpace(rule.PatternType), "regex")
-		matchAll := strings.EqualFold(strings.TrimSpace(rule.Match), "all")
-
-		var matchLine func(line string, hit func(patternIdx int))
-		if regexMode {
-			regexes := make([]*regexp.Regexp, 0, len(rule.Patterns))
+		m := &ruleMatcher{
+			rule:     rule,
+			sev:      sev,
+			files:    files,
+			matchAll: strings.EqualFold(strings.TrimSpace(rule.Match), "all"),
+			hits:     make([]bool, len(rule.Patterns)),
+		}
+		if strings.EqualFold(strings.TrimSpace(rule.PatternType), "regex") {
+			m.regexes = make([]*regexp.Regexp, 0, len(rule.Patterns))
 			for _, p := range rule.Patterns {
-				regexes = append(regexes, globalRegexCache.Get("(?i)"+p))
-			}
-			matchLine = func(line string, hit func(patternIdx int)) {
-				for i, r := range regexes {
-					if r.MatchString(line) {
-						hit(i)
-					}
-				}
-			}
-		} else {
-			// The automaton deduplicates literals, so its canonical indices
-			// are not positions in rule.Patterns. Translate them back to
-			// pattern positions here: otherwise a rule listing the same
-			// pattern twice (or twice with different case) mis-indexes the
-			// hit table — with match: all it can never be satisfied, and
-			// with match: any it can report a match no pattern produced.
-			ac := globalACCache.Get(rule.Patterns)
-			toPatternPos := make([][]int, ac.Len())
-			for pos, p := range rule.Patterns {
-				if ci, ok := ac.CanonicalIndex(p); ok {
-					toPatternPos[ci] = append(toPatternPos[ci], pos)
-				}
-			}
-			matchLine = func(line string, hit func(patternIdx int)) {
-				ac.Match(strings.ToLower(line), func(ci int) {
-					for _, pos := range toPatternPos[ci] {
-						hit(pos)
-					}
-				})
+				m.regexes = append(m.regexes, globalRegexCache.Get("(?i)"+p))
 			}
 		}
+		matchers = append(matchers, m)
+	}
 
-		applyRuleScan(dirPath, files, report, rule, sev, matchLine, matchAll)
+	// 2. Group matchers by file set; each group becomes ONE scan pass.
+	groups := make(map[string][]*ruleMatcher)
+	groupFiles := make(map[string][]string)
+	var groupOrder []string
+	for _, m := range matchers {
+		key := strings.Join(m.files, "\x00")
+		if _, ok := groups[key]; !ok {
+			groupOrder = append(groupOrder, key)
+			groupFiles[key] = m.files
+		}
+		groups[key] = append(groups[key], m)
+	}
+
+	var lineNo int64
+	for _, key := range groupOrder {
+		scanRuleGroup(dirPath, groupFiles[key], groups[key], &lineNo)
+	}
+
+	// 3. Emit in input order so the report stays deterministic.
+	for _, m := range matchers {
+		if !m.satisfied {
+			continue
+		}
+		msg := fmt.Sprintf("[RULE: %s] %s", m.rule.Name, m.rule.Message)
+		addConfigFindingEx(report, m.sev, m.rule.Category, msg,
+			strings.Join(m.files, ","), "rule:"+m.rule.Name, 0, m.evidence,
+			"rule:"+m.rule.Name, ConfidenceHeuristic, "")
 	}
 }
 
-// applyRuleScan streams the rule's target files once and evaluates the
-// matcher callback per line, honoring any/all semantics. The first matching
-// line is kept as evidence; evaluation stops as soon as the rule is
-// satisfied (any mode) to keep the cost minimal.
-func applyRuleScan(
-	dirPath string,
-	files []string,
-	report *ReportData,
-	rule AnalysisRule,
-	sev Severity,
-	matchLine func(line string, hit func(patternIdx int)),
-	matchAll bool,
-) {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
-	defer cancel()
+// scanRuleGroup streams the group's files once, evaluating every matcher of
+// the group against each line with a single automaton pass (literals) plus
+// the group's regex rules.
+func scanRuleGroup(dirPath string, files []string, group []*ruleMatcher, lineNo *int64) {
+	// One automaton over every literal pattern of the group.
+	var literal []*ruleMatcher
+	var allPatterns []string
+	for _, m := range group {
+		if m.regexes == nil {
+			literal = append(literal, m)
+			allPatterns = append(allPatterns, m.rule.Patterns...)
+		}
+	}
+	// postingEntry fans one canonical match out to every (rule, position)
+	// that registered it — the contract CanonicalIndex documents, but
+	// precomputed once for the whole group.
+	type postingEntry struct {
+		m   *ruleMatcher
+		pos int
+	}
+	var ac *ACMatcher
+	var posting map[int][]postingEntry
+	if len(allPatterns) > 0 {
+		ac = globalACCache.Get(allPatterns)
+		posting = make(map[int][]postingEntry, len(allPatterns))
+		for _, m := range literal {
+			for pos, p := range m.rule.Patterns {
+				ci, ok := ac.CanonicalIndex(p)
+				if !ok {
+					continue // empty pattern: never matches (as before)
+				}
+				posting[ci] = append(posting[ci], postingEntry{m: m, pos: pos})
+			}
+		}
+	}
 
-	satisfied := false
-	var evidenceLine string
-
-	scanFilesWithContext(ctx, dirPath, files, func(line string) {
-		if satisfied && !matchAll {
+	dirty := make([]*ruleMatcher, 0, len(group))
+	mark := func(m *ruleMatcher, pos int, ln int64) {
+		if m.satisfied {
 			return
 		}
-		hits := make([]bool, len(rule.Patterns))
-		hitCount := 0
-		matchLine(line, func(idx int) {
-			if !hits[idx] {
-				hits[idx] = true
-				hitCount++
-			}
-		})
-		ok := hitCount > 0
-		if matchAll {
-			ok = hitCount == len(rule.Patterns)
-		}
-		if ok {
-			satisfied = true
-			if evidenceLine == "" {
-				evidenceLine = strings.TrimSpace(line)
+		if m.lineNo != ln {
+			m.lineNo = ln
+			m.hitCount = 0
+			for i := range m.hits {
+				m.hits[i] = false
 			}
 		}
-	})
-
-	if !satisfied {
-		return
+		if !m.hits[pos] {
+			m.hits[pos] = true
+			m.hitCount++
+		}
+		if !m.inDirty {
+			m.inDirty = true
+			dirty = append(dirty, m)
+		}
 	}
-	msg := fmt.Sprintf("[RULE: %s] %s", rule.Name, rule.Message)
-	addConfigFindingEx(report, sev, rule.Category, msg, strings.Join(files, ","), "rule:"+rule.Name, 0, evidenceLine, "rule:"+rule.Name, ConfidenceHeuristic, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileScanTimeout)
+	defer cancel()
+	scanFilesWithContext(ctx, dirPath, files, func(line string) {
+		*lineNo++
+		ln := *lineNo
+
+		if ac != nil {
+			ac.Match(strings.ToLower(line), func(ci int) {
+				for _, e := range posting[ci] {
+					mark(e.m, e.pos, ln)
+				}
+			})
+		}
+		for _, m := range group {
+			if m.regexes == nil || m.satisfied {
+				continue
+			}
+			for i, re := range m.regexes {
+				if re.MatchString(line) {
+					mark(m, i, ln)
+				}
+			}
+		}
+
+		// End-of-line: a rule fires when this line completed it (any: at
+		// least one pattern; all: every pattern on this same line).
+		for _, m := range dirty {
+			m.inDirty = false
+			if m.satisfied {
+				continue
+			}
+			ok := m.hitCount > 0
+			if m.matchAll {
+				ok = m.hitCount == len(m.rule.Patterns)
+			}
+			if ok {
+				m.satisfied = true
+				m.evidence = strings.TrimSpace(line)
+			}
+		}
+		dirty = dirty[:0]
+	})
 }

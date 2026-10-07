@@ -38,12 +38,21 @@ var errorCapableRules = map[string]bool{
 	"correlate:hostname-not-fqdn":        true,
 	"correlate:dns-srv-failure":          true,
 	"correlate:offline-after-online":     true,
-	"log:ad-domain-unresolvable":         true,
-	"log:ad-server-unresolvable":         true,
-	"log:unsupported-sasl-mech":          true,
-	"log:krb5-validate-disabled":         true,
-	"log:starttls-on-ad":                 true,
-	"log:invalid-gpo-value":              true,
+	// Root-cause chains whose second link is a failed authentication: the
+	// first link alone already proves the login path is broken (TLS never
+	// came up / the SID cannot be mapped / the GPO cannot be read), so they
+	// belong with the krb5/dns correlate entries above, not with cosmetic
+	// config warnings. Golden scenarios tls-sasl-chain, idmap-out-of-range
+	// and gpo-pam-denied pin the severity as error.
+	"correlate:tls-before-sasl":  true,
+	"correlate:idmap-downstream": true,
+	"correlate:gpo-before-pam":   true,
+	"log:ad-domain-unresolvable": true,
+	"log:ad-server-unresolvable": true,
+	"log:unsupported-sasl-mech":  true,
+	"log:krb5-validate-disabled": true,
+	"log:starttls-on-ad":         true,
+	"log:invalid-gpo-value":      true,
 }
 
 // catalogSeverity enforces the central severity policy: a finding that wants

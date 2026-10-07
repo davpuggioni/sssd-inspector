@@ -1,0 +1,7 @@
+id: enum-watchdog-kill
+title: 'Chain enumerazione enorme -> kill watchdog'
+notes: 'Difetto iniettato: watchdog kill durante enumerazione di un huge group. La causa e la dimensione del gruppo, non il watchdog.'
+findings:
+  - rule_id: correlate:enum-watchdog
+    severity: warning
+    min_count: 1

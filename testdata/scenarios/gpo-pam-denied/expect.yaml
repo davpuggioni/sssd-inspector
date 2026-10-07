@@ -1,0 +1,7 @@
+id: gpo-pam-denied
+title: 'Chain GPO -> PAM: la negazione PAM e conseguenza della GPO illeggibile'
+notes: 'Difetto iniettato: Group Policy Container non leggibile + PAM_AUTHINFO_UNAVAIL. Non e un problema di credenziali.'
+findings:
+  - rule_id: correlate:gpo-before-pam
+    severity: error
+    min_count: 1

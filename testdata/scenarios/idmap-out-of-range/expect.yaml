@@ -1,0 +1,7 @@
+id: idmap-out-of-range
+title: 'Chain idmap -> sintomo downstream: SID fuori range, poi user not found'
+notes: 'Difetto iniettato: ID mapping out of range seguito da Permission denied sul lookup. Il secondo errore e conseguenza del primo.'
+findings:
+  - rule_id: correlate:idmap-downstream
+    severity: error
+    min_count: 1
