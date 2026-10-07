@@ -1,0 +1,9 @@
+id: catalog-domain-typo
+title: 'nss defualt_shell: opzione con refuso'
+notes: "Difetto iniettato: defualt_shell e un refuso di default_shell. Il validatore deve segnalare catalog:defualt_shell."
+findings:
+  - rule_id: catalog:unknown-option
+    severity: warning
+    min_count: 1
+
+

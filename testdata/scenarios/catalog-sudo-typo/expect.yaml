@@ -1,0 +1,9 @@
+id: catalog-sudo-typo
+title: 'domain ad ldap_sudo_random_offfset: refuso'
+notes: "Difetto iniettato: ldap_sudo_random_offfset e un refuso di ldap_sudo_random_offset. Il validatore deve segnalare catalog:ldap_sudo_random_offfset."
+findings:
+  - rule_id: catalog:unknown-option
+    severity: warning
+    min_count: 1
+
+

@@ -1,0 +1,9 @@
+id: catalog-ipa-host
+title: 'domain/ipa ipa_host_fqdn_x: opzione non esistente'
+notes: "Difetto iniettato: ipa_host_fqdn_x e un alias non esistente di ipa_host_fqdn. Il validatore deve segnalare catalog:ipa_host_fqdn_x."
+findings:
+  - rule_id: catalog:unknown-option
+    severity: warning
+    min_count: 1
+
+

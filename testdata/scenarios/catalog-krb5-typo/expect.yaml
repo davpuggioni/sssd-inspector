@@ -1,0 +1,9 @@
+id: catalog-krb5-typo
+title: 'krb5_serivce: opzione non esistente'
+notes: "Difetto iniettato: krb5_serivce e un alias non esistente di krb5_service. Il validatore deve segnalare catalog:krb5_serivce."
+findings:
+  - rule_id: catalog:unknown-option
+    severity: warning
+    min_count: 1
+
+

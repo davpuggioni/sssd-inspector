@@ -1,0 +1,9 @@
+id: catalog-cache-cred
+title: 'domain cache_credentials: valore non booleano'
+notes: "Difetto iniettato: cache_credentials = definitely (solo true/false accettati). Il validatore deve segnalare catalog:cache_credentials."
+findings:
+  - rule_id: catalog:invalid-value
+    severity: warning
+    min_count: 1
+
+

@@ -1,0 +1,9 @@
+id: catalog-sssd-cert
+title: 'sssd certificate_verification: valore non ammesso'
+notes: "Difetto iniettato: certificate_verification = fips1 (i valori ammessi sono mandatory e never). Il validatore deve segnalare catalog:certificate_verification."
+findings:
+  - rule_id: catalog:invalid-value
+    severity: warning
+    min_count: 1
+
+

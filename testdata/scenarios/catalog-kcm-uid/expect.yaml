@@ -1,0 +1,9 @@
+id: catalog-kcm-uid
+title: 'kcm max_uid_ccaches: valore non intero'
+notes: "Difetto iniettato: max_uid_ccaches = many (deve essere un intero). Il validatore deve segnalare catalog:max_uid_ccaches."
+findings:
+  - rule_id: catalog:invalid-value
+    severity: warning
+    min_count: 1
+
+
