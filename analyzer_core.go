@@ -160,7 +160,13 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	}
 
 	if report.SssdService != "Running" {
-		report.Problems = append(report.Problems, "sssd.service is not actively running.")
+		// Only report as a problem when systemd.txt was actually collected.
+		// If the supportconfig doesn't include systemd.txt, the status is
+		// genuinely unknown and should not be reported as a problem (avoids
+		// false positives for archives that simply didn't capture systemd state).
+		if _, err := os.Stat(filepath.Join(dirPath, "systemd.txt")); err == nil {
+			report.Problems = append(report.Problems, "sssd.service is not actively running.")
+		}
 	}
 
 	// Phase B: cross-source correlation/reconciliation. Runs after config, DNS,

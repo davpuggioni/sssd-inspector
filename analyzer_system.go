@@ -91,9 +91,11 @@ func analyzePerformance(dirPath string, report *ReportData) {
 func analyzeServices(dirPath string, report *ReportData) {
 	var sssdStatusBlock []string
 	inSssdStatus := false
+	sssdFoundInSystemd := false
 	scanFiles(dirPath, []string{"systemd.txt"}, func(line string) {
-		if strings.Contains(line, "sssd.service") && (strings.Contains(line, "Loaded:") || strings.HasPrefix(line, "●") || strings.Contains(line, "System Security Services Daemon")) {
+		if strings.Contains(line, "sssd.service") {
 			inSssdStatus = true
+			sssdFoundInSystemd = true
 		}
 		if inSssdStatus && strings.HasPrefix(line, "●") && !strings.Contains(line, "sssd.service") {
 			inSssdStatus = false
@@ -111,9 +113,12 @@ func analyzeServices(dirPath string, report *ReportData) {
 		}
 	})
 
+	sssdRunning := false
 	for _, line := range sssdStatusBlock {
-		if strings.Contains(line, "Active: active (running)") {
+		if isSssdRunningLine(line) {
+			sssdRunning = true
 			report.SssdService = "Running"
+			break
 		}
 
 		matches := reStatus.FindStringSubmatch(line)
@@ -137,12 +142,49 @@ func analyzeServices(dirPath string, report *ReportData) {
 		}
 	}
 
+	// Fallback: if systemd.txt was collected but contained no sssd.service entry
+	// at all, try SSSD log files for evidence the daemon is running (e.g.
+	// "Back end is online", active sssd_be process lines). This avoids false
+	// negatives when systemd.txt is missing or incomplete but SSSD logs clearly
+	// show the daemon operating.
+	if !sssdRunning && !sssdFoundInSystemd {
+		if isSssdRunningInLogs(dirPath) {
+			report.SssdService = "Running"
+			sssdRunning = true
+		}
+	}
+
 	if report.WinbindService == "Not Running / Unknown" {
 		report.WinbindService = "Not Running / Disabled"
 	}
 	if report.NscdStatus == "Not Running / Unknown" {
 		report.NscdStatus = "Disabled / Stopped"
 	}
+}
+
+// isSssdRunningLine returns true if a systemd status line indicates sssd is running.
+// It covers the most common systemctl output formats:
+//   - "Active: active (running)"       (systemctl status)
+//   - "active (running)"               (compact status, no prefix)
+//   - "ActiveState=active"             (systemctl show -p ActiveState)
+//   - "SubState=running"               (systemctl show -p SubState)
+//   - "... active running ..."         (systemctl list-units single-line format)
+func isSssdRunningLine(line string) bool {
+	lower := strings.ToLower(line)
+	return strings.Contains(lower, "active: active (running)") ||
+		strings.Contains(lower, "activestate=active") ||
+		strings.Contains(lower, "substate=running") ||
+		strings.Contains(lower, "active (running)") ||
+		strings.Contains(lower, "active running")
+}
+
+// isSssdRunningInLogs checks SSSD log files for evidence the daemon is running.
+// Used as a fallback when systemd.txt is missing or doesn't contain a
+// sssd.service entry at all.
+func isSssdRunningInLogs(dirPath string) bool {
+	return anyFileContains(dirPath, []string{"sssd.txt", "messages", "messages.txt"}, "Back end is online") ||
+		anyFileContains(dirPath, []string{"sssd.txt", "messages", "messages.txt"}, "SSSD is running") ||
+		anyFileContains(dirPath, []string{"sssd.txt", "messages", "messages.txt"}, "sssd_be[")
 }
 
 func analyzeDiskSpace(dirPath string, report *ReportData) {

@@ -287,3 +287,131 @@ func TestAnalyzePermissions_SLES15SP7_ConfOwnership_NonBuggyBuild(t *testing.T) 
 		t.Errorf("Non-buggy SLES15 SP7 build should not emit the update-sssd notification.")
 	}
 }
+
+// Test: Verify SSSD running detected via standard "Active: active (running)" format
+func TestAnalyzeServices_Running_ActiveActiveRunning(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "● sssd.service - System Security Services Daemon\n   Loaded: loaded (/usr/lib/systemd/system/sssd.service; enabled; vendor preset: disabled)\n   Active: active (running) since Mon 2024-01-01 10:00:00 UTC; 1h ago\n Main PID: 1234 (sssd)\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService != "Running" {
+		t.Errorf("Expected SssdService='Running', got '%s'", report.SssdService)
+	}
+	if containsString(report.Problems, "sssd.service is not actively running") {
+		t.Errorf("Should not report 'not actively running' when sssd is running; got: %v", report.Problems)
+	}
+}
+
+// Test: Verify SSSD running detected via "ActiveState=active" (systemctl show format)
+func TestAnalyzeServices_Running_ActiveStateActive(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "sssd.service\n   ActiveState=active\n   SubState=running\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService != "Running" {
+		t.Errorf("Expected SssdService='Running', got '%s'", report.SssdService)
+	}
+}
+
+// Test: Verify SSSD running detected via compact "active (running)" format
+func TestAnalyzeServices_Running_CompactFormat(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "sssd.service loaded active running System Security Services Daemon\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService != "Running" {
+		t.Errorf("Expected SssdService='Running', got '%s'", report.SssdService)
+	}
+}
+
+// Test: Verify SSSD running detected via log fallback when systemd.txt is missing
+func TestAnalyzeServices_Running_LogFallback(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.txt": "(2024-01-01 10:00:00): [sssd[be[example.com]]] (0x0040): Back end is online\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService != "Running" {
+		t.Errorf("Expected SssdService='Running' via log fallback, got '%s'", report.SssdService)
+	}
+}
+
+// Test: Verify SSSD running detected via sssd_be process line in logs
+func TestAnalyzeServices_Running_LogFallback_sssdBe(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"messages": "Jan  1 10:00:00 server sssd_be[1234]: [be[example.com]] Back end is online\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService != "Running" {
+		t.Errorf("Expected SssdService='Running' via sssd_be log fallback, got '%s'", report.SssdService)
+	}
+}
+
+// Test: Verify no false positive when systemd.txt is missing entirely
+func TestAnalyzeServices_NotRunning_NoSystemdTxt(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"sssd.conf": "[domain/example.com]\nid_provider = ad\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	// Status should remain unknown, not "Running"
+	if report.SssdService == "Running" {
+		t.Errorf("Expected SssdService != 'Running' when no systemd info available, got '%s'", report.SssdService)
+	}
+}
+
+// Test: Verify "not actively running" status when systemd.txt exists but sssd is not running
+func TestAnalyzeServices_NotRunning_HasSystemdTxt(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "● sssd.service - System Security Services Daemon\n   Loaded: loaded\n   Active: failed (Result: exit-code)\n   Process: 1234 ExecStart=/usr/sbin/sssd (code=exited, status=1)\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService == "Running" {
+		t.Errorf("Expected SssdService != 'Running' when systemd shows failed, got '%s'", report.SssdService)
+	}
+	// The generic exit-code problem should still be reported
+	if !containsString(report.Problems, "crashed with exit code 1") {
+		t.Errorf("Expected exit code 1 problem when systemd.txt shows sssd failed; got: %v", report.Problems)
+	}
+}
+
+// Test: Verify unknown status when systemd.txt exists but has no sssd.service entry
+func TestAnalyzeServices_Unknown_NoSssdEntry(t *testing.T) {
+	dir := setupMockDir(t, map[string]string{
+		"systemd.txt": "● sshd.service - OpenSSH server daemon\n   Loaded: loaded\n   Active: active (running)\n",
+	})
+	defer os.RemoveAll(dir)
+
+	var report ReportData
+	analyzeServices(dir, &report)
+
+	if report.SssdService == "Running" {
+		t.Errorf("Expected SssdService != 'Running' when no sssd.service entry, got '%s'", report.SssdService)
+	}
+}
