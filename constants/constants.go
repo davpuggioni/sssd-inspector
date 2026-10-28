@@ -7,7 +7,7 @@ import "time"
 const (
 	// App metadata
 	AppName    = "SSSD Inspector"
-	AppVersion = "0.2.4"
+	AppVersion = "0.2.5"
 
 	// Window dimensions
 	DefaultWindowWidth  = 1024
