@@ -87,7 +87,7 @@ const (
 
 	// Flag descriptions
 	DescVersion    = "Print program version"
-	DescAnalyze    = "Path to the supportconfig directory or log file"
+	DescAnalyze    = "Path to supportconfig directory or archive (.txz/.tar.xz/.tar.gz)"
 	DescTXT        = "Generate a TXT report"
 	DescHTML       = "Generate an HTML report"
 	DescAnonymize  = "Redact PII (IPs, Domains) from the report"
