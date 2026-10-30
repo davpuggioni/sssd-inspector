@@ -22,6 +22,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -70,7 +71,7 @@ func runScenario(t *testing.T, id string) ReportData {
 		t.Fatalf("scenario %s has no input/ directory: %v", id, err)
 	}
 	globalFileCache.Clear()
-	return analyzeData(input, false, nil)
+	return analyzeData(context.Background(), input, false, nil)
 }
 
 // renderGolden rewrites the findings block from the actual report, keeping the

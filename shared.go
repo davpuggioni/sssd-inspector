@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -72,7 +73,7 @@ func runCLI(path string, genTxt bool, genHtml bool, anonymize bool, genJSON bool
 	}
 
 	// Use the updated analyzeData signature
-	report := analyzeData(dirPath, anonymize, progressFunc)
+	report := analyzeData(context.Background(), dirPath, anonymize, progressFunc)
 
 	printDefinitionDiagnostics(report)
 
@@ -148,7 +149,7 @@ func runLogDirAnalyze(path string, genTxt bool, genHtml bool, anonymize bool, ge
 		fmt.Printf("[Progress %d%%] %s\n", pct, msg)
 	}
 
-	report := analyzeLogsOnly(dirPath, logFiles, anonymize, progressFunc)
+	report := analyzeLogsOnly(context.Background(), dirPath, logFiles, anonymize, progressFunc)
 
 	printDefinitionDiagnostics(report)
 

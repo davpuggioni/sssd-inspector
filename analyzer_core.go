@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -50,9 +51,15 @@ func getSSSDVersion(packages []string) (int, int) {
 
 // analyzeData is the main orchestrator. It routes the streaming directory path to specialized analyzers.
 // Now uses Single-Pass scanning for log files to eliminate ~29 redundant scans.
-func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
+// ctx supports cancellation/timeout: if the context is cancelled, analysis stops
+// at the next phase boundary and returns the partial report built so far.
+func analyzeData(ctx context.Context, dirPath string, anonymize bool, progressFunc func(string, int)) ReportData {
 	// Clear file cache from previous analysis to ensure fresh data
 	globalFileCache.Clear()
+
+	if ctx.Err() != nil {
+		return ReportData{}
+	}
 
 	var report ReportData
 	report.Timestamp = time.Now().Format("02:01:2006 15:04:05")
@@ -76,12 +83,20 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	analyzeHostnameAndFQDN(dirPath, &report)
 	analyzeSCC(dirPath, &report)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	if progressFunc != nil {
 		progressFunc("Analyzing Network & Kerberos state...", 15)
 	}
 	analyzeDNS(dirPath, &report)
 	analyzeTime(dirPath, &report)
 	analyzePerformance(dirPath, &report)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	// ---- Phase 2: Config analysis (also no log scanning) ----
 	if progressFunc != nil {
@@ -98,6 +113,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	analyzeSSSDFilePermissions(dirPath, &report)
 	analyzeDiskSpace(dirPath, &report)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	// ---- Phase 3: Single-Pass Log Scanning ----
 	// ONE scan of all log files extracts ALL information simultaneously,
 	// replacing ~29 separate scans that were previously performed.
@@ -109,6 +128,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	kbArticles, kbDiags := loadKBArticlesDiag(dirPath)
 	report.AddDiagnostics(kbDiags)
 	singlePassResult := performSinglePassScan(dirPath, report.MACType, kbArticles)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	// Apply single-pass results to report
 	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
@@ -130,6 +153,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 
 	if !singlePassResult.KeytabFound && !singlePassResult.KeytabNotFound && !singlePassResult.NoKeytabPrincipal {
 		report.Problems = append(report.Problems, "No Kerberos Keytab (Machine Account) principal found. AD join might be broken.")
+	}
+
+	if ctx.Err() != nil {
+		return report
 	}
 
 	// ---- Phase 5: SSSD Config & remaining log-based analysis ----
@@ -176,12 +203,20 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	// MAC denials (from security-*.txt files, not from log scanning)
 	analyzeMACDenials(dirPath, &report)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	// ---- Phase 6: KB Article matching (using single-pass evidence) ----
 	if progressFunc != nil {
 		progressFunc("Matching Knowledge Base Articles...", 80)
 	}
 	// Match KB using single-pass evidence and config-only patterns
 	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence, true)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	// ---- Phase 6b: Advanced correlation (temporal bursts + fuzzy KB) ----
 	if progressFunc != nil {
@@ -194,6 +229,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	// could not classify, against the loaded KB corpus.
 	report.KBSuggestions = analyzeKBSuggestions(report.Timeline, kbArticles, report.MatchedTIDs)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	// ---- Phase 6c: data-driven YAML rules (optional, additive) ----
 	// Loader problems (invalid severity, unreadable file, syntax error)
 	// are diagnostics, not stdout noise: they must reach the report so the
@@ -202,6 +241,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 	report.AddDiagnostics(ruleDiags)
 	if len(customRules) > 0 {
 		applyAnalysisRules(dirPath, &report, customRules)
+	}
+
+	if ctx.Err() != nil {
+		return report
 	}
 
 	// ---- Phase 6d: Sequence-based root-cause correlation ----
@@ -213,6 +256,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		progressFunc("Correlating root-cause sequences...", 88)
 	}
 	correlateSequences(report.Timeline, &report)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	// ---- Phase 7: Final checks ----
 	// Clean up duplicate entries mapped during distributed analysis
@@ -243,6 +290,10 @@ func analyzeData(dirPath string, anonymize bool, progressFunc func(string, int))
 		if report.SssdConfigFound && !hasDebug9 {
 			report.Warnings = append(report.Warnings, "[DIAGNOSTIC HINT] SSSD debug level is low. To get better logs, set debug_level=9 in sssd.conf, restart sssd, reproduce the error, and generate a new supportconfig.")
 		}
+	}
+
+	if ctx.Err() != nil {
+		return report
 	}
 
 	// Graph + anonymization are shared with raw-log mode (-logdir) so the
@@ -717,14 +768,14 @@ func CompareConfigsAnonymized(dirA, dirB string, anonymize bool, progressFunc fu
 	progressFunc(constants.MsgInitializing, constants.ProgressStart)
 
 	progressFunc("Analyzing first supportconfig…", 10)
-	reportA := analyzeData(dirA, anonymize, func(msg string, pct int) {
+	reportA := analyzeData(context.Background(), dirA, anonymize, func(msg string, pct int) {
 		// Map the sub-analysis progress 0..100 onto the global 10..45 band.
 		scaled := 10 + int(float64(pct)*0.35)
 		progressFunc(msg, scaled)
 	})
 
 	progressFunc("Analyzing second supportconfig…", 50)
-	reportB := analyzeData(dirB, anonymize, func(msg string, pct int) {
+	reportB := analyzeData(context.Background(), dirB, anonymize, func(msg string, pct int) {
 		scaled := 50 + int(float64(pct)*0.35)
 		progressFunc(msg, scaled)
 	})

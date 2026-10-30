@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestAnalyzeData_SurfacesCatalogFindings(t *testing.T) {
 	dir := catalogE2EFixture(t)
 	defer os.RemoveAll(dir)
 
-	report := analyzeData(dir, false, nil)
+	report := analyzeData(context.Background(), dir, false, nil)
 	if !report.SssdConfigFound {
 		t.Fatal("sssd.conf was not picked up by the analyzer")
 	}
@@ -70,7 +71,7 @@ func TestAnalyzeData_AcceptsGpoAccessControlDisabled(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	report := analyzeData(dir, false, nil)
+	report := analyzeData(context.Background(), dir, false, nil)
 	for _, f := range report.ConfigFindings {
 		if strings.Contains(f.Message, "ad_gpo_access_control") {
 			t.Errorf("ad_gpo_access_control = disabled produced a finding: %s", f.Message)
@@ -102,7 +103,7 @@ func TestCatalogOverrideChangesValidation(t *testing.T) {
 	// Baseline: no override anywhere, so the embedded catalog decides.
 	setUserDefinitionsRoot(t, t.TempDir())
 	setSystemDefinitionsRoot(t, t.TempDir())
-	baseline := analyzeData(dir, false, nil)
+	baseline := analyzeData(context.Background(), dir, false, nil)
 	if unknown(baseline, "ldap_uri") {
 		t.Fatalf("the embedded catalog does not know ldap_uri; the fixture is wrong:\n%+v", baseline.ConfigFindings)
 	}
@@ -115,7 +116,7 @@ func TestCatalogOverrideChangesValidation(t *testing.T) {
 	setUserDefinitionsRoot(t, userRoot)
 	writeCatalogOverride(t, userRoot, testCatalogJSON(t, "0.0.0-test", "services"))
 
-	overridden := analyzeData(dir, false, nil)
+	overridden := analyzeData(context.Background(), dir, false, nil)
 	if !unknown(overridden, "ldap_uri") {
 		t.Errorf("the override did not change validation: ldap_uri is unknown to it but was accepted.\nfindings: %+v", overridden.ConfigFindings)
 	}
@@ -139,7 +140,7 @@ func TestBrokenCatalogOverrideReachesTheReport(t *testing.T) {
 	setSystemDefinitionsRoot(t, t.TempDir())
 	path := writeCatalogOverride(t, userRoot, "{ not json at all")
 
-	report := analyzeData(dir, false, nil)
+	report := analyzeData(context.Background(), dir, false, nil)
 	for _, d := range report.Diagnostics {
 		if d.File == path && strings.Contains(d.Message, "option catalog override skipped") {
 			return

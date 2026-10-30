@@ -12,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -259,7 +260,7 @@ func TestAnalyzeLogsOnly_DetectsLogErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, false, nil)
 
 	if len(report.SSSDLogErrors) == 0 {
 		t.Fatal("raw-log analysis found no SSSD log errors; the pattern engine is not running on *.log files")
@@ -287,7 +288,7 @@ func TestAnalyzeLogsOnly_NoSupportconfigFalsePositives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, false, nil)
 
 	all := strings.Join(append(append([]string{}, report.Problems...), report.Warnings...), "\n")
 	for _, banned := range []string{
@@ -310,7 +311,7 @@ func TestAnalyzeLogsOnly_FieldsAndMarkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, false, nil)
 
 	for field, value := range map[string]string{
 		"SssdService":          report.SssdService,
@@ -351,7 +352,7 @@ func TestAnalyzeLogsOnly_SummaryClustersAndGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, false, nil)
 
 	s := report.Summary
 	if s.LogErrorCount == 0 {
@@ -408,7 +409,7 @@ func TestAnalyzeLogsOnly_AnonymizeRedactsPII(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, true, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, true, nil)
 
 	data, err := json.Marshal(report)
 	if err != nil {
@@ -430,7 +431,7 @@ func TestAnalyzeLogsOnly_AnonymizeKeepsNAMarkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, true, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, true, nil)
 
 	if report.SssdService != constants.RawLogModeNA {
 		t.Errorf("SssdService = %q, want the N/A marker to survive anonymization", report.SssdService)
@@ -462,7 +463,7 @@ func TestAnalyzeLogsOnly_WithoutAnonymizeKeepsValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := analyzeLogsOnly(dir, files, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, files, false, nil)
 
 	if report.Hostname != "testhost01" || report.SearchDomain != "example.test" || report.KerberosRealm != "EXAMPLE.TEST" {
 		t.Errorf("identity fields were altered without -anonymize: host=%q domain=%q realm=%q",
@@ -583,7 +584,7 @@ func TestAnalyzeData_IgnoresRawLogFiles(t *testing.T) {
 		"sssd_example.test.log": "(2026-09-18 10:00:01): [krb5_child] Clock skew too great\n",
 		"ldap_child.log":        "(2026-09-18 10:00:02): [ldap_child] Invalid credentials\n",
 	})
-	report := analyzeData(dir, false, nil)
+	report := analyzeData(context.Background(), dir, false, nil)
 
 	if len(report.SSSDLogErrors) != 0 {
 		t.Errorf("supportconfig analysis scanned raw *.log files: %+v", report.SSSDLogErrors)

@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +65,7 @@ func itoaSmall(i int) string {
 // TestAnonymizedSourceKeysHaveNoRawDomain: no ConfigFinding SourceKey may
 // expose the internal domain when anonymization is on.
 func TestAnonymizedSourceKeysHaveNoRawDomain(t *testing.T) {
-	report := analyzeData(provenanceFixture(t), true, nil)
+	report := analyzeData(context.Background(), provenanceFixture(t), true, nil)
 	if len(report.ConfigFindings) == 0 {
 		t.Skip("fixture produced no config findings; adjust fixture")
 	}
@@ -79,7 +80,7 @@ func TestAnonymizedSourceKeysHaveNoRawDomain(t *testing.T) {
 // TestAnonymizedGraphProvenanceHasNoRawDomain: graph findings (copies of
 // ConfigFindings) and graph entities must be redacted the same way.
 func TestAnonymizedGraphProvenanceHasNoRawDomain(t *testing.T) {
-	report := analyzeData(provenanceFixture(t), true, nil)
+	report := analyzeData(context.Background(), provenanceFixture(t), true, nil)
 	for i, f := range report.Graph.Findings {
 		if f.SourceKey == "" {
 			continue
@@ -97,7 +98,7 @@ func TestAnonymizedGraphProvenanceHasNoRawDomain(t *testing.T) {
 // WHERE to act — "domain/example.com.<key>" — so only the domain is
 // replaced, not the whole key.
 func TestSourceKeyKeepsActionableSection(t *testing.T) {
-	report := analyzeData(provenanceFixture(t), true, nil)
+	report := analyzeData(context.Background(), provenanceFixture(t), true, nil)
 	found := false
 	for _, f := range report.ConfigFindings {
 		if strings.HasPrefix(f.SourceKey, "domain/") {
@@ -127,7 +128,7 @@ func TestHostnameEntityHasNoShortHostname(t *testing.T) {
 	}
 	f.Close()
 
-	report := analyzeData(dir, true, nil)
+	report := analyzeData(context.Background(), dir, true, nil)
 	withHost := false
 	for _, e := range report.Graph.Entities {
 		if e.Kind != "hostname" {

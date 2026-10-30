@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func syslogShortHostFixture(t *testing.T) string {
 // TestSyslogShortHostnameIsRedactedInLogExamples reproduces the reported
 // screenshot: the bare syslog hostname must read "redacted-host".
 func TestSyslogShortHostnameIsRedactedInLogExamples(t *testing.T) {
-	report := analyzeData(syslogShortHostFixture(t), true, nil)
+	report := analyzeData(context.Background(), syslogShortHostFixture(t), true, nil)
 	if len(report.SSSDLogErrors) == 0 {
 		t.Skip("fixture produced no log errors; adjust fixture")
 	}
@@ -58,7 +59,7 @@ func TestSyslogShortHostnameIsRedactedInLogExamples(t *testing.T) {
 // RawLog/Samples, cluster SampleRawLog, KB SampleLine) must be scrubbed like
 // the log examples they come from.
 func TestTimelineAndClustersHaveNoRawPII(t *testing.T) {
-	report := analyzeData(syslogShortHostFixture(t), true, nil)
+	report := analyzeData(context.Background(), syslogShortHostFixture(t), true, nil)
 	check := func(where, s string) {
 		t.Helper()
 		lower := strings.ToLower(s)
@@ -85,7 +86,7 @@ func TestTimelineAndClustersHaveNoRawPII(t *testing.T) {
 // TestNonAnonymizedReportKeepsRawLines: without -anonymize nothing is
 // redacted (guard against over-redaction leaking into the default path).
 func TestNonAnonymizedReportKeepsRawLines(t *testing.T) {
-	report := analyzeData(syslogShortHostFixture(t), false, nil)
+	report := analyzeData(context.Background(), syslogShortHostFixture(t), false, nil)
 	found := false
 	for _, e := range report.SSSDLogErrors {
 		for _, ex := range e.Examples {
@@ -121,7 +122,7 @@ func TestShortHostnameFromKernelLineWithoutHostnameField(t *testing.T) {
 		}
 	}
 
-	report := analyzeData(dir, true, nil)
+	report := analyzeData(context.Background(), dir, true, nil)
 	if len(report.SSSDLogErrors) == 0 {
 		t.Skip("fixture produced no log errors; adjust fixture")
 	}

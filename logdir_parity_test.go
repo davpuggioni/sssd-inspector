@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,7 @@ func TestRawMode_MatchesKBArticles(t *testing.T) {
 	dir := rawLogDir(t, "sssd_example.com.log",
 		"(2026-04-01 10:00:00) [sssd[be[EXAMPLE.COM]]] Zqxjkv marker for parity\n")
 
-	report := analyzeLogsOnly(dir, []string{"sssd_example.com.log"}, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, []string{"sssd_example.com.log"}, false, nil)
 
 	if len(report.MatchedTIDs) != 1 || report.MatchedTIDs[0].TIDID != "TID-RAWMODE-TEST" {
 		t.Fatalf("raw-log mode must match KB articles on log patterns, got %+v", report.MatchedTIDs)
@@ -95,7 +96,7 @@ func TestRawMode_AppliesYAMLRules(t *testing.T) {
 	dir := rawLogDir(t, "sssd_example.com.log",
 		"(2026-04-01 10:00:00) [sssd[be[EXAMPLE.COM]]] Zqxjkv site marker\n")
 
-	report := analyzeLogsOnly(dir, []string{"sssd_example.com.log"}, false, nil)
+	report := analyzeLogsOnly(context.Background(), dir, []string{"sssd_example.com.log"}, false, nil)
 
 	found := false
 	for _, f := range report.ConfigFindings {
@@ -120,7 +121,7 @@ func TestRawMode_KeytabAbsenceIsNotAFinding(t *testing.T) {
 	t.Run("no keytab evidence stays silent", func(t *testing.T) {
 		dir := rawLogDir(t, "sssd_example.com.log",
 			"(2026-04-01 10:00:00) [sssd[be[EXAMPLE.COM]]] Service resolving timeout reached\n")
-		report := analyzeLogsOnly(dir, []string{"sssd_example.com.log"}, false, nil)
+		report := analyzeLogsOnly(context.Background(), dir, []string{"sssd_example.com.log"}, false, nil)
 		if strings.Contains(strings.Join(report.Problems, "|"), "No Kerberos Keytab") {
 			t.Errorf("raw-log mode must not infer a missing keytab from absent evidence: %+v", report.Problems)
 		}
@@ -129,7 +130,7 @@ func TestRawMode_KeytabAbsenceIsNotAFinding(t *testing.T) {
 	t.Run("keytab evidence is still reported", func(t *testing.T) {
 		dir := rawLogDir(t, "sssd_example.com.log",
 			"(2026-04-01 10:00:00) [sssd[be[EXAMPLE.COM]]] KVNO Principal: host/srv@EXAMPLE.COM\n")
-		report := analyzeLogsOnly(dir, []string{"sssd_example.com.log"}, false, nil)
+		report := analyzeLogsOnly(context.Background(), dir, []string{"sssd_example.com.log"}, false, nil)
 		if !report.KeytabFound {
 			t.Errorf("KeytabFound must be true on KVNO evidence")
 		}

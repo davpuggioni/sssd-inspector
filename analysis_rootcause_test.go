@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,7 +156,7 @@ func TestAnalyzeData_EndToEnd_RootCause(t *testing.T) {
 	})
 	defer os.RemoveAll(dir)
 
-	report := analyzeData(dir, false, nil)
+	report := analyzeData(context.Background(), dir, false, nil)
 
 	// 1. The sequence engine must have collapsed the chain into a "dns" root cause.
 	foundRC := false

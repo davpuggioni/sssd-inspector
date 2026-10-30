@@ -2,6 +2,8 @@
 
 package main
 
+import "context"
+
 // FileScanner defines the interface for file scanning operations
 // This interface enables dependency injection and makes the code more testable
 type FileScanner interface {
@@ -135,5 +137,5 @@ func (d *defaultAnalysisEngineImpl) Analyze(dirPath string, anonymize bool, prog
 	}
 
 	// Use existing analyzeData function for backward compatibility
-	return analyzeData(dirPath, anonymize, progressFunc)
+	return analyzeData(context.Background(), dirPath, anonymize, progressFunc)
 }

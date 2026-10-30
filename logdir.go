@@ -10,6 +10,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -272,8 +273,12 @@ func (t logPIITokens) redactTokens() []redactToken {
 // summary, correlation graph, anonymization — but skips every phase that
 // requires supportconfig files, so it can never emit supportconfig-only
 // findings such as "sssd.conf not found" or "sssd.service is not running".
-func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
+func analyzeLogsOnly(ctx context.Context, dirPath string, logFiles []string, anonymize bool, progressFunc func(string, int)) ReportData {
 	globalFileCache.Clear()
+
+	if ctx.Err() != nil {
+		return ReportData{}
+	}
 
 	var report ReportData
 	report.Timestamp = time.Now().Format(constants.TimestampFormat)
@@ -327,6 +332,10 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	kbArticles, kbDiags := loadKBArticlesDiag(dirPath)
 	report.AddDiagnostics(kbDiags)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	singlePassResult := performSinglePassScanOnFiles(dirPath, logFiles, report.MACType, kbArticles)
 	report.SSSDLogErrors = singlePassResult.SSSDLogErrors
 	report.Timeline = singlePassResult.Timeline
@@ -352,12 +361,20 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	// guessed, since a wrong guess would silently hide a relevant article.
 	matchKBArticlesWithEvidence(dirPath, &report, kbArticles, singlePassResult.KBEvidence, false)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	// Temporal bursts and fuzzy KB suggestions work on the timeline alone.
 	if progressFunc != nil {
 		progressFunc("Running advanced correlation analysis...", 60)
 	}
 	report.TemporalClusters = analyzeTemporalClusters(report.Timeline)
 	report.KBSuggestions = analyzeKBSuggestions(report.Timeline, kbArticles, report.MatchedTIDs)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	// ---- Data-driven YAML rules ----
 	// A rule that targets sssd.txt / messages is meaningful on raw logs, which
@@ -369,6 +386,10 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 		applyAnalysisRules(dirPath, &report, customRules)
 	}
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	// Root-cause sequence correlation is timeline-driven as well (DNS/SRV
 	// failover, Kerberos realm+clock skew, watchdog, backend offline) and must
 	// run before the executive summary so its [CORRELATED ROOT CAUSE] findings
@@ -378,10 +399,18 @@ func analyzeLogsOnly(dirPath string, logFiles []string, anonymize bool, progress
 	}
 	correlateSequences(report.Timeline, &report)
 
+	if ctx.Err() != nil {
+		return report
+	}
+
 	report.Problems = deduplicateProblems(report.Problems)
 	report.Warnings = deduplicateProblems(report.Warnings)
 
 	computeExecutiveSummary(&report)
+
+	if ctx.Err() != nil {
+		return report
+	}
 
 	finalizeReport(&report, dirPath, anonymize, progressFunc, tokens.redactTokens()...)
 

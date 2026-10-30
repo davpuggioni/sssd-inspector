@@ -119,7 +119,11 @@ func (a *App) Analyze(targetPath string, anonymize bool) (ReportData, error) {
 		defer os.RemoveAll(dirPath)
 	}
 
-	report := analyzeData(dirPath, anonymize, progressFunc)
+	ctx := a.ctx
+if ctx == nil {
+	ctx = context.Background()
+}
+report := analyzeData(ctx, dirPath, anonymize, progressFunc)
 	progressFunc(constants.MsgAnalysisComplete, constants.ProgressComplete)
 
 	// Surface definition-loading problems (skipped rules/KB articles) to the
