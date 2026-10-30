@@ -69,7 +69,7 @@ describe('ReportView', () => {
 
   it('omits the evidence block for an article matched without log evidence', () => {
     const report = makeReport();
-    delete (report.matched_tids[0] as { evidence?: string[] }).evidence;
+    delete (report.matched_tids![0] as { evidence?: string[] }).evidence;
     render(<ReportView report={report} />);
     expect(screen.queryByText('Evidence Found')).toBeNull();
   });
