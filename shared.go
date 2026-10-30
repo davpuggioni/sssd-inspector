@@ -103,7 +103,9 @@ func writeReports(report ReportData, baseName, reportText string, genTxt, genHtm
 
 	if genHtml {
 		htmlReportFile := baseName + constants.DefaultOutputSuffix + "." + constants.HTMLFormat
-		writeHTMLReportFile(report, htmlReportFile)
+		if err := writeHTMLReportFile(report, htmlReportFile); err != nil {
+			return fmt.Errorf("error writing html report: %w", err)
+		}
 		fmt.Printf("HTML report saved to: %s\n", htmlReportFile)
 	}
 

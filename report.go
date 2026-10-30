@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"os"
 	"strings"
 )
@@ -238,7 +237,7 @@ func buildJSONReport(report ReportData) ([]byte, error) {
 	return json.MarshalIndent(report, "", "  ")
 }
 
-func writeHTMLReportFile(report ReportData, filename string) {
+func writeHTMLReportFile(report ReportData, filename string) error {
 	t, err := template.New("report").Funcs(template.FuncMap{
 		"healthScoreClass": healthScoreClass,
 		"mult":             func(a, b float64) float64 { return a * b },
@@ -259,18 +258,17 @@ func writeHTMLReportFile(report ReportData, filename string) {
 		"occurrenceCount": timelineRowOccurrences,
 	}).Parse(reportHTMLTemplate)
 	if err != nil {
-		log.Printf("Template parsing error: %v", err)
-		return
+		return fmt.Errorf("template parsing error: %w", err)
 	}
 
 	file, err := os.Create(filename)
 	if err != nil {
-		log.Printf("Failed to create HTML report: %v", err)
-		return
+		return fmt.Errorf("failed to create HTML report: %w", err)
 	}
 	defer file.Close()
 
 	if err := t.Execute(file, report); err != nil {
-		log.Printf("Template execution error: %v", err)
+		return fmt.Errorf("template execution error: %w", err)
 	}
+	return nil
 }

@@ -151,6 +151,18 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		}
 	}
 
+	// wordBoundaryMatch reports whether val appears as a whole word in text,
+	// case-insensitively. Using word boundaries prevents false positives such
+	// as entity value "ad" matching inside "admin" or "sad", and false
+	// negatives caused by casing differences between the report and the graph.
+	var wordBoundaryMatch = func(text, val string) bool {
+		if val == "" {
+			return false
+		}
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(val) + `\b`)
+		return re.MatchString(text)
+	}
+
 	// 3. Temporal clusters
 	for i := range r.TemporalClusters {
 		c := &r.TemporalClusters[i]
@@ -158,7 +170,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		fID := addFinding("temporal", msg, "", "", 0, c.SampleRawLog, c.EventCount, SevWarning, "log:temporal-burst", ConfidenceLog, "")
 		for ei := range g.Entities {
 			ent := &g.Entities[ei]
-			if ent.Value != "" && strings.Contains(strings.ToLower(c.Description), strings.ToLower(ent.Value)) {
+			if wordBoundaryMatch(c.Description, ent.Value) {
 				addEdge(ent.ID, fID, "entity_to_finding")
 			}
 		}
@@ -170,7 +182,7 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		fID := addFinding("log_error", e.Description, "", "", 0, "", 0, SevWarning, "log:log-error", ConfidenceLog, "")
 		for ei := range g.Entities {
 			ent := &g.Entities[ei]
-			if ent.Value != "" && strings.Contains(strings.ToLower(e.Description), strings.ToLower(ent.Value)) {
+			if wordBoundaryMatch(e.Description, ent.Value) {
 				addEdge(ent.ID, fID, "entity_to_finding")
 			}
 		}

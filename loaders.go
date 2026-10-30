@@ -38,6 +38,8 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 		progressFunc("Decompressing archive securely to disk...", 5)
 	}
 
+	var skippedFiles int
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -67,6 +69,7 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 			if err != nil {
+				skippedFiles++
 				continue
 			}
 
@@ -79,10 +82,16 @@ func extractArchiveToTemp(archivePath string, progressFunc func(string, int)) (s
 				// invented findings (missing sections, invalid ranges, ...)
 				// as if they were real. Remove it and move on.
 				os.Remove(targetPath)
+				skippedFiles++
 				continue
 			}
 			outFile.Close()
 		}
 	}
+
+	if skippedFiles > 0 {
+		fmt.Fprintf(os.Stderr, "[!] Warning: %d file(s) could not be extracted from the archive and were skipped.\n", skippedFiles)
+	}
+
 	return tempDir, nil
 }
