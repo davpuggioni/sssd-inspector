@@ -188,12 +188,49 @@ func buildCorrelationGraph(r *ReportData) CorrelationGraph {
 		}
 	}
 
-	// 5. KB suggestions
+	// 5. KB suggestions — connect to entities via the sample log line
 	for i := range r.KBSuggestions {
 		kb := &r.KBSuggestions[i]
 		msg := fmt.Sprintf("KB suggestion: %s (%.0f%%)", kb.Title, kb.Score*100)
-		addFinding("kb_suggestion", msg, "", "", 0, kb.SampleLine, 0, SevWarning, "log:kb-suggestion", ConfidenceLog, "")
+		fID := addFinding("kb_suggestion", msg, "", "", 0, kb.SampleLine, 0, SevWarning, "log:kb-suggestion", ConfidenceLog, "")
+		for ei := range g.Entities {
+			ent := &g.Entities[ei]
+			if wordBoundaryMatch(kb.SampleLine, ent.Value) {
+				addEdge(ent.ID, fID, "entity_to_finding")
+			}
+		}
 	}
+
+	// 6. Entity-to-entity edges: represent identity/state relationships
+	//    (domain → realm → hostname chains that model trust topology).
+	addEntityEdge := func(fromKind, fromValue, toKind, toValue string) {
+		if fromValue == "" || toValue == "" {
+			return
+		}
+		fromID := entityID(fromKind, fromValue)
+		toID := entityID(toKind, toValue)
+		// Only add if both nodes exist in the graph.
+		fromExists := false
+		toExists := false
+		for _, ent := range g.Entities {
+			if ent.ID == fromID {
+				fromExists = true
+			}
+			if ent.ID == toID {
+				toExists = true
+			}
+		}
+		if fromExists && toExists {
+			addEdge(fromID, toID, "entity_to_entity")
+		}
+	}
+
+	// AD domain authenticates via Kerberos realm.
+	addEntityEdge("domain", r.AdDomain, "realm", r.KerberosRealm)
+	// Hostname belongs to its DNS domain.
+	addEntityEdge("hostname", r.Hostname, "domain", r.AdDomain)
+	// Hostname authenticates via Kerberos realm.
+	addEntityEdge("hostname", r.Hostname, "realm", r.KerberosRealm)
 
 	return g
 }

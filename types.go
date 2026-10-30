@@ -127,16 +127,16 @@ type ReportData struct {
 	SssdService     string   `json:"sssd_service"`
 	WinbindService  string   `json:"winbind_service"`
 	NscdStatus      string   `json:"nscd_status"`
-	NscdCaching     []string `json:"nscd_caching"`
-	SSSDPackages    []string `json:"sssd_packages"`
+	NscdCaching     []string `json:"nscd_caching,omitempty"`
+	SSSDPackages    []string `json:"sssd_packages,omitempty"`
 
 	// Authentication Details
 	NsswitchValid     bool     `json:"nsswitch_valid"`
 	PamSssInstalled   bool     `json:"pam_sss_installed"`
 	PamGDPRRestricted bool     `json:"pam_gdpr_restricted"`
-	HostsIssues       []string `json:"hosts_issues"`
+	HostsIssues       []string `json:"hosts_issues,omitempty"`
 	HostsFileStatus   string   `json:"hosts_file_status"` // present / missing_on_host / not_collected / malformed
-	Nameservers       []string `json:"nameservers"`
+	Nameservers       []string `json:"nameservers,omitempty"`
 	SearchDomain      string   `json:"search_domain"`
 	TimeService       string   `json:"time_service"`
 	KerberosRealm     string   `json:"kerberos_realm"`
@@ -150,7 +150,7 @@ type ReportData struct {
 	Hostname       string `json:"hostname"`  // hostname/FQDN captured from basic-environment.txt
 
 	// Structured, provenance-aware configuration findings (AD validator + correlation)
-	ConfigFindings []ConfigFinding `json:"config_findings"`
+	ConfigFindings []ConfigFinding `json:"config_findings,omitempty"`
 
 	// CatalogProvenance records which offline SSSD option catalog validated
 	// sssd.conf, so the report always states the documentation release its
@@ -163,14 +163,14 @@ type ReportData struct {
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 
 	// Log Analysis & Problems
-	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors"`
+	SSSDLogErrors     []SSSDLogError `json:"sssd_log_errors,omitempty"`
 	SSSDConfigSnippet string         `json:"sssd_config_snippet"`
-	MACDenialExamples []string       `json:"mac_denial_examples"`
+	MACDenialExamples []string       `json:"mac_denial_examples,omitempty"`
 
-	Problems    []string        `json:"problems"`
-	Warnings    []string        `json:"warnings"`
-	MatchedTIDs []TIDArticle    `json:"matched_tids"`
-	Timeline    []TimelineEvent `json:"timeline"`
+	Problems    []string        `json:"problems,omitempty"`
+	Warnings    []string        `json:"warnings,omitempty"`
+	MatchedTIDs []TIDArticle    `json:"matched_tids,omitempty"`
+	Timeline    []TimelineEvent `json:"timeline,omitempty"`
 
 	// Phase 3: advanced correlation output
 	TemporalClusters []TemporalCluster `json:"temporal_clusters,omitempty"`
